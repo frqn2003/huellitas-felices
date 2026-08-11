@@ -1,11 +1,11 @@
 ---
-description: Diseña una pantalla completa de Huellitas Felices desde un brief (HU + wireframe). Flujo: audit UX → visual ui-ux-pro-max (tokens Pet Bliss) → código hardcodeado → test Playwright → checkpoint de revisión antes de subir a GitHub.
+description: Diseña una pantalla completa de Huellitas Felices desde un brief (HU + wireframe). Flujo: audit UX → visual ui-ux-pro-max (tokens Pet Bliss) → refinamiento con Impeccable (pregunta por modo live) → código hardcodeado → verificación técnica → checkpoint de revisión. La subida a GitHub se hace con /subir.
 agent: build
 ---
 
 # Comando /diseñar — Pantalla completa desde brief
 
-Vas a diseñar, codear y testear una pantalla de **Huellitas Felices** (sistema de gestión veterinaria) a partir del brief indicado. Ejecutá los pasos EN ORDEN y no te saltees ninguno.
+Vas a diseñar, codear y verificar una pantalla de **Huellitas Felices** (sistema de gestión veterinaria) a partir del brief indicado. Ejecutá los pasos EN ORDEN y no te saltees ninguno.
 
 **Brief a procesar:** `docs/briefs/$ARGUMENTS.md`
 ($ARGUMENTS es el nombre del brief, ej: `HU-001` o `dashboard`. Si no se indica o el archivo no existe, listá los briefs disponibles en `docs/briefs/` y pedí cuál procesar.)
@@ -15,7 +15,7 @@ Vas a diseñar, codear y testear una pantalla de **Huellitas Felices** (sistema 
 ## Paso 1 — Leer contexto (obligatorio)
 
 1. `docs/briefs/$ARGUMENTS.md` — la HU, wireframe, datos y criterios de aceptación.
-2. `design-system/huellitas-felices/MASTER.md` — **tokens OBLIGATORIOS** (Pet Bliss). Sus reglas reemplazan al catálogo de la skill.
+2. `design-system/huellitas-felices/MASTER.md` — **tokens OBLIGATORIOS** (Pet Bliss). Sus reglas reemplazan al catálogo de cualquier skill.
 3. `AGENTS.md` — acuerdos del equipo y reglas técnicas.
 4. Si existe `design-system/huellitas-felices/pages/[pantalla].md`, tiene prioridad sobre el MASTER.
 5. Si NO existe el archivo de página en `design-system/huellitas-felices/pages/`, crearlo documentando los tokens/reglas específicos de esta pantalla.
@@ -31,7 +31,9 @@ Usá la skill `ux-heuristics` (Wondel.ai) sobre el wireframe del brief:
 
 Presentá un resumen corto del audit antes de seguir. Corregí problemas de lógica y jerarquía en el plan de implementación.
 
-## Paso 3 — Generar el visual (guía de composición)
+## Paso 3 — Generar el visual + refinamiento
+
+### 3a. Composición con ui-ux-pro-max
 
 Usá la skill `ui-ux-pro-max` como guía de composición, estados y anti-patterns. Pero **los tokens finales son SIEMPRE los del MASTER Pet Bliss**:
 
@@ -39,6 +41,18 @@ Usá la skill `ui-ux-pro-max` como guía de composición, estados y anti-pattern
 - Tipografía: Baloo 2 (display, bold, uppercase) + Nunito (body).
 - Radios: 8/12/16px, pill para botones/chips. Sombras discretas. Motion 150/250/500ms.
 - Composición: overlaps, formas orgánicas, alternancia de fondos, una sola acción clara por viewport.
+
+### 3b. Refinamiento con Impeccable (preguntar)
+
+Después del visual, **preguntá explícitamente al usuario** cómo quiere el pase de refinamiento con la skill `impeccable`:
+
+- **"¿Querés refinar el diseño con Impeccable en modo `live` (variantes visuales en el navegador) o en modo estándar sobre el código?"**
+
+Opciones:
+- **`live`** → seguí `reference/live.md` de la skill (iteración visual en navegador sobre la pantalla ya levantada).
+- **Estándar** → pase de `polish`/`critique`/`audit` sobre el código/componentes, según lo que indique la skill.
+
+Regla inquebrantable: Impeccable **refina, no redefine**. Sus instrucciones visuales NO pueden contradecir los tokens Pet Bliss del MASTER ni el archivo de página (`design-system/huellitas-felices/pages/[pantalla].md`). Si Impeccable sugiere algo fuera de tokens (colores, fuentes, radios, patrones), se descarta o se propone al usuario como actualización del MASTER (que debe aprobarse y sincronizarse en `docs/`).
 
 ## Paso 4 — Codear (componentes reutilizables + página)
 
@@ -50,31 +64,28 @@ Usá la skill `ui-ux-pro-max` como guía de composición, estados y anti-pattern
 - Estados: vacío, cargando, error, con datos — según corresponda a la pantalla.
 - Accesibilidad: contraste ≥4.5:1, focus visible, touch targets ≥44×44px, `alt` en imágenes.
 
-## Paso 5 — Testear con Playwright
+## Paso 5 — Verificación técnica (sin navegador)
 
-Usá la skill `playwright-cli`:
+Verificá el código sin levantar navegador:
 
-1. Levantá el servidor (`npm run dev`) en segundo plano.
-2. Navegá a la ruta de la pantalla.
-3. Verificá: render correcto, navegación, clics en elementos interactivos, estados (si aplica).
-4. Probá responsive: desktop y mobile (375px).
-5. Guardá **screenshots como evidencia** en `docs/evidencia/<pantalla>.png` (nombre legible, ej: `docs/evidencia/dashboard.png`).
-6. Cerrá el navegador y el servidor.
+1. `npm run lint` (errores solo en `src/`; los de `.opencode/skills/` y `.agents/skills/` son preexistentes y no son responsabilidad tuya).
+2. `npx tsc --noEmit`.
+3. Checklist de accesibilidad sobre el código: contraste de tokens usados, focus visible, touch targets ≥44px, `aria-label` en iconos-acción, `alt`/`aria` en imágenes, `prefers-reduced-motion` respetado.
 
-## Paso 6 — CHECKPOINT: revisión del usuario (NO subir automáticamente)
+Corregí todo lo que falle antes de pasar al checkpoint. **No se usa Playwright ni se toman screenshots.**
 
-**IMPORTANTE: NO hacés commit ni push sin confirmación explícita del usuario.**
+## Paso 6 — CHECKPOINT: revisión del usuario (sin git)
 
-1. Presentá un resumen de lo creado: archivos, componentes, ruta, resultado del audit y del test.
+**IMPORTANTE: este comando NO hace commit ni push. La subida se hace aparte con el comando `/subir`.**
+
+1. Presentá un resumen de lo creado: archivos, componentes, ruta, resultado del audit y de la verificación técnica.
 2. Decile al usuario que pruebe la pantalla: `npm run dev` y abrir la ruta en el navegador.
-3. Preguntá explícitamente: **"¿Confirmás la subida a GitHub?"**
-   - **Sí** → commit con mensaje referenciando la HU (ej: `feat: pantalla dashboard (HU-001)`) + push.
-   - **No / pedir ajustes** → aplicá los cambios que pida, repetí el test (paso 5) y volvé a preguntar.
-   - **Dejarlo local** → todo queda sin commitear para que revise cuando quiera.
+3. Si pidió ajustes, aplicálos y volvé a correr el paso 5.
+4. Recordale que cuando quiera publicar los cambios use **`/subir`** (revisa el diff, propone el mensaje de commit referenciando la HU y pushea a GitHub con su confirmación).
 
 ## Recordatorio de reglas
 
-- NO usar la skill Impeccable (regla del equipo).
+- Skills visuales: **ui-ux-pro-max** genera el visual; **Impeccable** refina después (con la opción de modo `live` que se pregunta al usuario). Ambas respetan los tokens Pet Bliss del MASTER.
 - NO inventar colores, fuentes ni estilos fuera del MASTER Pet Bliss.
 - UI en español, tono amigable pero profesional (Pet Bliss: "playful, never childish").
 - Componentes reutilizables, nada de pantallas sueltas.
