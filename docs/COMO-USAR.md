@@ -44,6 +44,27 @@ En un `.md` de `docs/briefs/` (usar `_plantilla.md` como base):
 [qué debe cumplir la pantalla para darse por terminada]
 ```
 
+### Cómo lanzar la pantalla: `/diseñar`
+
+Con el brief escrito, desde OpenCode ejecutar:
+
+```
+/diseñar HU-001
+```
+
+(`HU-001` es el nombre del archivo en `docs/briefs/`; si no se indica, el comando lista los briefs disponibles.)
+
+El comando ejecuta solo:
+
+1. **Lee el contexto** — brief + `MASTER.md` (tokens obligatorios) + `AGENTS.md`. Crea el override en `design-system/huellitas-felices/pages/[pantalla].md`.
+2. **Audita UX** — skill `ux-heuristics` sobre el wireframe (Nielsen/Krug), con puntaje, antes de codear.
+3. **Genera el visual** — skill `ui-ux-pro-max` solo como guía; los tokens finales siempre del Pet Bliss.
+4. **Codea** — componentes reutilizables en `src/components/` + página en `src/app/<ruta>/` con datos hardcodeados.
+5. **Testea** — skill `playwright-cli`: render, clics, responsive y screenshot en `docs/evidencia/<pantalla>.png`.
+6. **⏸️ CHECKPOINT** — te dejás probar y el comando **pregunta antes de subir a GitHub**. Nada se commitea sin tu confirmación explícita.
+
+La ruta por defecto deriva del nombre legible de la pantalla (ej: "Dashboard de turnos" → `/dashboard`).
+
 ### Qué hace OpenCode al recibir el brief
 
 1. Lee el brief + `design-system/huellitas-felices/MASTER.md` + `AGENTS.md`.
