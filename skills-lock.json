@@ -97,12 +97,6 @@
       "skillPath": "design-sprint/SKILL.md",
       "computedHash": "a62001708960552d7fba815944a0eb05b20388f01d695de8fc1c351ea1da60dc"
     },
-    "dev": {
-      "source": "microsoft/playwright-cli",
-      "sourceType": "github",
-      "skillPath": ".claude/skills/dev/SKILL.md",
-      "computedHash": "245c4f70e2a2dee2924994a39af9db21f301f3ecb742bf78a5b1f9a106dbcca0"
-    },
     "domain-driven-design": {
       "source": "wondelai/skills",
       "sourceType": "github",
@@ -276,12 +270,6 @@
       "sourceType": "github",
       "skillPath": "one-page-marketing/SKILL.md",
       "computedHash": "cbc08098c36bf7c2f5ed67eebf6730ecac03ddca71861878ac20bd202b8a802a"
-    },
-    "playwright-cli": {
-      "source": "microsoft/playwright-cli",
-      "sourceType": "github",
-      "skillPath": "skills/playwright-cli/SKILL.md",
-      "computedHash": "f602822b51bcb6d033749c60731b8f1e80f308222fcb2e4af551905a817c6e08"
     },
     "pragmatic-programmer": {
       "source": "wondelai/skills",

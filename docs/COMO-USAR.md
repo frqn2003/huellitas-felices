@@ -60,7 +60,7 @@ El comando ejecuta solo:
 2. **Audita UX** — skill `ux-heuristics` sobre el wireframe (Nielsen/Krug), con puntaje, antes de codear.
 3. **Genera el visual** — skill `ui-ux-pro-max` solo como guía; los tokens finales siempre del Pet Bliss.
 4. **Codea** — componentes reutilizables en `src/components/` + página en `src/app/<ruta>/` con datos hardcodeados.
-5. **Testea** — skill `playwright-cli`: render, clics, responsive y screenshot en `docs/evidencia/<pantalla>.png`.
+5. **Verifica** — `npm run lint` + `tsc --noEmit` + checklist de accesibilidad sobre el código (sin navegador).
 6. **⏸️ CHECKPOINT** — te dejás probar y el comando **pregunta antes de subir a GitHub**. Nada se commitea sin tu confirmación explícita.
 
 La ruta por defecto deriva del nombre legible de la pantalla (ej: "Dashboard de turnos" → `/dashboard`).
@@ -71,14 +71,13 @@ La ruta por defecto deriva del nombre legible de la pantalla (ej: "Dashboard de 
 2. Audita usabilidad del wireframe (skill `ux-heuristics` — Nielsen/Krug) y corrige lógica antes del visual.
 3. Genera el visual (skill `ui-ux-pro-max`) con los tokens Pet Bliss obligatorios.
 4. Crea componentes reutilizables en `src/components/` y la página en `src/app/<ruta>/`.
-5. Testea con Playwright (navegación, clics, responsive, screenshots).
-6. Commitea con referencia a la HU.
+5. Verifica el código (lint + tipos + accesibilidad) y hace checkpoint para que pruebes antes de subir.
+6. La subida a GitHub se hace aparte con `/subir` y tu confirmación explícita.
 
 ## Skills instaladas (proyecto)
 
 - **Wondel.ai UX** (`.agents/skills/`): ux-heuristics, design-everyday-things, refactoring-ui, microinteractions, web-typography, lean-ux.
 - **UI/UX Pro Max** (`.opencode/skills/`): ui-ux-pro-max + banner, brand, design, design-system, slides, ui-styling. Requiere Python 3 (`python --version` para verificar).
-- **Playwright CLI** (`.agents/skills/`): automatización de navegador.
 - **GitHub** (`.agents/skills/`): repo, commits, PRs.
 
 > Las skills se disparan cuando el pedido coincide con su descripción; para activación garantizada, nombrarlas explícitamente: *"usá la skill ux-heuristics"*.

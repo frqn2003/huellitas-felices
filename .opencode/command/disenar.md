@@ -1,5 +1,5 @@
 ---
-description: Diseña una pantalla completa de Huellitas Felices desde un brief (HU + wireframe). Flujo: audit UX → visual ui-ux-pro-max (tokens Pet Bliss) → refinamiento con Impeccable (pregunta por modo live) → código hardcodeado → verificación técnica → checkpoint de revisión. La subida a GitHub se hace con /subir.
+description: Diseña una pantalla completa de Huellitas Felices desde un brief (HU + wireframe). Flujo: audit UX → visual ui-ux-pro-max (tokens Pet Bliss) → código hardcodeado → verificación técnica → checkpoint de revisión. La subida a GitHub se hace con /subir.
 agent: build
 ---
 
@@ -31,7 +31,7 @@ Usá la skill `ux-heuristics` (Wondel.ai) sobre el wireframe del brief:
 
 Presentá un resumen corto del audit antes de seguir. Corregí problemas de lógica y jerarquía en el plan de implementación.
 
-## Paso 3 — Generar el visual + refinamiento
+## Paso 3 — Generar el visual
 
 ### 3a. Composición con ui-ux-pro-max
 
@@ -41,18 +41,6 @@ Usá la skill `ui-ux-pro-max` como guía de composición, estados y anti-pattern
 - Tipografía: Baloo 2 (display, bold, uppercase) + Nunito (body).
 - Radios: 8/12/16px, pill para botones/chips. Sombras discretas. Motion 150/250/500ms.
 - Composición: overlaps, formas orgánicas, alternancia de fondos, una sola acción clara por viewport.
-
-### 3b. Refinamiento con Impeccable (preguntar)
-
-Después del visual, **preguntá explícitamente al usuario** cómo quiere el pase de refinamiento con la skill `impeccable`:
-
-- **"¿Querés refinar el diseño con Impeccable en modo `live` (variantes visuales en el navegador) o en modo estándar sobre el código?"**
-
-Opciones:
-- **`live`** → seguí `reference/live.md` de la skill (iteración visual en navegador sobre la pantalla ya levantada).
-- **Estándar** → pase de `polish`/`critique`/`audit` sobre el código/componentes, según lo que indique la skill.
-
-Regla inquebrantable: Impeccable **refina, no redefine**. Sus instrucciones visuales NO pueden contradecir los tokens Pet Bliss del MASTER ni el archivo de página (`design-system/huellitas-felices/pages/[pantalla].md`). Si Impeccable sugiere algo fuera de tokens (colores, fuentes, radios, patrones), se descarta o se propone al usuario como actualización del MASTER (que debe aprobarse y sincronizarse en `docs/`).
 
 ## Paso 4 — Codear (componentes reutilizables + página)
 
@@ -72,7 +60,7 @@ Verificá el código sin levantar navegador:
 2. `npx tsc --noEmit`.
 3. Checklist de accesibilidad sobre el código: contraste de tokens usados, focus visible, touch targets ≥44px, `aria-label` en iconos-acción, `alt`/`aria` en imágenes, `prefers-reduced-motion` respetado.
 
-Corregí todo lo que falle antes de pasar al checkpoint. **No se usa Playwright ni se toman screenshots.**
+Corregí todo lo que falle antes de pasar al checkpoint. **No se usan test de navegador ni screenshots automáticos.**
 
 ## Paso 6 — CHECKPOINT: revisión del usuario (sin git)
 
@@ -85,7 +73,7 @@ Corregí todo lo que falle antes de pasar al checkpoint. **No se usa Playwright 
 
 ## Recordatorio de reglas
 
-- Skills visuales: **ui-ux-pro-max** genera el visual; **Impeccable** refina después (con la opción de modo `live` que se pregunta al usuario). Ambas respetan los tokens Pet Bliss del MASTER.
+- Skills visuales: **ui-ux-pro-max** genera el visual, respetando los tokens Pet Bliss del MASTER.
 - NO inventar colores, fuentes ni estilos fuera del MASTER Pet Bliss.
 - UI en español, tono amigable pero profesional (Pet Bliss: "playful, never childish").
 - Componentes reutilizables, nada de pantallas sueltas.

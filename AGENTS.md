@@ -29,10 +29,9 @@ Guía de trabajo para agentes de IA en este repositorio. Es el acuerdo del equip
 
 1. **Wondel.ai (skill UX)** → auditar wireframe/flujo antes de visual: usabilidad, jerarquía, heurísticas de Nielsen/Norman/Krug.
 2. **UI/UX Pro Max (skill visual)** → generar y pulir visualmente los componentes.
-3. **Impeccable (refinamiento)** → pase de pulido/crítica tras el visual de ui-ux-pro-max (se pregunta al usuario si quiere el modo `live`). **Refina, no redefine**: nunca contradice los tokens Pet Bliss.
-4. **Verificación técnica** → `npm run lint` + `tsc --noEmit` + checklist de accesibilidad sobre el código (sin navegador).
+3. **Verificación técnica** → `npm run lint` + `tsc --noEmit` + checklist de accesibilidad sobre el código (sin navegador).
 
-> Regla del equipo: **ui-ux-pro-max** es la skill visual que genera; **Impeccable** se usa como pase de refinamiento posterior (opcional modo `live` con confirmación del usuario). NO se usa Playwright para testear el front.
+> Regla del equipo: **ui-ux-pro-max** es la skill visual que genera. No se usa ningún test de navegador ni screenshots automáticos para el front.
 
 ## Control de versiones
 
@@ -41,7 +40,7 @@ Guía de trabajo para agentes de IA en este repositorio. Es el acuerdo del equip
 
 ## Regla de tokens (IMPORTANTE)
 
-Cuando se usen las skills `ui-ux-pro-max` o `impeccable`, leer SIEMPRE `design-system/huellitas-felices/MASTER.md`. Sus reglas **reemplazan** a los catálogos genéricos de las skills (paletas, tipografías, estilos de sus catálogos NO se usan). Los tokens Pet Bliss del MASTER son obligatorios para ambas.
+Cuando se use la skill `ui-ux-pro-max`, leer SIEMPRE `design-system/huellitas-felices/MASTER.md`. Sus reglas **reemplazan** a los catálogos genéricos de las skills (paletas, tipografías, estilos de sus catálogos NO se usan). Los tokens Pet Bliss del MASTER son obligatorios.
 
 - Si existe `design-system/huellitas-felices/pages/[página].md`, ese archivo tiene prioridad sobre el MASTER para esa página.
 - Para el razonamiento completo detrás de cada token, ver `docs/design-system-pet-bliss-style.md` (la versión humana).
