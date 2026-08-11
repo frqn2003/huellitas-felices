@@ -69,14 +69,19 @@ npm run dev
 
 ## Workflow de diseño (obligatorio)
 
-1. **Wondel.ai** → auditar wireframe/flujo (usabilidad, jerarquía) antes de visual.
-2. **UI/UX Pro Max** → generar y pulir los componentes visualmente.
-3. **Playwright CLI** → testear que los flujos funcionen.
+1. **El equipo** → investigación + wireframes (fuera del repo).
+2. **Escribir el brief** → HU + wireframe en `docs/briefs/` (ver plantilla).
+3. **Wondel.ai** → auditar wireframe/flujo (usabilidad, jerarquía) antes de visual.
+4. **UI/UX Pro Max** → generar y pulir los componentes (siempre con los tokens de `design-system/huellitas-felices/MASTER.md`).
+5. **Playwright CLI** → testear que los flujos funcionen.
 
 ## Documentación
 
 - `docs/guia-diseno-huellitas-felices.md.pdf` — guía del proceso de diseño.
-- `docs/design-system-pet-bliss-style.md` — design system (fuente de verdad visual: color, tipografía, spacing, motion).
+- `docs/design-system-pet-bliss-style.md` — design system (versión humana, fuente de verdad).
+- `design-system/huellitas-felices/MASTER.md` — design system para la skill ui-ux-pro-max (reglas que reemplazan al catálogo de la skill).
+- `docs/briefs/_plantilla.md` — plantilla de brief por pantalla (HU + wireframe).
+- `docs/COMO-USAR.md` — guía rápida del flujo de trabajo.
 - `AGENTS.md` — acuerdos del equipo y reglas para agentes de IA.
 
 ## Convenciones del equipo
