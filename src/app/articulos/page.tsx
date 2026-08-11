@@ -9,7 +9,7 @@ import { ToastProvider, useToast } from "@/components/ui/Toast";
 import { ArticulosTable } from "@/components/articulos/ArticulosTable";
 import { ArticuloFormModal, type ArticuloDraft, type FormModo } from "@/components/articulos/ArticuloFormModal";
 import { DesactivarModal } from "@/components/articulos/DesactivarModal";
-import { FiltrosArticulos, type Filtros } from "@/components/articulos/FiltrosArticulos";
+import { FiltrosArticulos, FiltrosChips, type Filtros } from "@/components/articulos/FiltrosArticulos";
 import type { Articulo } from "@/data/articulos";
 import { PROVEEDORES, SIMULAR_ERROR, SIMULAR_VACIO, articulosIniciales } from "@/data/articulos";
 
@@ -211,38 +211,44 @@ function ArticulosScreen() {
                   Artículos
                 </h1>
               </div>
-              <Button onClick={openNuevo} disabled={loading || error} size="lg">
-                <PackagePlus className="h-5 w-5" aria-hidden="true" />
-                Nuevo artículo
-              </Button>
-            </div>
-
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="relative flex-1">
-                <Search
-                  className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-text-secondary"
-                  aria-hidden="true"
-                />
-                <input
-                  type="search"
-                  value={busqueda}
-                  onChange={(e) => handleBusqueda(e.target.value)}
-                  placeholder="Buscar por código o nombre..."
-                  aria-label="Buscar por código o nombre"
-                  disabled={loading || error}
-                  className="h-11 w-full cursor-text rounded-pill border border-border bg-surface pl-12 pr-4 text-base text-text-primary transition-colors duration-fast ease-out placeholder:text-text-secondary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20 disabled:cursor-not-allowed disabled:opacity-45"
-                />
-              </div>
               <div className="flex flex-wrap items-center gap-3">
-                <FiltrosArticulos
-                  filtros={filtros}
-                  onChange={handleFiltros}
-                  disabled={loading || error}
-                />
+                <Button onClick={openNuevo} disabled={loading || error} size="lg">
+                  <PackagePlus className="h-5 w-5" aria-hidden="true" />
+                  Nuevo artículo
+                </Button>
                 <Button variant="outline" onClick={handleExportar} disabled={loading || error || filtrados.length === 0}>
                   <Download className="h-4 w-4" aria-hidden="true" />
                   Exportar
                 </Button>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div className="relative flex-1">
+                  <Search
+                    className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-text-secondary"
+                    aria-hidden="true"
+                  />
+                  <input
+                    type="search"
+                    value={busqueda}
+                    onChange={(e) => handleBusqueda(e.target.value)}
+                    placeholder="Buscar por código o nombre..."
+                    aria-label="Buscar por código o nombre"
+                    disabled={loading || error}
+                    className="h-11 w-full cursor-text rounded-pill border border-border bg-surface pl-12 pr-4 text-base text-text-primary transition-colors duration-fast ease-out placeholder:text-text-secondary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20 disabled:cursor-not-allowed disabled:opacity-45"
+                  />
+                </div>
+                <FiltrosArticulos
+                  filtros={filtros}
+                  onChange={handleFiltros}
+                  disabled={loading || error}
+                  hideChips
+                />
+              </div>
+              <div className="flex flex-wrap items-center">
+                <FiltrosChips filtros={filtros} onChange={handleFiltros} />
               </div>
             </div>
           </div>
