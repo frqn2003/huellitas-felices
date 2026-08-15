@@ -11,6 +11,7 @@
   --color-text-primary: #114f3c;
   --color-text-secondary: #547066;
   --color-border: #ddd8c8;
+  --color-destructive: #dc2626;
 
   --font-display: var(--font-baloo), ui-sans-serif, system-ui, sans-serif;
   --font-sans: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;

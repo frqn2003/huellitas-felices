@@ -21,7 +21,7 @@ Equipo de diseño UI/UX trabajando en Scrum. Este README documenta cómo dejar e
 ### 1. Clonar el repo
 
 ```bash
-git clone https://github.com/<org>/huellitas-felices.git
+git clone https://github.com/frqn2003/huellitas-felices.git
 cd huellitas-felices
 npm install
 ```
@@ -33,8 +33,7 @@ Las skills de proyecto ya están commiteadas en el repo. Verificar que OpenCode 
 1. Reiniciar OpenCode desde la raíz del proyecto.
 2. Ejecutar: `¿Qué skills tenés cargadas?` — deben aparecer:
    - **Wondel.ai (UX)** — auditar usabilidad (heurísticas Nielsen/Norman/Krug).
-   - **UI/UX Pro Max** — generar y pulir visual (regla del equipo: NO usar Impeccable).
-   - **Playwright CLI** — testear flujos armados (E2E/screenshots).
+   - **UI/UX Pro Max** — generar y pulir visual (con los tokens Pet Bliss del MASTER).
    - **GitHub** — manejo de repo, commits, PRs.
 
 Si falta alguna, instalarla manualmente:
@@ -45,9 +44,6 @@ npx skills add wondelai/skills -a opencode -y --skill ux-heuristics --skill desi
 
 # UI/UX Pro Max
 npx ui-ux-pro-max-cli init -a opencode -f
-
-# Playwright CLI
-npx skills add microsoft/playwright-cli -a opencode -y
 
 # GitHub
 gh skill install Dimillian/Skills github --agent opencode --scope project --force
@@ -69,14 +65,19 @@ npm run dev
 
 ## Workflow de diseño (obligatorio)
 
-1. **Wondel.ai** → auditar wireframe/flujo (usabilidad, jerarquía) antes de visual.
-2. **UI/UX Pro Max** → generar y pulir los componentes visualmente.
-3. **Playwright CLI** → testear que los flujos funcionen.
+1. **El equipo** → investigación + wireframes (fuera del repo).
+2. **Escribir el brief** → HU + wireframe en `docs/briefs/` (ver plantilla).
+3. **Wondel.ai** → auditar wireframe/flujo (usabilidad, jerarquía) antes de visual.
+4. **UI/UX Pro Max** → generar y pulir los componentes (siempre con los tokens de `design-system/huellitas-felices/MASTER.md`).
+5. **Verificación técnica** → `npm run lint` + `tsc --noEmit` + checklist de accesibilidad sobre el código.
 
 ## Documentación
 
 - `docs/guia-diseno-huellitas-felices.md.pdf` — guía del proceso de diseño.
-- `docs/design-system-pet-bliss-style.md` — design system (fuente de verdad visual: color, tipografía, spacing, motion).
+- `docs/design-system-pet-bliss-style.md` — design system (versión humana, fuente de verdad).
+- `design-system/huellitas-felices/MASTER.md` — design system para la skill ui-ux-pro-max (reglas que reemplazan al catálogo de la skill).
+- `docs/briefs/_plantilla.md` — plantilla de brief por pantalla (HU + wireframe).
+- `docs/COMO-USAR.md` — guía rápida del flujo de trabajo.
 - `AGENTS.md` — acuerdos del equipo y reglas para agentes de IA.
 
 ## Convenciones del equipo

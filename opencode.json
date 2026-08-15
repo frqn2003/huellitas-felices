@@ -4,14 +4,6 @@
   "skills": {
     "paths": [".agents/skills", ".opencode/skills"]
   },
-  "mcp": {
-    "playwright": {
-      "type": "local",
-      "command": ["npx", "-y", "@playwright/mcp"],
-      "enabled": true,
-      "environment": { "BROWSER": "chromium" }
-    }
-  },
   "permission": {
     "bash": {
       "git *": "allow",
