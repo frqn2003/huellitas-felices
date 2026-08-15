@@ -21,7 +21,7 @@ Equipo de diseño UI/UX trabajando en Scrum. Este README documenta cómo dejar e
 ### 1. Clonar el repo
 
 ```bash
-git clone https://github.com/<org>/huellitas-felices.git
+git clone https://github.com/frqn2003/huellitas-felices.git
 cd huellitas-felices
 npm install
 ```
