@@ -47,6 +47,7 @@ Usá la skill `ui-ux-pro-max` como guía de composición, estados y anti-pattern
 - Componentes **reutilizables** en `src/components/` (pensados 1 a 1 para React), no pantallas sueltas.
 - Página en `src/app/<ruta>/page.tsx` con **datos hardcodeados** del brief (en español).
   - Ruta por defecto: derivar del nombre legible de la pantalla (ej: "Dashboard de turnos" → `/dashboard`). Si el brief aclara ruta, usar esa.
+- **Datos placeholder listos para backend**: cada registro lleva un `id` numérico (la PK que mandará la base de datos). En cada punto de integración (fetch inicial, POST/PUT/PATCH/DELETE, selects de catálogos) dejar un comentario con prefijo `// BACKEND:` indicando el endpoint y qué reemplazar, para que el equipo de back conecte sin reescribir el front (ej: `// BACKEND: reemplazar por GET /api/articulos`).
 - Tokens vía Tailwind (`src/app/globals.css`) — nada de colores hardcodeados.
 - Iconos **Lucide**, animaciones **Framer Motion** (respetando `prefers-reduced-motion`).
 - Estados: vacío, cargando, error, con datos — según corresponda a la pantalla.

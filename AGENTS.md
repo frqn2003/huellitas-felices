@@ -68,3 +68,4 @@ Detalles completos y checklist de fidelidad en `docs/design-system-pet-bliss-sty
 - Accesibilidad: contraste verificado, focus visible, touch targets ≥ 44×44px, `alt` en imágenes.
 - Antes de subir: comprimir imágenes (TinyPNG).
 - Idioma de la UI: español.
+- **Preparación para backend**: los datos placeholder llevan `id` numérico (la PK que mandará la base). Cada punto de integración (fetch, POST/PUT/PATCH/DELETE, selects de catálogos) lleva un comentario `// BACKEND:` con el endpoint y qué reemplazar. El equipo de back los busca con `grep -rn "BACKEND" src/`.
