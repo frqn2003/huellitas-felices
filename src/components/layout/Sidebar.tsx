@@ -6,8 +6,6 @@ import {
   LogOut,
   Menu,
   Package,
-  PanelLeftClose,
-  PanelLeftOpen,
   PawPrint,
   Settings,
   ShieldCheck,
@@ -18,7 +16,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface SidebarItem {
   label: string;
@@ -52,9 +50,6 @@ const SECCIONES: SidebarSection[] = [
   },
 ];
 
-const SESSION_KEY = "huellitas-sidebar";
-const SIDEBAR_EVENT = "huellitas-sidebar-change";
-
 // BACKEND: datos de sesión desde GET /api/auth/sesion (nombre, rol).
 const USUARIO_ACTUAL = { nombre: "Ana Martínez", rol: "Administradora" };
 
@@ -66,19 +61,6 @@ function iniciales(nombre: string) {
     .slice(0, 2)
     .join("")
     .toUpperCase();
-}
-
-function subscribeToSession(callback: () => void) {
-  window.addEventListener(SIDEBAR_EVENT, callback);
-  window.addEventListener("storage", callback);
-  return () => {
-    window.removeEventListener(SIDEBAR_EVENT, callback);
-    window.removeEventListener("storage", callback);
-  };
-}
-
-function readCollapsed() {
-  return window.sessionStorage.getItem(SESSION_KEY) === "collapsed";
 }
 
 function useItemActivo(href: string) {
@@ -127,13 +109,9 @@ function NavItem({
 
 function NavBody({
   collapsed,
-  showToggle = true,
-  onToggle,
   onNavigate,
 }: {
   collapsed: boolean;
-  showToggle?: boolean;
-  onToggle: () => void;
   onNavigate?: () => void;
 }) {
   return (
@@ -180,22 +158,6 @@ function NavBody({
             </>
           )}
         </div>
-        {showToggle && (
-          <button
-            type="button"
-            onClick={onToggle}
-            aria-label={collapsed ? "Expandir menú" : "Colapsar menú"}
-            className={`flex h-11 w-11 cursor-pointer items-center justify-center rounded-md text-cream-50/90 transition-colors duration-fast ease-out hover:bg-cream-50/10 hover:text-cream-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cream-50 ${
-              collapsed ? "mx-auto" : "self-start"
-            }`}
-          >
-            {collapsed ? (
-              <PanelLeftOpen className="h-5 w-5" aria-hidden="true" />
-            ) : (
-              <PanelLeftClose className="h-5 w-5" aria-hidden="true" />
-            )}
-          </button>
-        )}
       </div>
     </>
   );
@@ -204,17 +166,9 @@ function NavBody({
 export function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [hovering, setHovering] = useState(false);
-  const collapsed = useSyncExternalStore(subscribeToSession, readCollapsed, () => false);
-  const expanded = !collapsed || hovering;
   const drawerRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const hamburgerRef = useRef<HTMLButtonElement>(null);
-
-  const toggleCollapse = () => {
-    setHovering(false);
-    window.sessionStorage.setItem(SESSION_KEY, expanded ? "collapsed" : "open");
-    window.dispatchEvent(new Event(SIDEBAR_EVENT));
-  };
 
   useEffect(() => {
     if (!mobileOpen) return;
@@ -256,15 +210,17 @@ export function Sidebar() {
       <aside
         onMouseEnter={() => setHovering(true)}
         onMouseLeave={() => setHovering(false)}
-        className={`sticky top-0 z-30 hidden h-screen shrink-0 flex-col bg-brand-900 transition-all duration-normal ease-out lg:flex ${expanded ? "w-[264px]" : "w-[72px]"}`}
+        onPointerEnter={() => setHovering(true)}
+        onPointerLeave={() => setHovering(false)}
+        className={`sticky top-0 z-30 hidden h-screen shrink-0 flex-col bg-brand-900 transition-all duration-normal ease-out lg:flex ${hovering ? "w-[264px]" : "w-[72px]"}`}
       >
         <div
-          className={`flex items-center gap-2 border-b border-cream-50/15 px-4 py-4 ${expanded ? "" : "justify-center"}`}
+          className={`flex items-center gap-2 border-b border-cream-50/15 px-4 py-4 ${hovering ? "" : "justify-center"}`}
         >
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-accent-500">
             <PawPrint className="h-5 w-5 text-brand-900" aria-hidden="true" />
           </span>
-          {expanded && (
+          {hovering && (
             <span className="font-display text-sm font-extrabold uppercase leading-tight tracking-tight text-cream-50">
               Huellitas
               <br />
@@ -272,7 +228,7 @@ export function Sidebar() {
             </span>
           )}
         </div>
-        <NavBody collapsed={!expanded} onToggle={toggleCollapse} />
+        <NavBody collapsed={!hovering} />
       </aside>
 
       <div className="sticky top-0 z-30 flex w-full items-center justify-between border-b border-border bg-cream-50 px-4 py-3 lg:hidden">
@@ -331,7 +287,7 @@ export function Sidebar() {
                 <X className="h-5 w-5" aria-hidden="true" />
               </button>
             </div>
-            <NavBody collapsed={false} showToggle={false} onToggle={() => {}} onNavigate={() => setMobileOpen(false)} />
+            <NavBody collapsed={false} onNavigate={() => setMobileOpen(false)} />
           </div>
         </div>
       )}
