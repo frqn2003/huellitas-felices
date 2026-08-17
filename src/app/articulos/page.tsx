@@ -53,7 +53,12 @@ function ArticulosScreen() {
   const [articulos, setArticulos] = useState<Articulo[]>([]);
 
   const [busqueda, setBusqueda] = useState("");
-  const [filtros, setFiltros] = useState<Filtros>({ categoria: "", estado: "Activo" });
+  const [filtros, setFiltros] = useState<Filtros>({
+    categoria: "",
+    estado: "Activo",
+    unidadMedida: "",
+    proveedorId: "",
+  });
   const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
 
@@ -63,6 +68,8 @@ function ArticulosScreen() {
   const [aDesactivar, setADesactivar] = useState<Articulo | null>(null);
 
   useEffect(() => {
+    // BACKEND: reemplazar la simulación por GET /api/articulos.
+    // Los estados SIMULAR_VACIO / SIMULAR_ERROR de src/data/articulos.ts controlan esta demo.
     const timer = window.setTimeout(() => {
       if (SIMULAR_ERROR) {
         setError(true);
@@ -80,11 +87,13 @@ function ArticulosScreen() {
       const matchBusqueda =
         !q || a.codigo.toLowerCase().includes(q) || a.nombre.toLowerCase().includes(q);
       const matchCategoria = !filtros.categoria || a.categoria === filtros.categoria;
+      const matchUnidad = !filtros.unidadMedida || a.unidadMedida === filtros.unidadMedida;
+      const matchProveedor =
+        !filtros.proveedorId || a.proveedorPreferido?.id === Number(filtros.proveedorId);
       let matchEstado = true;
       if (filtros.estado === "Activo") matchEstado = a.activo;
       else if (filtros.estado === "Inactivo") matchEstado = !a.activo;
-      else if (filtros.estado === "Próximo a vencer") matchEstado = a.proximoaVencer === true;
-      return matchBusqueda && matchCategoria && matchEstado;
+      return matchBusqueda && matchCategoria && matchUnidad && matchProveedor && matchEstado;
     });
   }, [articulos, busqueda, filtros]);
 
@@ -94,7 +103,11 @@ function ArticulosScreen() {
   const pageStart = filtrados.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
   const pageEnd = Math.min(safePage * pageSize, filtrados.length);
   const hasActiveFilters =
-    busqueda.trim() !== "" || filtros.categoria !== "" || filtros.estado !== "Todos";
+    busqueda.trim() !== "" ||
+    filtros.categoria !== "" ||
+    filtros.estado !== "Todos" ||
+    filtros.unidadMedida !== "" ||
+    filtros.proveedorId !== "";
 
   const handleBusqueda = (value: string) => {
     setBusqueda(value);
@@ -125,6 +138,9 @@ function ArticulosScreen() {
   };
 
   const handleSave = (draft: ArticuloDraft) => {
+    // BACKEND: enviar el draft por POST /api/articulos (INSERCION) o
+    // PUT /api/articulos/:id (EDICION) y usar el id devuelto por la API.
+    // La imagen llega como base64 en `imagen`; el back la guarda y devuelve la URL final.
     const proveedorId = Number(draft.proveedorId) || 0;
     const proveedor = PROVEEDORES_FIND(proveedorId);
     const ahora = new Date().toISOString();
@@ -135,11 +151,12 @@ function ArticulosScreen() {
         codigo: draft.codigo.trim().toUpperCase(),
         nombre: draft.nombre.trim(),
         descripcion: draft.descripcion.trim(),
+        fabricante: draft.fabricante.trim(),
         unidadMedida: draft.unidadMedida,
         categoria: draft.categoria,
         proveedorPreferido: proveedor,
         estado: "Activo",
-        imagen: "",
+        imagen: draft.imagen,
         createdAt: ahora,
         updatedAt: ahora,
         activo: true,
@@ -155,15 +172,13 @@ function ArticulosScreen() {
                 ...a,
                 nombre: draft.nombre.trim(),
                 descripcion: draft.descripcion.trim(),
+                fabricante: draft.fabricante.trim(),
                 unidadMedida: draft.unidadMedida,
                 categoria: draft.categoria,
                 proveedorPreferido: proveedor,
+                imagen: draft.imagen,
                 activo: draft.activo,
-                estado: draft.activo
-                  ? a.proximoaVencer
-                    ? "Próximo a vencer"
-                    : "Activo"
-                  : "Inactivo",
+                estado: draft.activo ? "Activo" : "Inactivo",
                 updatedAt: ahora,
               }
             : a,
@@ -175,6 +190,7 @@ function ArticulosScreen() {
   };
 
   const handleDesactivar = (articulo: Articulo) => {
+    // BACKEND: enviar PATCH /api/articulos/:id con { activo: false }.
     setArticulos((prev) =>
       prev.map((a) =>
         a.id === articulo.id
@@ -193,7 +209,7 @@ function ArticulosScreen() {
 
   const limpiarTodo = () => {
     setBusqueda("");
-    setFiltros({ categoria: "", estado: "Activo" });
+    setFiltros({ categoria: "", estado: "Activo", unidadMedida: "", proveedorId: "" });
   };
 
   return (

@@ -2,14 +2,16 @@
 
 import { SlidersHorizontal, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { CATEGORIAS } from "@/data/articulos";
+import { CATEGORIAS, PROVEEDORES, UNIDADES } from "@/data/articulos";
 import { Button } from "@/components/ui/Button";
 
-export type EstadoFiltro = "Activo" | "Inactivo" | "Próximo a vencer" | "Todos";
+export type EstadoFiltro = "Activo" | "Inactivo" | "Todos";
 
 export interface Filtros {
   categoria: string;
   estado: EstadoFiltro;
+  unidadMedida: string;
+  proveedorId: string;
 }
 
 interface FiltrosArticulosProps {
@@ -24,7 +26,9 @@ interface FiltrosChipsProps {
   onChange: (filtros: Filtros) => void;
 }
 
-const ESTADOS: EstadoFiltro[] = ["Activo", "Inactivo", "Próximo a vencer", "Todos"];
+const ESTADOS: EstadoFiltro[] = ["Activo", "Inactivo", "Todos"];
+
+const FILTROS_VACIOS: Filtros = { categoria: "", estado: "Todos", unidadMedida: "", proveedorId: "" };
 
 function buildTags(filtros: Filtros, onChange: (filtros: Filtros) => void) {
   const tags: { label: string; onRemove: () => void }[] = [];
@@ -38,6 +42,19 @@ function buildTags(filtros: Filtros, onChange: (filtros: Filtros) => void) {
     tags.push({
       label: `Estado: ${filtros.estado}`,
       onRemove: () => onChange({ ...filtros, estado: "Todos" }),
+    });
+  }
+  if (filtros.unidadMedida) {
+    tags.push({
+      label: `Unidad: ${filtros.unidadMedida}`,
+      onRemove: () => onChange({ ...filtros, unidadMedida: "" }),
+    });
+  }
+  if (filtros.proveedorId) {
+    const proveedor = PROVEEDORES.find((p) => p.id === Number(filtros.proveedorId));
+    tags.push({
+      label: `Proveedor: ${proveedor?.nombre ?? filtros.proveedorId}`,
+      onRemove: () => onChange({ ...filtros, proveedorId: "" }),
     });
   }
   return tags;
@@ -137,11 +154,42 @@ export function FiltrosArticulos({ filtros, onChange, disabled = false, hideChip
                   ))}
                 </select>
               </label>
+              <label className="flex flex-col gap-1.5 text-sm font-bold text-text-primary">
+                Unidad de medida
+                <select
+                  value={filtros.unidadMedida}
+                  onChange={(e) => onChange({ ...filtros, unidadMedida: e.target.value })}
+                  className="h-11 cursor-pointer rounded-sm border border-border bg-surface px-3 text-base font-normal text-text-primary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
+                >
+                  <option value="">Todas</option>
+                  {UNIDADES.map((u) => (
+                    <option key={u} value={u}>
+                      {u}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {/* BACKEND: poblar desde GET /api/proveedores (id + nombre). */}
+              <label className="flex flex-col gap-1.5 text-sm font-bold text-text-primary">
+                Proveedor
+                <select
+                  value={filtros.proveedorId}
+                  onChange={(e) => onChange({ ...filtros, proveedorId: e.target.value })}
+                  className="h-11 cursor-pointer rounded-sm border border-border bg-surface px-3 text-base font-normal text-text-primary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
+                >
+                  <option value="">Todos</option>
+                  {PROVEEDORES.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.nombre}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <Button
                 variant="ghost"
                 size="sm"
                 type="button"
-                onClick={() => onChange({ categoria: "", estado: "Todos" })}
+                onClick={() => onChange(FILTROS_VACIOS)}
               >
                 Limpiar filtros
               </Button>

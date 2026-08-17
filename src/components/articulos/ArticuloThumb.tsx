@@ -1,28 +1,36 @@
-import { Bone, Package, Pill, Syringe } from "lucide-react";
-import type { Categoria } from "@/data/articulos";
+import { PawPrint } from "lucide-react";
 
-const categoryIcons = {
-  Medicamentos: Pill,
-  Insumos: Syringe,
-  Alimentos: Bone,
-  Accesorios: Package,
+const SIZES = {
+  md: { box: "h-16 w-16", icon: "h-7 w-7" },
 } as const;
 
 export function ArticuloThumb({
-  categoria,
+  imagen,
   nombre,
+  size = "md",
 }: {
-  categoria: Categoria;
+  imagen: string;
   nombre: string;
+  size?: keyof typeof SIZES;
 }) {
-  const Icon = categoryIcons[categoria] ?? Package;
+  const dims = SIZES[size];
+  if (imagen) {
+    return (
+      <img
+        src={imagen}
+        alt={nombre}
+        loading="lazy"
+        className={`${dims.box} shrink-0 rounded-sm object-cover`}
+      />
+    );
+  }
   return (
     <span
-      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm bg-cream-100"
+      className={`${dims.box} flex shrink-0 items-center justify-center rounded-sm border border-dashed border-border bg-cream-50`}
       role="img"
-      aria-label={`Ícono de ${nombre}`}
+      aria-label={`Sin imagen de ${nombre}`}
     >
-      <Icon className="h-5 w-5 text-brand-900" aria-hidden="true" />
+      <PawPrint className={`${dims.icon} text-brand-900/40`} aria-hidden="true" />
     </span>
   );
 }

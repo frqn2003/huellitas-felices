@@ -9,10 +9,6 @@ const badgeStyles = {
     chip: "bg-cream-100 text-text-secondary",
     dot: "bg-text-secondary",
   },
-  "Próximo a vencer": {
-    chip: "bg-accent-500/20 text-brand-900",
-    dot: "bg-accent-500",
-  },
 } as const;
 
 export function EstadoBadge({ articulo }: { articulo: Articulo }) {

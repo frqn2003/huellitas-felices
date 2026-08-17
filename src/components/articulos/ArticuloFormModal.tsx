@@ -1,7 +1,7 @@
 "use client";
 
-import { PackagePlus, Pencil } from "lucide-react";
-import { useState } from "react";
+import { PackagePlus, Pencil, Upload } from "lucide-react";
+import { useRef, useState } from "react";
 import type { Articulo, Categoria, Proveedor, UnidadMedida } from "@/data/articulos";
 import { CATEGORIAS, PROVEEDORES, UNIDADES } from "@/data/articulos";
 import { Button } from "@/components/ui/Button";
@@ -15,10 +15,12 @@ export interface ArticuloDraft {
   codigo: string;
   nombre: string;
   descripcion: string;
+  fabricante: string;
   unidadMedida: UnidadMedida;
   categoria: Categoria;
   proveedorId: string;
   activo: boolean;
+  imagen: string;
 }
 
 interface ArticuloFormModalProps {
@@ -45,20 +47,24 @@ function initialDraft(articulo: Articulo | null, articulos: Articulo[]): Articul
       codigo: articulo.codigo,
       nombre: articulo.nombre,
       descripcion: articulo.descripcion,
+      fabricante: articulo.fabricante,
       unidadMedida: articulo.unidadMedida,
       categoria: articulo.categoria,
       proveedorId: articulo.proveedorPreferido ? String(articulo.proveedorPreferido.id) : "",
       activo: articulo.activo,
+      imagen: articulo.imagen,
     };
   }
   return {
     codigo: nextCodigo(articulos),
     nombre: "",
     descripcion: "",
+    fabricante: "",
     unidadMedida: "Unidad",
     categoria: "Medicamentos",
     proveedorId: "",
     activo: true,
+    imagen: "",
   };
 }
 
@@ -108,6 +114,9 @@ function ArticuloFormFields({
   const [draft, setDraft] = useState<ArticuloDraft>(() => initialDraft(articulo, articulos));
   const [errors, setErrors] = useState<Partial<Record<keyof ArticuloDraft, string>>>({});
   const [touched, setTouched] = useState<Partial<Record<keyof ArticuloDraft, boolean>>>({});
+  const [imagenError, setImagenError] = useState<string | null>(null);
+  const [imagenDragging, setImagenDragging] = useState(false);
+  const imagenInputRef = useRef<HTMLInputElement>(null);
 
   const showError = (field: keyof ArticuloDraft) => (touched[field] ? errors[field] : undefined);
 
@@ -117,6 +126,38 @@ function ArticuloFormFields({
     if (touched[field]) {
       setErrors(validateDraft(next, articulos, articulo?.id));
     }
+  };
+
+  const procesarArchivoImagen = (file: File | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setImagenError("El archivo debe ser una imagen (PNG, JPG o WEBP).");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setImagenError("La imagen no puede superar 2 MB.");
+      return;
+    }
+    // BACKEND: el back recibe la imagen (base64 en el POST/PUT o multipart en
+    // POST /api/articulos/:id/imagen) y devuelve la URL para el campo `imagen`.
+    const reader = new FileReader();
+    reader.onload = () => {
+      setImagenError(null);
+      setField("imagen", String(reader.result ?? ""));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleImagenFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    procesarArchivoImagen(file);
+  };
+
+  const handleImagenDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setImagenDragging(false);
+    procesarArchivoImagen(e.dataTransfer.files?.[0]);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -168,6 +209,108 @@ function ArticuloFormFields({
         hint="Ej: Para infecciones bacterianas"
         readOnly={isLectura}
       />
+      <Input
+        id="fabricante"
+        label="Fabricante"
+        value={draft.fabricante}
+        onChange={(e) => setField("fabricante", e.target.value)}
+        hint="Ej: Laboratorios Pharma S.A."
+        readOnly={isLectura}
+      />
+      <p className="text-sm font-bold text-text-primary">Imagen</p>
+      {isLectura ? (
+        <div className="flex flex-col gap-3 rounded-sm border border-border bg-surface p-4">
+          {draft.imagen ? (
+            <div className="flex items-center gap-4">
+              <img
+                src={draft.imagen}
+                alt={draft.nombre || "Imagen del artículo"}
+                className="h-24 w-24 shrink-0 rounded-sm object-cover"
+              />
+              <p className="text-xs text-text-secondary">Imagen actual del artículo.</p>
+            </div>
+          ) : (
+            <p className="text-sm text-text-secondary">Este artículo no tiene imagen cargada.</p>
+          )}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <div
+            role="button"
+            tabIndex={0}
+            aria-label="Subir o arrastrar imagen del artículo"
+            onClick={() => imagenInputRef.current?.click()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                imagenInputRef.current?.click();
+              }
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setImagenDragging(true);
+            }}
+            onDragLeave={() => setImagenDragging(false)}
+            onDrop={handleImagenDrop}
+            className={`flex cursor-pointer flex-col items-center justify-center gap-3 rounded-sm border-2 border-dashed px-6 py-6 text-center transition-colors duration-fast ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900 ${
+              imagenDragging
+                ? "border-brand-900 bg-brand-900/5"
+                : "border-border bg-cream-50 hover:border-brand-900/60"
+            }`}
+          >
+            {draft.imagen ? (
+              <div className="flex flex-col items-center gap-3 sm:flex-row">
+                <img
+                  src={draft.imagen}
+                  alt={draft.nombre || "Imagen del artículo"}
+                  className="h-24 w-24 shrink-0 rounded-sm object-cover"
+                />
+                <div className="flex flex-col gap-1">
+                  <p className="text-sm font-bold text-text-primary">Arrastrá una imagen para cambiar</p>
+                  <p className="text-xs text-text-secondary">o hacé clic para elegir otra</p>
+                </div>
+              </div>
+            ) : (
+              <>
+                <span className="flex h-11 w-11 items-center justify-center rounded-pill bg-brand-900/10">
+                  <Upload className="h-5 w-5 text-brand-900" aria-hidden="true" />
+                </span>
+                <div className="flex flex-col gap-1">
+                  <p className="text-sm font-bold text-text-primary">Arrastrá y soltá la imagen acá</p>
+                  <p className="text-xs text-text-secondary">o hacé clic para subir · PNG, JPG o WEBP · máx. 2 MB</p>
+                </div>
+              </>
+            )}
+          </div>
+          <input
+            ref={imagenInputRef}
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            onChange={handleImagenFile}
+            aria-label="Subir imagen del artículo"
+          />
+          <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs text-text-secondary">
+              La imagen se guarda al confirmar. Sin imagen, en el listado se muestra una huella.
+            </p>
+            {draft.imagen && (
+              <button
+                type="button"
+                onClick={() => setField("imagen", "")}
+                className="h-11 cursor-pointer rounded-pill px-4 text-sm font-bold text-destructive transition-colors duration-fast ease-out hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
+              >
+                Quitar imagen
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+      {imagenError && (
+        <p className="text-sm font-semibold text-destructive" role="alert">
+          {imagenError}
+        </p>
+      )}
       <div className="flex flex-col gap-4 sm:flex-row">
         <div className="flex-1">
           <Select
@@ -204,6 +347,7 @@ function ArticuloFormFields({
           </Select>
         </div>
       </div>
+      {/* BACKEND: poblar las opciones desde GET /api/proveedores (id + nombre). */}
       <Select
         id="proveedor"
         label="Proveedor preferido"
@@ -225,18 +369,18 @@ function ArticuloFormFields({
             : "Sin proveedor"}
         </p>
       )}
-      {isEdicion && (
-        <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-sm border border-border bg-surface px-4 text-sm font-bold text-text-primary">
+      {!isLectura && (
+        <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-sm border border-border bg-surface px-4 text-sm font-bold text-text-primary">
+          Artículo activo
           <input
             type="checkbox"
             checked={draft.activo}
             onChange={(e) => setField("activo", e.target.checked)}
             className="h-5 w-5 cursor-pointer accent-brand-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900"
           />
-          Artículo activo
         </label>
       )}
-      {isEdicion && !draft.activo && (
+      {!isLectura && !draft.activo && (
         <p className="rounded-sm bg-accent-500/15 px-4 py-3 text-sm font-semibold text-brand-900" role="status">
           Al guardar, el artículo quedará inactivo: no podrá usarse en nuevos movimientos, listas de precios ni
           órdenes de compra.
