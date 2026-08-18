@@ -12,6 +12,7 @@ import {
   ShoppingCart,
   Tags,
   Truck,
+  Warehouse,
   X,
 } from "lucide-react";
 import Link from "next/link";
@@ -35,6 +36,7 @@ const SECCIONES: SidebarSection[] = [
     items: [
       { label: "Inicio", href: "/", icon: LayoutDashboard },
       { label: "Artículos", href: "/articulos", icon: Package },
+      { label: "Stock", href: "/stock", icon: Warehouse },
       { label: "Lista de Precios", href: "#lista-precios", icon: Tags },
       { label: "Órdenes de Compra", href: "#ordenes-compra", icon: ShoppingCart },
       { label: "Proveedores", href: "#proveedores", icon: Truck },
