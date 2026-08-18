@@ -6,10 +6,21 @@
   },
   "permission": {
     "bash": {
+      "*": "ask",
       "git *": "allow",
       "npm *": "allow",
       "npx *": "allow",
-      "*": "ask"
-    }
+      "node *": "allow",
+      "Get-ChildItem*": "allow",
+      "Get-Content*": "allow",
+      "Test-Path*": "allow",
+      "Select-Object*": "allow",
+      "Measure-Object*": "allow",
+      "Remove-Item *": "ask"
+    },
+    "edit": "allow",
+    "webfetch": "allow",
+    "websearch": "allow",
+    "doom_loop": "ask"
   }
 }
