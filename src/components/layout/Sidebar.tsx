@@ -7,6 +7,7 @@ import {
   Menu,
   Package,
   PawPrint,
+  Pin,
   Settings,
   ShieldCheck,
   ShoppingCart,
@@ -40,7 +41,7 @@ const SECCIONES: SidebarSection[] = [
       { label: "Lista de Precios", href: "#lista-precios", icon: Tags },
       { label: "Órdenes de Compra", href: "#ordenes-compra", icon: ShoppingCart },
       { label: "Proveedores", href: "#proveedores", icon: Truck },
-      { label: "Movimientos de Stock", href: "#movimientos", icon: ArrowLeftRight },
+      { label: "Movimientos de Stock", href: "/movimientos-stock", icon: ArrowLeftRight },
     ],
   },
   {
@@ -168,9 +169,24 @@ function NavBody({
 export function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [hovering, setHovering] = useState(false);
+  const [pinned, setPinned] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const hamburgerRef = useRef<HTMLButtonElement>(null);
+
+  // BACKEND: el estado fijado del menú es preferencia local de sesión
+  // (sessionStorage); no se persiste en la base de datos.
+  useEffect(() => {
+    const stored = window.sessionStorage.getItem("huellitas.sidebar.pinned") === "1";
+    const id = window.setTimeout(() => setPinned(stored), 0);
+    return () => window.clearTimeout(id);
+  }, []);
+
+  useEffect(() => {
+    window.sessionStorage.setItem("huellitas.sidebar.pinned", pinned ? "1" : "0");
+  }, [pinned]);
+
+  const expanded = pinned || hovering;
 
   useEffect(() => {
     if (!mobileOpen) return;
@@ -214,23 +230,38 @@ export function Sidebar() {
         onMouseLeave={() => setHovering(false)}
         onPointerEnter={() => setHovering(true)}
         onPointerLeave={() => setHovering(false)}
-        className={`sticky top-0 z-30 hidden h-screen shrink-0 flex-col bg-brand-900 transition-all duration-normal ease-out lg:flex ${hovering ? "w-[264px]" : "w-[72px]"}`}
+        className={`sticky top-0 z-30 hidden h-screen shrink-0 flex-col bg-brand-900 transition-all duration-normal ease-out lg:flex ${expanded ? "w-[264px]" : "w-[72px]"}`}
       >
         <div
-          className={`flex items-center gap-2 border-b border-cream-50/15 px-4 py-4 ${hovering ? "" : "justify-center"}`}
+          className={`flex items-center gap-2 border-b border-cream-50/15 px-4 py-4 ${expanded ? "" : "justify-center"}`}
         >
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-accent-500">
             <PawPrint className="h-5 w-5 text-brand-900" aria-hidden="true" />
           </span>
-          {hovering && (
-            <span className="font-display text-sm font-extrabold uppercase leading-tight tracking-tight text-cream-50">
-              Huellitas
-              <br />
-              Felices
-            </span>
+          {expanded && (
+            <>
+              <span className="min-w-0 flex-1 font-display text-sm font-extrabold uppercase leading-tight tracking-tight text-cream-50">
+                Huellitas
+                <br />
+                Felices
+              </span>
+              <button
+                type="button"
+                onClick={() => setPinned((p) => !p)}
+                aria-pressed={pinned}
+                aria-label={pinned ? "Desfijar menú abierto" : "Fijar menú abierto"}
+                title={pinned ? "Desfijar menú" : "Fijar menú"}
+                className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-pill text-cream-50/75 transition-colors duration-fast ease-out hover:bg-cream-50/10 hover:text-cream-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cream-50"
+              >
+                <Pin
+                  className={`h-4 w-4 transition-transform duration-fast ease-out ${pinned ? "rotate-45" : ""}`}
+                  aria-hidden="true"
+                />
+              </button>
+            </>
           )}
         </div>
-        <NavBody collapsed={!hovering} />
+        <NavBody collapsed={!expanded} />
       </aside>
 
       <div className="sticky top-0 z-30 flex w-full items-center justify-between border-b border-border bg-cream-50 px-4 py-3 lg:hidden">
