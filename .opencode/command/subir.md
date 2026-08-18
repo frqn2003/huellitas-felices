@@ -5,7 +5,7 @@ agent: build
 
 # Comando /subir — Publicar cambios en GitHub
 
-Publica los cambios del repo **Huellitas Felices** en GitHub (`origin` → `github.com/dev-pcr/huellitas-felices`). **Nunca commitear ni pushear sin confirmación explícita del usuario.**
+Publica los cambios del repo **Huellitas Felices** en GitHub (`origin` → `github.com/frqn2003/huellitas-felices`). **Nunca commitear ni pushear sin confirmación explícita del usuario.**
 
 > Nota técnica: `git` no está en el PATH de PowerShell. Usá SIEMPRE la ruta completa: `C:\Program Files\Git\cmd\git.exe` (definila una vez al inicio como `$GIT`).
 
