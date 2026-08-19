@@ -109,6 +109,7 @@ interface FiltrosMovimientosProps {
   articulos: { id: number; nombre: string }[];
   onChange: (filtros: FiltrosMovimientos) => void;
   disabled?: boolean;
+  hideChips?: boolean;
 }
 
 export function FiltrosMovimientos({
@@ -116,6 +117,7 @@ export function FiltrosMovimientos({
   articulos,
   onChange,
   disabled = false,
+  hideChips = false,
 }: FiltrosMovimientosProps) {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -227,7 +229,9 @@ export function FiltrosMovimientos({
           </div>
         )}
       </div>
-      <FiltrosMovimientosChips filtros={filtros} articulos={articulos} onChange={onChange} />
+      {!hideChips && (
+        <FiltrosMovimientosChips filtros={filtros} articulos={articulos} onChange={onChange} />
+      )}
     </div>
   );
 }

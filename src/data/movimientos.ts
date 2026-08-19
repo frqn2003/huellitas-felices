@@ -10,6 +10,9 @@ import { fichasStockIniciales, type FichaStock } from "./stock";
 // artículos genera N registros que comparten `numero` (agrupador visual).
 // Las transferencias generan el par egreso (dep. origen) + ingreso (dep. destino)
 // vinculados con `movimiento_vinculado_id`.
+// REGLA DE ORIGEN: `origen_id` solo referencia documentos reales (Orden de
+// Compra, Venta). En Transferencia y Ajuste el origen es implícito
+// (el par vinculado / el ajuste mismo) y `origen_id` queda NULL.
 export type TipoMovimiento = "Ingreso" | "Egreso" | "Transferencia" | "Ajuste";
 
 export interface MovimientoStock {
@@ -17,8 +20,8 @@ export interface MovimientoStock {
   numero: string;
   fichaStockId: number;
   fichaStock: { articuloNombre: string; articuloUnidad: string; depositoNombre: string };
-  origenId: number;
-  origen: { nombre: string };
+  origenId: number | null;
+  origen: { nombre: string } | null;
   origenEntidadId: number | null;
   tipo: TipoMovimiento;
   cantidad: number;
@@ -75,8 +78,8 @@ export const movimientosIniciales: MovimientoStock[] = [
     numero: "MOV-0003",
     fichaStockId: 5,
     fichaStock: { articuloNombre: "Alimento Premium", articuloUnidad: "Kg", depositoNombre: "Dep. Norte" },
-    origenId: 3,
-    origen: { nombre: "Transferencia" },
+    origenId: null,
+    origen: null,
     origenEntidadId: null,
     tipo: "Ingreso",
     cantidad: 10,
@@ -92,8 +95,8 @@ export const movimientosIniciales: MovimientoStock[] = [
     numero: "MOV-0004",
     fichaStockId: 3,
     fichaStock: { articuloNombre: "Alimento Premium", articuloUnidad: "Kg", depositoNombre: "Dep. Central" },
-    origenId: 3,
-    origen: { nombre: "Transferencia" },
+    origenId: null,
+    origen: null,
     origenEntidadId: null,
     tipo: "Egreso",
     cantidad: 10,
@@ -115,25 +118,25 @@ export const tiposMovimiento: { id: number; nombre: TipoMovimiento }[] = [
   { id: 4, nombre: "Ajuste" },
 ];
 
-// Catálogo `origen_movimiento` (tabla de referencia).
+// Catálogo `origen_movimiento` (tabla de referencia): SOLO documentos reales.
+// Transferencia y Ajuste NO tienen origen documental (ver REGLA DE ORIGEN).
 // BACKEND: poblar desde GET /api/origenes-movimiento.
 export const origenesMovimiento: { id: number; nombre: string }[] = [
   { id: 1, nombre: "Orden de Compra" },
   { id: 2, nombre: "Venta" },
-  { id: 3, nombre: "Transferencia" },
-  { id: 4, nombre: "Ajuste" },
 ];
 
 // Orígenes válidos según el tipo de movimiento (combos inválidos no se ofrecen).
-// - Ingreso: llega stock (OC, transferencia entrante o ajuste positivo).
-// - Egreso: sale stock (venta, transferencia saliente o ajuste negativo).
-// - Transferencia: el origen SIEMPRE es Transferencia (el sistema vincula el par).
-// - Ajuste: el origen SIEMPRE es Ajuste.
+// - Ingreso: llega stock por una Orden de Compra.
+// - Egreso: sale stock por una Venta.
+// - Transferencia: sin origen documental (el par vinculado egreso/ingreso hace
+//   de origen y destino; `origen_id` queda NULL).
+// - Ajuste: sin origen documental (corrección manual; `origen_id` queda NULL).
 export const origenesPorTipo: Record<TipoMovimiento, number[]> = {
-  Ingreso: [1, 3, 4],
-  Egreso: [2, 3, 4],
-  Transferencia: [3],
-  Ajuste: [4],
+  Ingreso: [1],
+  Egreso: [2],
+  Transferencia: [],
+  Ajuste: [],
 };
 
 // Empleados que aparecen en los movimientos de ejemplo + el usuario logueado.
@@ -157,6 +160,14 @@ export const fichasMovimientos: FichaStock[] = fichasStockIniciales.filter(
 
 export function codigoFicha(fichaId: number): string {
   return `FIC-${String(fichaId).padStart(3, "0")}`;
+}
+
+// Convierte la cantidad del formulario a número: acepta coma o punto decimal
+// (teclados es-AR) y redondea a 2 decimales (la DB usa decimal(12,2)).
+export function parseCantidad(raw: string): number {
+  const normalizado = raw.trim().replace(",", ".");
+  const n = Number.parseFloat(normalizado);
+  return Number.isNaN(n) ? NaN : Math.round(n * 100) / 100;
 }
 
 // Próximo número de movimiento: MOV-XXXX (agrupador de los N registros generados).

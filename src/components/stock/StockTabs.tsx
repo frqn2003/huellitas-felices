@@ -3,7 +3,7 @@
 import { ArrowLeftRight, ClipboardList, Warehouse } from "lucide-react";
 import { useRef } from "react";
 
-export type TabStock = "depositos" | "fichas" | "transferencias";
+export type TabStock = "depositos" | "fichas" | "movimientos";
 
 interface StockTabsProps {
   active: TabStock;
@@ -14,14 +14,14 @@ interface StockTabsProps {
 const TABS: { id: TabStock; label: string; icon: React.ComponentType<{ className?: string; "aria-hidden"?: boolean }> }[] = [
   { id: "depositos", label: "Depósitos", icon: Warehouse },
   { id: "fichas", label: "Fichas de Stock", icon: ClipboardList },
-  { id: "transferencias", label: "Transferencias", icon: ArrowLeftRight },
+  { id: "movimientos", label: "Movimientos", icon: ArrowLeftRight },
 ];
 
 export function StockTabs({ active, onChange, disabled = false }: StockTabsProps) {
   const tabRefs = useRef<Record<TabStock, HTMLButtonElement | null>>({
     depositos: null,
     fichas: null,
-    transferencias: null,
+    movimientos: null,
   });
 
   const handleKeyDown = (e: React.KeyboardEvent, index: number) => {

@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  ArrowLeftRight,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -37,11 +36,10 @@ const SECCIONES: SidebarSection[] = [
     items: [
       { label: "Inicio", href: "/", icon: LayoutDashboard },
       { label: "Artículos", href: "/articulos", icon: Package },
-      { label: "Stock", href: "/stock", icon: Warehouse },
+      { label: "Inventario", href: "/stock", icon: Warehouse },
       { label: "Lista de Precios", href: "#lista-precios", icon: Tags },
       { label: "Órdenes de Compra", href: "#ordenes-compra", icon: ShoppingCart },
       { label: "Proveedores", href: "#proveedores", icon: Truck },
-      { label: "Movimientos de Stock", href: "/movimientos-stock", icon: ArrowLeftRight },
     ],
   },
   {

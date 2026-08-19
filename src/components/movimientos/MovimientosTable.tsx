@@ -165,7 +165,9 @@ export function MovimientosTable({
                 </td>
                 <td className="whitespace-nowrap px-4 py-3">
                   <div className="flex flex-col">
-                    <span className="text-sm font-semibold text-text-primary">{mov.origen.nombre}</span>
+                    <span className="text-sm font-semibold text-text-primary">
+                      {mov.origen?.nombre ?? mov.tipo}
+                    </span>
                     {mov.origenEntidadId !== null && (
                       <span className="text-xs font-medium text-text-secondary">
                         #{mov.origenEntidadId}

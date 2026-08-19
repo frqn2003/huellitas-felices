@@ -7,6 +7,7 @@ import {
   codigoFicha,
   origenesMovimiento,
   origenesPorTipo,
+  parseCantidad,
   tiposMovimiento,
 } from "@/data/movimientos";
 import { Button } from "@/components/ui/Button";
@@ -18,6 +19,13 @@ import { Select } from "@/components/ui/Select";
 export interface MovimientoItemDraft {
   articuloId: string;
   cantidad: string;
+}
+
+// Prefill opcional para el atajo "Transferir" desde una ficha: abre el modal
+// con tipo Transferencia, depósito origen y artículo ya cargados.
+export interface MovimientoInicial {
+  articuloId: number;
+  depositoId: number;
 }
 
 export interface MovimientoDraft {
@@ -35,7 +43,7 @@ export interface MovimientoDraft {
 interface MovimientoFormErrors {
   fechaHora?: string;
   tipoId?: string;
-  origenId?: string;
+  origenEntidadId?: string;
   depositoId?: string;
   depositoDestinoId?: string;
   general?: string;
@@ -47,6 +55,7 @@ interface MovimientoFormModalProps {
   depositos: Deposito[];
   fichas: FichaStock[];
   numeroSiguiente: string;
+  inicial?: MovimientoInicial | null;
   onClose: () => void;
   onConfirm: (draft: MovimientoDraft) => void;
 }
@@ -80,14 +89,28 @@ function MovimientoFormFields({
   depositos,
   fichas,
   numeroSiguiente,
+  inicial,
   onConfirm,
 }: {
   depositos: Deposito[];
   fichas: FichaStock[];
   numeroSiguiente: string;
+  inicial?: MovimientoInicial | null;
   onConfirm: (draft: MovimientoDraft) => void;
 }) {
-  const [draft, setDraft] = useState<MovimientoDraft>(() => draftVacio(numeroSiguiente));
+  const [draft, setDraft] = useState<MovimientoDraft>(() => {
+    const base = draftVacio(numeroSiguiente);
+    if (!inicial) return base;
+    // Prefill desde el atajo "Transferir" de una ficha: tipo Transferencia,
+    // depósito origen y artículo ya cargados (el destino lo elige el usuario).
+    const tipoTransferencia = tiposMovimiento.find((t) => t.nombre === "Transferencia");
+    return {
+      ...base,
+      tipoId: tipoTransferencia ? String(tipoTransferencia.id) : "",
+      depositoId: String(inicial.depositoId),
+      items: [{ articuloId: String(inicial.articuloId), cantidad: "" }],
+    };
+  });
   const [errors, setErrors] = useState<MovimientoFormErrors>(errorsVacios);
 
   const tipo = tiposMovimiento.find((t) => t.id === Number(draft.tipoId))?.nombre;
@@ -96,7 +119,7 @@ function MovimientoFormFields({
   // Origen filtrado según el tipo (combos inválidos no se ofrecen).
   const origenesValidos = tipo ? origenesPorTipo[tipo] : origenesMovimiento.map((o) => o.id);
   const opcionesOrigen = origenesMovimiento.filter((o) => origenesValidos.includes(o.id));
-  const origenFijado = opcionesOrigen.length === 1 ? String(opcionesOrigen[0].id) : "";
+  const esNroOC = opcionesOrigen[0]?.nombre === "Orden de Compra";
 
   const depositoOrigenId = Number(draft.depositoId);
   const depositoDestinoId = Number(draft.depositoDestinoId);
@@ -121,8 +144,13 @@ function MovimientoFormFields({
   const setField = <K extends keyof MovimientoDraft>(field: K, value: MovimientoDraft[K]) => {
     const next = { ...draft, [field]: value };
     if (field === "tipoId") {
-      // Al cambiar el tipo se corrige el origen (fijado o vacío).
-      next.origenId = origenFijado;
+      // Al cambiar el tipo se corrige el origen con el NUEVO tipo: fijado
+      // (Ingreso -> OC, Egreso -> Venta) o vacío (Transferencia / Ajuste).
+      // Se calcula desde `value`, no desde el closure (tipo anterior).
+      const nuevoTipo = tiposMovimiento.find((t) => t.id === Number(value))?.nombre;
+      const validos = nuevoTipo ? origenesPorTipo[nuevoTipo] : [];
+      next.origenId = validos.length === 1 ? String(validos[0]) : "";
+      if (validos.length === 0) next.origenEntidadId = "";
     }
     if (field === "depositoId") {
       // Si el depósito de origen cambia, los artículos sin ficha se limpian.
@@ -159,7 +187,18 @@ function MovimientoFormFields({
     const next: MovimientoFormErrors = {};
     if (!draft.fechaHora) next.fechaHora = "La fecha y hora son obligatorias.";
     if (!draft.tipoId) next.tipoId = "Seleccioná un tipo de movimiento.";
-    if (!draft.origenId) next.origenId = "Seleccioná el origen.";
+
+    // El nro. de documento (OC/venta) es opcional, pero si se completa debe ser
+    // un entero positivo (id de la entidad referenciada).
+    if (
+      opcionesOrigen.length === 1 &&
+      draft.origenEntidadId.trim() !== "" &&
+      (!Number.isInteger(Number(draft.origenEntidadId)) || Number(draft.origenEntidadId) < 1)
+    ) {
+      next.origenEntidadId = esNroOC
+        ? "El nro. de OC debe ser un entero positivo."
+        : "El nro. de venta debe ser un entero positivo.";
+    }
     if (esTransferencia) {
       if (!draft.depositoId) next.depositoId = "Seleccioná el depósito de origen.";
       if (!draft.depositoDestinoId) next.depositoDestinoId = "Seleccioná el depósito de destino.";
@@ -179,7 +218,7 @@ function MovimientoFormFields({
       const err: { articuloId?: string; cantidad?: string } = {};
       const articuloId = Number(item.articuloId);
       const ficha = fichasDeposito.find((f) => f.articuloId === articuloId);
-      const cant = Number.parseFloat(item.cantidad);
+      const cant = parseCantidad(item.cantidad);
 
       if (!item.articuloId) {
         err.articuloId = "Seleccioná un artículo.";
@@ -248,16 +287,21 @@ function MovimientoFormFields({
         </p>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {/* BACKEND: el número lo genera el back (secuencia MOV-XXXX); acá es readonly. */}
-        <Input
-          id="mov-numero"
-          label="Número de movimiento"
-          value={draft.numero}
-          readOnly
-          disabled
-          hint="Se genera automáticamente"
-        />
+      <div
+        className="flex flex-col gap-1 rounded-sm border border-border/60 bg-cream-50 px-4 py-3"
+        role="note"
+      >
+        <p className="text-xs font-extrabold uppercase tracking-wide text-text-secondary">
+          Número de movimiento
+        </p>
+        <p className="font-mono text-base font-bold text-brand-900">{draft.numero}</p>
+        <p className="text-xs font-medium text-text-secondary">
+          {/* BACKEND: el número lo genera el back (secuencia MOV-XXXX) al confirmar. */}
+          Se asigna automáticamente al confirmar; no se puede modificar.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Input
           id="mov-fecha"
           label="Fecha y hora"
@@ -267,6 +311,22 @@ function MovimientoFormFields({
           onChange={(e) => setField("fechaHora", e.target.value)}
           error={errors.fechaHora}
         />
+        {/* BACKEND: poblar desde GET /api/tipos-movimiento. */}
+        <Select
+          id="mov-tipo"
+          label="Tipo de movimiento"
+          requiredMark
+          value={draft.tipoId}
+          onChange={(e) => setField("tipoId", e.target.value)}
+          error={errors.tipoId}
+        >
+          <option value="">Seleccionar...</option>
+          {tiposMovimiento.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.nombre}
+            </option>
+          ))}
+        </Select>
         {/* BACKEND: poblar desde GET /api/depositos. */}
         <Select
           id="mov-deposito"
@@ -301,58 +361,43 @@ function MovimientoFormFields({
             ))}
           </Select>
         )}
-        {/* BACKEND: poblar desde GET /api/tipos-movimiento. */}
-        <Select
-          id="mov-tipo"
-          label="Tipo de movimiento"
-          requiredMark
-          value={draft.tipoId}
-          onChange={(e) => setField("tipoId", e.target.value)}
-          error={errors.tipoId}
-        >
-          <option value="">Seleccionar...</option>
-          {tiposMovimiento.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.nombre}
-            </option>
-          ))}
-        </Select>
-        {/* BACKEND: poblar desde GET /api/origenes-movimiento. */}
-        <Select
-          id="mov-origen"
-          label="Origen"
-          requiredMark
-          value={draft.origenId}
-          onChange={(e) => setField("origenId", e.target.value)}
-          error={errors.origenId}
-          disabled={opcionesOrigen.length === 1}
-          hint={opcionesOrigen.length === 1 ? "Origen fijado por el tipo de movimiento" : undefined}
-        >
-          <option value="">Seleccionar...</option>
-          {opcionesOrigen.map((o) => (
-            <option key={o.id} value={o.id}>
-              {o.nombre}
-            </option>
-          ))}
-        </Select>
-        {/* BACKEND: el back valida que origen_entidad_id exista en la entidad
-        referenciada (nro. de OC, nro. de venta, etc.). */}
-        <Input
-          id="mov-origen-entidad"
-          label="Origen entidad"
-          type="number"
-          min={1}
-          value={draft.origenEntidadId}
-          onChange={(e) => setField("origenEntidadId", e.target.value)}
-          hint="Opcional: nro. de orden de compra, venta, etc."
-        />
-        <Input
+        {/* El origen queda auto-fijado según el tipo (Ingreso -> Orden de
+        Compra, Egreso -> Venta); acá va el nro. del documento.
+        BACKEND: poblar el catálogo desde GET /api/origenes-movimiento. */}
+        {opcionesOrigen.length === 1 && (
+          <Input
+            id="mov-origen-entidad"
+            label={esNroOC ? "Nro. de OC" : "Nro. de venta"}
+            type="number"
+            min={1}
+            value={draft.origenEntidadId}
+            onChange={(e) => setField("origenEntidadId", e.target.value)}
+            error={errors.origenEntidadId}
+            hint={
+              esNroOC
+                ? "Opcional: nro. de la orden de compra"
+                : "Opcional: nro. de la venta"
+            }
+          />
+        )}
+        </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="mov-motivo" className="text-sm font-bold text-text-primary">
+          Motivo
+        </label>
+        <textarea
           id="mov-motivo"
-          label="Motivo"
           value={draft.motivo}
           onChange={(e) => setField("motivo", e.target.value)}
-          hint="Opcional: texto libre (máx. 255 caracteres)"
+          maxLength={255}
+          rows={3}
+          placeholder="Describí el motivo del movimiento..."
+          className="min-h-24 w-full rounded-sm border border-border bg-surface px-4 py-3 text-base text-text-primary transition-colors duration-fast ease-out placeholder:text-text-secondary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
         />
+        <p className="text-xs font-medium text-text-secondary">
+          Opcional: texto libre (máx. 255 caracteres)
+        </p>
       </div>
 
       <fieldset className="flex flex-col gap-3 rounded-md border border-border bg-cream-50 p-4">
@@ -440,6 +485,7 @@ export function MovimientoFormModal({
   depositos,
   fichas,
   numeroSiguiente,
+  inicial = null,
   onClose,
   onConfirm,
 }: MovimientoFormModalProps) {
@@ -469,6 +515,7 @@ export function MovimientoFormModal({
         depositos={depositos}
         fichas={fichas}
         numeroSiguiente={numeroSiguiente}
+        inicial={inicial}
         onConfirm={onConfirm}
       />
     </Modal>

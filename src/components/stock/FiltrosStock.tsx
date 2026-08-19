@@ -69,9 +69,10 @@ interface FiltrosStockProps {
   filtros: FiltrosStock;
   onChange: (filtros: FiltrosStock) => void;
   disabled?: boolean;
+  hideChips?: boolean;
 }
 
-export function FiltrosStock({ filtros, onChange, disabled = false }: FiltrosStockProps) {
+export function FiltrosStock({ filtros, onChange, disabled = false, hideChips = false }: FiltrosStockProps) {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -148,7 +149,7 @@ export function FiltrosStock({ filtros, onChange, disabled = false }: FiltrosSto
           </div>
         )}
       </div>
-      <FiltrosStockChips filtros={filtros} onChange={onChange} />
+      {!hideChips && <FiltrosStockChips filtros={filtros} onChange={onChange} />}
     </div>
   );
 }
