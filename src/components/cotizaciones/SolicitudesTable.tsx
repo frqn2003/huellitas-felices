@@ -17,7 +17,7 @@ interface SolicitudesTableProps {
   onCancelar: (solicitud: SolicitudCotizacion) => void;
 }
 
-const HEADERS = ["N°", "Fecha", "Cotizaciones", "Estado", "Acciones"];
+const HEADERS = ["Nº", "Fecha", "Cant. artículos", "Cotizaciones", "Estado", "Acciones"];
 
 export function SolicitudesTable({
   solicitudes,
@@ -32,7 +32,7 @@ export function SolicitudesTable({
   if (loading) {
     return (
       <div className="overflow-hidden rounded-md border border-border bg-surface shadow-card">
-        <div className="hidden grid-cols-5 gap-4 border-b border-border bg-cream-50 px-4 py-3 lg:grid">
+        <div className="hidden grid-cols-6 gap-4 border-b border-border bg-cream-50 px-4 py-3 lg:grid">
           {HEADERS.map((h) => (
             <span key={h} className="text-xs font-extrabold uppercase tracking-wide text-text-secondary">
               {h}
@@ -47,6 +47,7 @@ export function SolicitudesTable({
           >
             <div className="h-6 w-20 animate-pulse rounded bg-cream-100" />
             <div className="hidden h-4 w-24 animate-pulse rounded bg-cream-100 lg:block" />
+            <div className="h-4 w-24 animate-pulse rounded bg-cream-100" />
             <div className="h-4 w-28 animate-pulse rounded bg-cream-100" />
             <div className="h-6 w-24 animate-pulse rounded-pill bg-cream-100" />
             <div className="ml-auto flex gap-1 lg:ml-0">
@@ -133,6 +134,10 @@ export function SolicitudesTable({
                   </td>
                   <td className="px-4 py-3 text-sm font-medium text-text-primary">
                     {formatFecha(solicitud.fecha)}
+                  </td>
+                  <td className="px-4 py-3 text-sm font-medium text-text-primary">
+                    {solicitud._articulos_solicitados.length}{" "}
+                    {solicitud._articulos_solicitados.length === 1 ? "artículo" : "artículos"}
                   </td>
                   <td className="px-4 py-3 text-sm font-medium text-text-primary">
                     {solicitud._cotizaciones.length}{" "}
