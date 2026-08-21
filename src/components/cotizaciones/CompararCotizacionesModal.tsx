@@ -119,9 +119,9 @@ function CompararContenido({
     );
   };
 
-  // Adjudicada: la comparación queda en modo lectura (sin elegir proveedor
-  // ni generar órdenes; eso ya ocurrió).
-  const adjudicada = solicitud.estado === "Adjudicada";
+  // Solo lectura: la comparación queda en modo visual (sin elegir proveedor
+  // ni generar órdenes; eso ya ocurrió o se canceló).
+  const soloLectura = solicitud.estado !== "Abierta";
 
   return (
     <Modal
@@ -131,7 +131,7 @@ function CompararContenido({
       icon={<GitCompareArrows className="h-5 w-5 text-brand-900" aria-hidden="true" />}
       maxWidth="max-w-4xl"
       footer={
-        adjudicada ? (
+        soloLectura ? (
           <Button variant="outline" onClick={onClose}>
             Cerrar
           </Button>
@@ -236,7 +236,8 @@ function CompararContenido({
                           setAsignaciones((prev) => ({ ...prev, [art.id]: Number(e.target.value) }))
                         }
                         aria-label={`Proveedor para ${art.nombre}`}
-                        className="h-10 w-full min-w-36 cursor-pointer rounded-sm border border-border bg-surface px-2 text-sm font-bold text-text-primary transition-colors duration-fast ease-out focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
+                        disabled={soloLectura}
+                        className="h-10 w-full min-w-36 cursor-pointer rounded-sm border border-border bg-surface px-2 text-sm font-bold text-text-primary transition-colors duration-fast ease-out focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {opciones.map((c) => (
                           <option key={c.id} value={String(c.id)}>
@@ -289,9 +290,11 @@ function CompararContenido({
 
         <div className="flex flex-col gap-2 rounded-md border border-border bg-cream-50 p-4">
           <p className="text-sm font-medium text-text-primary" role="status">
-            {resumenProveedores.length > 0 ? (
+            {solicitud.estado === "Cancelada" ? (
+              "Esta solicitud fue cancelada. No se generaron órdenes de compra."
+            ) : resumenProveedores.length > 0 ? (
               <>
-                Se generarán{" "}
+                {solicitud.estado === "Adjudicada" ? "Se generaron " : "Se generarán "}
                 <strong>
                   {resumenProveedores.length}{" "}
                   {resumenProveedores.length === 1 ? "orden de compra" : "órdenes de compra"}
@@ -310,10 +313,12 @@ function CompararContenido({
               "Elegí un proveedor por artículo para generar las órdenes."
             )}
           </p>
-          <p className="text-xs font-medium text-text-secondary">
-            Cada proveedor recibe su propia orden con los artículos asignados; quedan Pendientes
-            hasta confirmarlas desde Órdenes de Compra.
-          </p>
+          {solicitud.estado === "Abierta" && (
+            <p className="text-xs font-medium text-text-secondary">
+              Cada proveedor recibe su propia orden con los artículos asignados; quedan Pendientes
+              hasta confirmarlas desde Órdenes de Compra.
+            </p>
+          )}
         </div>
       </div>
     </Modal>
