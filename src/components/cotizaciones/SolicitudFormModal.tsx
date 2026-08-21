@@ -121,17 +121,27 @@ export function SolicitudFormModal({
   };
 
   // Chip de bajo stock → agrega la línea con el artículo precargado.
-  // Cantidad sugerida: reponer al doble del mínimo (2×mín − actual).
+  // Cantidad sugerida: umbral mínimo (como pidió el usuario).
   const agregarDesdeChip = (articuloId: number) => {
     if (lineas.some((l) => l.articuloId === String(articuloId))) return;
     const ficha = fichasStockIniciales.find((f) => f.articuloId === articuloId);
-    const sugerido = ficha
-      ? Math.max(ficha.stockMinimo * 2 - ficha.stockActual, ficha.stockMinimo)
-      : 0;
-    agregarLinea({
-      articuloId: String(articuloId),
-      cantidad: String(Math.round(sugerido)),
-    });
+    const sugerido = ficha ? ficha.stockMinimo : 0;
+    
+    // Buscar si hay una fila vacía para reusarla en lugar de agregar una nueva
+    const indexVacia = lineas.findIndex((l) => !l.articuloId && !l.cantidad && !l.nota);
+    
+    if (indexVacia !== -1) {
+      actualizarLinea(lineas[indexVacia].key, {
+        articuloId: String(articuloId),
+        cantidad: String(Math.round(sugerido)),
+      });
+      touchLinea(lineas[indexVacia].key);
+    } else {
+      agregarLinea({
+        articuloId: String(articuloId),
+        cantidad: String(Math.round(sugerido)),
+      });
+    }
   };
 
   const eliminarLinea = (key: string) => {
@@ -260,7 +270,14 @@ export function SolicitudFormModal({
                     requiredMark
                     value={linea.articuloId}
                     options={articuloOptions}
-                    onChange={(value) => actualizarLinea(linea.key, { articuloId: value })}
+                    onChange={(value) => {
+                      const patch: Partial<Omit<LineaDraft, "key">> = { articuloId: value };
+                      if (!linea.cantidad && value) {
+                        const ficha = fichasStockIniciales.find((f) => f.articuloId === Number(value));
+                        if (ficha) patch.cantidad = String(ficha.stockMinimo);
+                      }
+                      actualizarLinea(linea.key, patch);
+                    }}
                     onBlur={() => touchLinea(linea.key)}
                     error={showError(linea.key, "articuloId")}
                     placeholder="Buscar artículo..."
