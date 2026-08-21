@@ -6,6 +6,7 @@ import { EstadoProveedorBadge } from "./EstadoProveedorBadge";
 
 interface ProveedoresTableProps {
   proveedores: Proveedor[];
+  loading?: boolean;
   hasActiveFilters: boolean;
   onClearFilters: () => void;
   onNueva: () => void;
@@ -18,6 +19,7 @@ const HEADERS = ["Razón Social", "CUIT", "Teléfono", "Forma Pago", "Estado", "
 
 export function ProveedoresTable({
   proveedores,
+  loading = false,
   hasActiveFilters,
   onClearFilters,
   onNueva,
@@ -25,6 +27,37 @@ export function ProveedoresTable({
   onEditar,
   onBaja,
 }: ProveedoresTableProps) {
+  if (loading) {
+    return (
+      <div className="overflow-hidden rounded-md border border-border bg-surface shadow-card">
+        <div className="hidden grid-cols-6 gap-4 border-b border-border bg-cream-50 px-4 py-3 lg:grid">
+          {HEADERS.map((h) => (
+            <span key={h} className="text-xs font-extrabold uppercase tracking-wide text-text-secondary">
+              {h}
+            </span>
+          ))}
+        </div>
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div
+            key={i}
+            className="flex items-center gap-4 border-b border-border/60 px-4 py-3 last:border-b-0"
+            aria-hidden="true"
+          >
+            <div className="h-4 w-44 animate-pulse rounded bg-cream-100" />
+            <div className="hidden h-4 w-28 animate-pulse rounded bg-cream-100 lg:block" />
+            <div className="hidden h-4 w-24 animate-pulse rounded bg-cream-100 lg:block" />
+            <div className="h-6 w-24 animate-pulse rounded-pill bg-cream-100" />
+            <div className="ml-auto flex gap-1 lg:ml-0">
+              <div className="h-11 w-11 animate-pulse rounded-pill bg-cream-100" />
+              <div className="h-11 w-11 animate-pulse rounded-pill bg-cream-100" />
+              <div className="h-11 w-11 animate-pulse rounded-pill bg-cream-100" />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   if (proveedores.length === 0) {
     return (
       <div className="flex flex-col items-center gap-4 rounded-md border border-border bg-surface px-6 py-16 text-center shadow-card">
@@ -132,11 +165,7 @@ export function ProveedoresTable({
                           </button>
                           <button
                             type="button"
-                            onClick={() => {
-                              if (confirm(`¿Estás seguro de dar de baja a ${prov.razonSocial}?`)) {
-                                onBaja(prov);
-                              }
-                            }}
+                            onClick={() => onBaja(prov)}
                             aria-label={`Dar de baja a ${prov.razonSocial}`}
                             title="Dar de baja"
                             className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-pill text-text-secondary transition-colors duration-fast ease-out hover:bg-status-danger/10 hover:text-status-danger-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900"

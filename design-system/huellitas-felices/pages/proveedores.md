@@ -21,3 +21,11 @@ Esta página es un ABML (Alta, Baja, Modificación y Lectura) estándar, pero ad
 - Fondo del overlay semi-transparente, modal centrado.
 - Botón "Guardar" primario, botón "Cancelar" outline o ghost.
 - En modo LECTURA: campos deshabilitados (texto primario visible, fondo bloqueado o inputs reemplazados por texto).
+
+### Estados de pantalla y toolbar (alineada al patrón de articulos/ordenes)
+- **Cargando:** skeleton de filas dentro de la card (`animate-pulse`, `bg-cream-100`), cabecera visible.
+- **Error:** card centrada con ícono `AlertTriangle` en `destructive/10`, botón secundario "Reintentar".
+- **Exportar:** botón outline con ícono `Download` junto al CTA primario; descarga CSV del listado filtrado + toast de éxito.
+- **Paginación:** componente `Pagination` de `ui/` debajo de la tabla (solo con datos).
+- **Baja:** confirmación con modal propio del módulo (`BajaProveedorModal`, botón destructive), nunca `confirm()` nativo.
+- Feedback de alta/edición/baja siempre con toast (`useToast`).

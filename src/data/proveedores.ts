@@ -3,6 +3,10 @@
 
 export type EstadoProveedor = "Activo" | "Inactivo";
 
+// Banderas de demo para simular los estados de la pantalla (ver src/app/proveedores/page.tsx).
+export const SIMULAR_VACIO = false;
+export const SIMULAR_ERROR = false;
+
 export interface Proveedor {
   id: number;
   razonSocial: string;
