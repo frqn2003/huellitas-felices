@@ -221,7 +221,7 @@ function ArticulosScreen() {
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex flex-col gap-1">
                 <p className="text-xs font-bold uppercase tracking-widest text-text-secondary">
-                  Stock · Catálogo
+                  Gestión de catálogo
                 </p>
                 <h1 className="font-display text-2xl font-extrabold uppercase tracking-tight text-brand-900 sm:text-3xl">
                   Artículos

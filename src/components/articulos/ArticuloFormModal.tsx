@@ -418,15 +418,10 @@ export function ArticuloFormModal({
       maxWidth="max-w-xl"
       footer={
         isLectura ? (
-          <>
-            <Button variant="outline" onClick={onClose}>
-              Cerrar
-            </Button>
-            <Button onClick={onEditFromRead}>
-              <Pencil className="h-4 w-4" aria-hidden="true" />
-              Editar artículo
-            </Button>
-          </>
+          <Button onClick={onEditFromRead}>
+            <Pencil className="h-4 w-4" aria-hidden="true" />
+            Editar artículo
+          </Button>
         ) : (
           <>
             <Button variant="outline" onClick={onClose}>

@@ -411,7 +411,7 @@ function MovimientoFormFields({
             return (
               <div
                 key={index}
-                className="grid grid-cols-1 gap-3 rounded-sm border border-border bg-surface p-3 sm:grid-cols-[1fr_120px_110px_120px_44px] sm:items-end"
+                className="grid grid-cols-1 gap-3 rounded-sm border border-border bg-surface p-3 sm:grid-cols-[1fr_120px_110px_120px_44px]"
               >
                 <Combobox
                   id={`mov-item-articulo-${index}`}
@@ -447,16 +447,21 @@ function MovimientoFormFields({
                     {ficha ? `${ficha.stockActual.toFixed(2)} ${ficha.articulo.unidadMedida}` : "—"}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => quitarItem(index)}
-                  disabled={draft.items.length === 1}
-                  aria-label={`Quitar artículo de la fila ${index + 1}`}
-                  title="Quitar artículo"
-                  className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-pill text-text-secondary transition-colors duration-fast ease-out hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900 disabled:cursor-not-allowed disabled:opacity-45 sm:justify-self-end"
-                >
-                  <Trash2 className="h-5 w-5" aria-hidden="true" />
-                </button>
+                <div className="flex flex-col gap-1.5 sm:justify-self-end">
+                  {/* Spacer con la altura de un label: mantiene el botón
+                  alineado con los inputs aunque una celda muestre error. */}
+                  <span aria-hidden="true" className="block h-5" />
+                  <button
+                    type="button"
+                    onClick={() => quitarItem(index)}
+                    disabled={draft.items.length === 1}
+                    aria-label={`Quitar artículo de la fila ${index + 1}`}
+                    title="Quitar artículo"
+                    className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-pill text-text-secondary transition-colors duration-fast ease-out hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900 disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    <Trash2 className="h-5 w-5" aria-hidden="true" />
+                  </button>
+                </div>
               </div>
             );
           })}
