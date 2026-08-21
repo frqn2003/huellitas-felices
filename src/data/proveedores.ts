@@ -15,7 +15,7 @@ export interface Proveedor {
   telefono: string;
   email: string;
   contacto: string;
-  formaPago: string;
+  formasPago: string[];
   plazoEntregaDias: number;
   estado: EstadoProveedor;
 }
@@ -30,7 +30,7 @@ export const proveedoresIniciales: Proveedor[] = [
     telefono: "387-4551122",
     email: "ventas@nutricionanimal.com.ar",
     contacto: "Marcela Funes",
-    formaPago: "Cuenta Corriente",
+    formasPago: ["Cuenta Corriente", "Transferencia"],
     plazoEntregaDias: 5,
     estado: "Activo",
   },
@@ -42,7 +42,7 @@ export const proveedoresIniciales: Proveedor[] = [
     telefono: "387-4223344",
     email: "pedidos@vetinsumosnorte.com",
     contacto: "Diego Herrera",
-    formaPago: "Contado",
+    formasPago: ["Contado"],
     plazoEntregaDias: 2,
     estado: "Activo",
   },
@@ -54,7 +54,7 @@ export const proveedoresIniciales: Proveedor[] = [
     telefono: "387-4998877",
     email: "administracion@farmavet.com.ar",
     contacto: "Lucía Paz",
-    formaPago: "Cheque a 30 días",
+    formasPago: ["Cheque a 30 días", "Contado"],
     plazoEntregaDias: 7,
     estado: "Activo",
   },
@@ -66,7 +66,7 @@ export const proveedoresIniciales: Proveedor[] = [
     telefono: "387-4667788",
     email: "contacto@balanceadosnorte.com",
     contacto: "Rubén Salinas",
-    formaPago: "Cuenta Corriente",
+    formasPago: ["Cuenta Corriente"],
     plazoEntregaDias: 10,
     estado: "Inactivo",
   },

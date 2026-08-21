@@ -25,7 +25,7 @@ function exportarCSV(proveedores: Proveedor[]) {
     "Telefono",
     "Email",
     "Contacto",
-    "FormaPago",
+    "FormasPago",
     "PlazoEntregaDias",
     "Estado",
   ];
@@ -37,7 +37,7 @@ function exportarCSV(proveedores: Proveedor[]) {
       p.telefono,
       p.email,
       `"${p.contacto.replace(/"/g, '""')}"`,
-      p.formaPago,
+      `"${p.formasPago.join(" / ").replace(/"/g, '""')}"`,
       String(p.plazoEntregaDias),
       p.estado,
     ].join(";"),

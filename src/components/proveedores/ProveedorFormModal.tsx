@@ -39,7 +39,7 @@ export function ProveedorFormModal({
   const [telefono, setTelefono] = useState("");
   const [email, setEmail] = useState("");
   const [contacto, setContacto] = useState("");
-  const [formaPago, setFormaPago] = useState("Contado");
+  const [formasPago, setFormasPago] = useState<string[]>(["Contado"]);
   const [plazoEntregaDias, setPlazoEntregaDias] = useState("1");
   const [errorGlobal, setErrorGlobal] = useState("");
 
@@ -54,7 +54,7 @@ export function ProveedorFormModal({
         setTelefono(proveedor.telefono);
         setEmail(proveedor.email);
         setContacto(proveedor.contacto);
-        setFormaPago(proveedor.formaPago);
+        setFormasPago(proveedor.formasPago);
         setPlazoEntregaDias(String(proveedor.plazoEntregaDias));
       } else {
         setRazonSocial("");
@@ -63,13 +63,19 @@ export function ProveedorFormModal({
         setTelefono("");
         setEmail("");
         setContacto("");
-        setFormaPago("Contado");
+        setFormasPago(["Contado"]);
         setPlazoEntregaDias("1");
       }
     }
   }, [open, proveedor, modo]);
 
   const soloLectura = modo === "ver";
+
+  const toggleFormaPago = (f: string) => {
+    setFormasPago((prev) =>
+      prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f],
+    );
+  };
   const title =
     modo === "crear"
       ? "Nuevo proveedor"
@@ -86,6 +92,11 @@ export function ProveedorFormModal({
       return;
     }
 
+    if (formasPago.length === 0) {
+      setErrorGlobal("Seleccioná al menos una forma de pago.");
+      return;
+    }
+
     const plazo = parseInt(plazoEntregaDias, 10);
     if (isNaN(plazo) || plazo < 0) {
       setErrorGlobal("El plazo de entrega debe ser un número válido.");
@@ -99,7 +110,7 @@ export function ProveedorFormModal({
       telefono: telefono.trim(),
       email: email.trim(),
       contacto: contacto.trim(),
-      formaPago,
+      formasPago,
       plazoEntregaDias: plazo,
     };
 
@@ -196,35 +207,42 @@ export function ProveedorFormModal({
           disabled={soloLectura}
         />
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-bold text-text-primary">
-              Forma de pago
-            </span>
-            <select
-              value={formaPago}
-              onChange={(e) => setFormaPago(e.target.value)}
-              disabled={soloLectura}
-              className="h-10 rounded-sm border border-border bg-surface px-3 py-1.5 text-sm text-text-primary transition-colors duration-fast ease-out focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20 disabled:cursor-not-allowed disabled:bg-cream-50 disabled:opacity-80"
-            >
-              {FORMAS_PAGO.map((f) => (
-                <option key={f} value={f}>
-                  {f}
-                </option>
-              ))}
-            </select>
-          </label>
+        <Input
+          id="prov-plazo"
+          label="Plazo de entrega (días)"
+          type="number"
+          min="0"
+          value={plazoEntregaDias}
+          onChange={(e) => setPlazoEntregaDias(e.target.value)}
+          disabled={soloLectura}
+        />
 
-          <Input
-            id="prov-plazo"
-            label="Plazo de entrega (días)"
-            type="number"
-            min="0"
-            value={plazoEntregaDias}
-            onChange={(e) => setPlazoEntregaDias(e.target.value)}
-            disabled={soloLectura}
-          />
-        </div>
+        <fieldset className="flex flex-col gap-1.5" disabled={soloLectura}>
+          <legend className="text-sm font-bold text-text-primary">
+            Formas de pago
+          </legend>
+          <div className="flex flex-wrap gap-2 pt-1">
+            {FORMAS_PAGO.map((f) => {
+              const activa = formasPago.includes(f);
+              return (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => toggleFormaPago(f)}
+                  aria-pressed={activa}
+                  disabled={soloLectura}
+                  className={`inline-flex h-11 cursor-pointer items-center rounded-pill px-4 text-sm font-bold transition-all duration-fast ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed ${
+                    activa
+                      ? "bg-brand-900 text-cream-50 hover:bg-brand-700"
+                      : "border border-brand-900 bg-surface text-brand-900 hover:bg-brand-900/5"
+                  } ${soloLectura && !activa ? "opacity-45" : ""}`}
+                >
+                  {f}
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
       </form>
     </Modal>
   );

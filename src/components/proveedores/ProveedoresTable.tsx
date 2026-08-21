@@ -15,7 +15,7 @@ interface ProveedoresTableProps {
   onBaja: (proveedor: Proveedor) => void;
 }
 
-const HEADERS = ["Razón Social", "CUIT", "Teléfono", "Forma Pago", "Estado", "Acciones"];
+const HEADERS = ["Razón Social", "CUIT", "Teléfono", "Formas de Pago", "Estado", "Acciones"];
 
 export function ProveedoresTable({
   proveedores,
@@ -134,8 +134,17 @@ export function ProveedoresTable({
                   <td className="px-4 py-3 text-sm text-text-primary">
                     {prov.telefono}
                   </td>
-                  <td className="px-4 py-3 text-sm text-text-primary">
-                    {prov.formaPago}
+                  <td className="px-4 py-3">
+                    <div className="flex max-w-[240px] flex-wrap gap-1">
+                      {prov.formasPago.map((f) => (
+                        <span
+                          key={f}
+                          className="rounded-pill bg-cream-100 px-2 py-0.5 text-xs font-bold text-text-secondary"
+                        >
+                          {f}
+                        </span>
+                      ))}
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <EstadoProveedorBadge estado={prov.estado} />

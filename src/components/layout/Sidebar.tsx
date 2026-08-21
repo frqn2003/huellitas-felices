@@ -39,7 +39,7 @@ const SECCIONES: SidebarSection[] = [
       { label: "Inventario", href: "/stock", icon: Warehouse },
       { label: "Compras", href: "/ordenes-compra", icon: ShoppingCart },
       { label: "Lista de Precios", href: "#lista-precios", icon: Tags },
-      { label: "Proveedores", href: "#proveedores", icon: Truck },
+      { label: "Proveedores", href: "/proveedores", icon: Truck },
     ],
   },
   {
