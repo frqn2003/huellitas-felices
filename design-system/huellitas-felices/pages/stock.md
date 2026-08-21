@@ -7,9 +7,9 @@
 Pantalla de gestión de stock (HU-STK-02). Módulo interno tipo back-office: densidad media-alta, tres modos controlados por pestañas (Depósitos / Fichas de Stock / Transferencias). Una sola acción clara por viewport: el CTA amarillo es exclusivo de la pestaña activa.
 
 ## Desviaciones y decisiones
+- **Amarillo (accent)**: SOLO en el CTA de la pestaña activa (Nueva ficha / Nuevo depósito / Confirmar transferencia). Exportar/Filtros son outline; acciones de fila son ghost. El amarillo de acción (`accent-500`) no se usa en badges — para eso está `status-warning` (ver MASTER.md "Status Colors").
 
-- **Amarillo (accent)**: SOLO en el CTA de la pestaña activa (Nueva ficha / Nuevo depósito / Confirmar transferencia). Exportar/Filtros son outline; acciones de fila son ghost. Nunca amarillo en badges de estado.
-- **Estados de stock (derivados, calculados)**: `normal` (verde brand), `bajo` (amarillo accent — único uso de amarillo fuera de CTA, reservado a la alerta ⚠️), `critico` (destructivo). Badge SIEMPRE con texto + icono, nunca color solo. El estado se calcula en el front: `critico` si `stockCritico != null && stockActual <= stockCritico`; `bajo` si `stockActual < stockMinimo`; si `stockCritico` es null solo existen normal/bajo. No se persiste.
+- **Estados de stock (derivados, calculados)** — paleta de estado del sistema (`StatusBadge`): `normal` (variante `success`, verde vibrante, icono CheckCircle2), `bajo` (variante `warning`, amarillo, icono AlertTriangle), `critico` (variante `danger`, rojo, icono AlertCircle). Badge SIEMPRE con texto + icono, nunca color solo. El estado se calcula en el front: `critico` si `stockCritico != null && stockActual <= stockCritico`; `bajo` si `stockActual < stockMinimo`; si `stockCritico` es null solo existen normal/bajo. No se persiste.
 - **Filtro por defecto**: solo fichas con artículo activo (`articulo.estado = activo`), sin toggle; la tabla `ficha_stock` no tiene estado propio.
 - **Transferencias**: UN solo flujo — la pestaña "Transferencias" embebe el formulario; el botón 🔄 de fila cambia a esa pestaña con origen precargado (no hay modal duplicado). Origen y destino deben ser depósitos distintos; la cantidad no puede superar el stock del origen.
 - **Densidad**: tablas con padding compacto (py-3), toolbar espaciado (gap-4). Container `min(1280px, calc(100% - 48px))` igual que la página Artículos.

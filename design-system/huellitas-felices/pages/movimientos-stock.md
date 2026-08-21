@@ -9,11 +9,12 @@ Pantalla de registro y consulta de movimientos de stock (HU-STK-04, ruta `/movim
 ## Desviaciones y decisiones
 
 - **Amarillo (accent)**: SOLO en el CTA "Nuevo movimiento". Exportar y Filtros son outline; no hay acciones de fila.
-- **Tipo de movimiento (badge con color + icono, nunca color solo)**:
-  - `Ingreso`: chip verde brand + icono `ArrowDownToLine`.
-  - `Egreso`: chip destructivo + icono `ArrowUpFromLine`.
-  - `Transferencia`: chip neutro (borde) + icono `ArrowLeftRight`.
-  - `Ajuste`: chip crema/brand + icono `Scale`.
+- **Tipo de movimiento (badge con color + icono, nunca color solo)** — usa la
+  paleta de estado del sistema (`StatusBadge`, ver MASTER.md "Status Colors"):
+  - `Ingreso`: variante `success` (verde vibrante) + icono `ArrowDownToLine`.
+  - `Egreso`: variante `danger` (rojo) + icono `ArrowUpFromLine`.
+  - `Transferencia`: variante `info` (azul) + icono `ArrowLeftRight`.
+  - `Ajuste`: variante `warning` (amarillo) + icono `Scale`.
 - **Formulario modal (Nuevo movimiento)**:
   - Nº de movimiento auto-generado `MOV-XXXX` (agrupador de los N registros), readonly en el modal.
   - Tipo = **Transferencia** → dos campos: "Depósito origen" y "Depósito destino" (deben ser distintos). Otros tipos → un solo "Depósito".
