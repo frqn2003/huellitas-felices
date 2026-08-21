@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, PackagePlus, Pencil, Plus, Scale, Send, Trash2, XCircle } from "lucide-react";
+import { Eye, FileWarning, PackagePlus, Pencil, Plus, Receipt, Send, Trash2, XCircle } from "lucide-react";
 import { useRef, useState } from "react";
 import type { Proveedor } from "@/data/articulos";
 import { PROVEEDORES, articulosIniciales } from "@/data/articulos";
@@ -42,17 +42,6 @@ export interface OrdenDraft {
   lineas: LineaDraft[];
 }
 
-// Snapshot que llega desde la adjudicación de una cotización (HU-COMP-02):
-// precarga la nueva orden y la vincula con la solicitud por cotizacion_id.
-export interface OrdenPrefill {
-  solicitudCodigo: string;
-  cotizacionId: number;
-  proveedorId: string;
-  condicionPago: string;
-  notas: string;
-  lineas: { articuloId: string; cantidad: string; precio: string }[];
-}
-
 interface LineaErrors {
   articuloId?: string;
   cantidad?: string;
@@ -71,7 +60,6 @@ interface OrdenFormFieldsProps {
   orden: OrdenCompra | null;
   ordenes: OrdenCompra[];
   modo: OrdenFormModo;
-  prefill?: OrdenPrefill | null;
   cotizacionCodigo?: string | null;
   onSave: (draft: OrdenDraft) => void;
 }
@@ -143,7 +131,7 @@ function validarDraft(draft: OrdenDraft): DraftErrors {
   return next;
 }
 
-function initialDraft(orden: OrdenCompra | null, prefill?: OrdenPrefill | null): OrdenDraft {
+function initialDraft(orden: OrdenCompra | null): OrdenDraft {
   if (orden) {
     // La orden guarda solo el varchar; el depósito se infiere por match exacto
     // de dirección. Si no coincide con ningún depósito del catálogo, cae al
@@ -164,19 +152,6 @@ function initialDraft(orden: OrdenCompra | null, prefill?: OrdenPrefill | null):
         cantidad: importeAInput(d.cantidad),
         precio: importeAInput(d.precio_acordado),
       })),
-    };
-  }
-  if (prefill) {
-    return {
-      proveedorId: prefill.proveedorId,
-      fecha: new Date().toISOString().slice(0, 10),
-      fechaEntrega: "",
-      depositoEntregaId: String(DEPOSITO_ENTREGA_DEFAULT_ID),
-      condicionPago: prefill.condicionPago,
-      notas: prefill.notas,
-      descuento: "",
-      gastosEnvio: "",
-      lineas: prefill.lineas.map((l, i) => ({ key: `p-${i + 1}`, ...l })),
     };
   }
   return {
@@ -204,14 +179,13 @@ function OrdenFormFields({
   orden,
   ordenes,
   modo,
-  prefill,
   cotizacionCodigo = null,
   onSave,
 }: OrdenFormFieldsProps) {
   const isLectura = modo === "LECTURA";
   const editable = !isLectura;
 
-  const [draft, setDraft] = useState<OrdenDraft>(() => initialDraft(orden, prefill));
+  const [draft, setDraft] = useState<OrdenDraft>(() => initialDraft(orden));
   const [errors, setErrors] = useState<DraftErrors>({ lineas: {} });
   const [touched, setTouched] = useState<Partial<Record<Exclude<keyof OrdenDraft, "lineas">, boolean>>>({});
   const [lineasTouched, setLineasTouched] = useState<Record<string, boolean>>({});
@@ -329,23 +303,6 @@ function OrdenFormFields({
 
   return (
     <form id="orden-form" onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
-      {modo === "INSERCION" && prefill && (
-        <div
-          className="flex items-start gap-3 rounded-sm border border-accent-500/40 bg-accent-500/10 px-4 py-3"
-          role="note"
-        >
-          <Scale className="mt-0.5 h-5 w-5 shrink-0 text-brand-900" aria-hidden="true" />
-          <div className="flex flex-col gap-0.5">
-            <p className="text-sm font-extrabold text-brand-900">
-              Generada desde {prefill.solicitudCodigo} · comparación adjunta
-            </p>
-            <p className="text-xs font-medium text-text-secondary">
-              Proveedor, condición de pago y precios precargados de la cotización adjudicada.
-            </p>
-          </div>
-        </div>
-      )}
-
       {modo === "INSERCION" && (
         <div
           className="flex flex-col gap-1 rounded-sm border border-border/60 bg-cream-50 px-4 py-3"
@@ -651,12 +608,10 @@ interface OrdenFormModalProps {
   modo: OrdenFormModo;
   orden: OrdenCompra | null;
   ordenes: OrdenCompra[];
-  prefill?: OrdenPrefill | null;
   /** Código SC-XXXX resuelto cuando la orden nació de una adjudicación. */
   cotizacionCodigo?: string | null;
   onClose: () => void;
   onSave: (draft: OrdenDraft) => void;
-  onEditFromRead: () => void;
   onCancelFromRead: (orden: OrdenCompra) => void;
   onEnviar: (orden: OrdenCompra) => void;
 }
@@ -666,21 +621,21 @@ export function OrdenFormModal({
   modo,
   orden,
   ordenes,
-  prefill = null,
   cotizacionCodigo = null,
   onClose,
   onSave,
-  onEditFromRead,
   onCancelFromRead,
   onEnviar,
 }: OrdenFormModalProps) {
   const isLectura = modo === "LECTURA";
   const isEdicion = modo === "EDICION";
-  const formKey = `${modo}-${orden?.id ?? (prefill ? `prefill-${prefill.cotizacionId}` : "nueva")}`;
+  const formKey = `${modo}-${orden?.id ?? "nueva"}`;
   // Cancelar solo antes de recibir mercadería (criterio HU-COMP-02).
   const cancelable = orden?.estado === "Pendiente" || orden?.estado === "Enviada";
-  const editableDesdeLectura = orden?.estado === "Pendiente";
   const enviable = orden?.estado === "Pendiente";
+  // Con recepción parcial quedan pendientes ítems por recibir: se habilita el
+  // acceso al remito y la nota de reclamo al proveedor.
+  const recibidaParcial = orden?.estado === "Recibida Parcial";
 
   const titulo = isLectura
     ? `Orden ${numeroOrden(orden?.id ?? 0)}`
@@ -717,12 +672,6 @@ export function OrdenFormModal({
                 Cancelar orden
               </Button>
             )}
-            {editableDesdeLectura && (
-              <Button variant="secondary" onClick={onEditFromRead}>
-                <Pencil className="h-4 w-4" aria-hidden="true" />
-                Editar
-              </Button>
-            )}
             {enviable && (
               <Button
                 onClick={() => {
@@ -732,6 +681,24 @@ export function OrdenFormModal({
                 <Send className="h-4 w-4" aria-hidden="true" />
                 Enviar al proveedor
               </Button>
+            )}
+            {recibidaParcial && (
+              <>
+                {/* BACKEND: GET /api/ordenes-compra/:id/remito — abrir el remito
+                    de la recepción parcial asociada a la orden. */}
+                <Button variant="outline">
+                  <Receipt className="h-4 w-4" aria-hidden="true" />
+                  Ver remito
+                </Button>
+                {/* BACKEND: POST /api/ordenes-compra/:id/notas-reclamo — crear
+                    la nota de reclamo al proveedor por los ítems faltantes.
+                    Es la acción principal del estado: CTA amarillo para
+                    diferenciarlo del acceso secundario al remito. */}
+                <Button variant="primary">
+                  <FileWarning className="h-4 w-4" aria-hidden="true" />
+                  Generar nota de reclamo
+                </Button>
+              </>
             )}
           </>
         ) : (
@@ -751,7 +718,6 @@ export function OrdenFormModal({
         orden={orden}
         ordenes={ordenes}
         modo={modo}
-        prefill={prefill}
         cotizacionCodigo={cotizacionCodigo}
         onSave={onSave}
       />

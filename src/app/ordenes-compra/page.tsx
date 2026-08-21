@@ -29,10 +29,9 @@ import {
   OrdenFormModal,
   type OrdenDraft,
   type OrdenFormModo,
-  type OrdenPrefill,
 } from "@/components/ordenes-compra/OrdenFormModal";
 import { OrdenesTable } from "@/components/ordenes-compra/OrdenesTable";
-import { useCotizaciones } from "@/context/CotizacionesContext";
+import { useCotizaciones, type AsignacionArticulo } from "@/context/CotizacionesContext";
 import { articulosIniciales, PROVEEDORES } from "@/data/articulos";
 import {
   SIMULAR_ERROR as SIMULAR_ERROR_COT,
@@ -42,6 +41,7 @@ import {
 } from "@/data/cotizaciones";
 import type { OrdenCompra } from "@/data/ordenes-compra";
 import {
+  DEPOSITO_ENTREGA_DEFAULT_ID,
   SIMULAR_ERROR,
   SIMULAR_VACIO,
   USUARIO_SESION,
@@ -54,6 +54,13 @@ import { depositosIniciales } from "@/data/stock";
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+// Convierte un input de rango a número; vacío o inválido = sin límite.
+function parseRango(raw: string): number | null {
+  if (raw.trim() === "") return null;
+  const n = parseImporte(raw);
+  return Number.isNaN(n) ? null : n;
 }
 
 const TITULO_ACCIONES: Record<Exclude<OrdenFormModo, "LECTURA">, string> = {
@@ -102,8 +109,18 @@ function ComprasScreen() {
   const { showToast } = useToast();
   // Fuente viva de solicitudes: resuelve cotizacion_id → "SC-XXXX" en el
   // detalle de lectura y alimenta el tab de cotizaciones (HU-COMP-02).
-  const { solicitudes, crearSolicitud, registrarCotizacion, adjudicar, cancelarSolicitud } =
-    useCotizaciones();
+  const {
+    solicitudes,
+    crearSolicitud,
+    registrarCotizacion,
+    adjudicarPorArticulo,
+    cancelarSolicitud,
+  } = useCotizaciones();
+  // La simulación de vacío filtra la fuente; el estado vivo lo maneja el contexto.
+  const solicitudesDemo = useMemo(
+    () => (SIMULAR_VACIO_COT ? [] : solicitudes),
+    [solicitudes],
+  );
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -120,10 +137,8 @@ function ComprasScreen() {
   const [formModo, setFormModo] = useState<OrdenFormModo>("INSERCION");
   const [formOrden, setFormOrden] = useState<OrdenCompra | null>(null);
   const [aCancelarOrden, setACancelarOrden] = useState<OrdenCompra | null>(null);
-  const [prefill, setPrefill] = useState<OrdenPrefill | null>(null);
 
   // ── Estado del tab "Cotizaciones" ───────────────────────────────────
-  const [solicitudesVisibles, setSolicitudesVisibles] = useState<SolicitudCotizacion[]>([]);
   const [busquedaCot, setBusquedaCot] = useState("");
   const [filtrosCot, setFiltrosCot] = useState<FiltrosSolicitud>(FILTROS_SOLICITUD_VACIOS);
   const [pageSizeCot, setPageSizeCot] = useState(10);
@@ -153,32 +168,38 @@ function ComprasScreen() {
       }
       if (SIMULAR_ERROR_COT) {
         setError(true);
-      } else {
-        setSolicitudesVisibles(SIMULAR_VACIO_COT ? [] : solicitudes);
       }
       setLoading(false);
     }, 900);
     return () => window.clearTimeout(timer);
-    // La demo carga una sola vez; el estado vivo lo maneja el contexto.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Filtrado órdenes ────────────────────────────────────────────────
   const filtradas = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
-    return ordenes.filter((o) => {
+    const totalMin = parseRango(filtros.totalMin);
+    const totalMax = parseRango(filtros.totalMax);
+    const lista = ordenes.filter((o) => {
       const matchBusqueda =
         !q ||
         numeroOrden(o.id).toLowerCase().includes(q) ||
         String(o.id).includes(q) ||
         o._proveedor.razon_social.toLowerCase().includes(q);
       let matchEstado = true;
-      if (filtros.estado === "Activas") matchEstado = o.estado !== "Cancelada";
-      else if (filtros.estado !== "Todas") matchEstado = o.estado === filtros.estado;
+      if (filtros.estado !== "Todas") matchEstado = o.estado === filtros.estado;
       const matchProveedor =
         !filtros.proveedorId || o.proveedor_id === Number(filtros.proveedorId);
-      return matchBusqueda && matchEstado && matchProveedor;
+      const matchTotal =
+        (totalMin === null || o.total >= totalMin) &&
+        (totalMax === null || o.total <= totalMax);
+      return matchBusqueda && matchEstado && matchProveedor && matchTotal;
     });
+    // BACKEND: el ORDER BY fecha lo resuelve la consulta SQL; acá es solo demo.
+    return lista.sort((a, b) =>
+      filtros.ordenFecha === "antiguas"
+        ? Date.parse(a.fecha) - Date.parse(b.fecha)
+        : Date.parse(b.fecha) - Date.parse(a.fecha),
+    );
   }, [ordenes, busqueda, filtros]);
 
   const totalPages = Math.max(1, Math.ceil(filtradas.length / pageSize));
@@ -189,7 +210,9 @@ function ComprasScreen() {
   const hasActiveFilters =
     busqueda.trim() !== "" ||
     filtros.proveedorId !== "" ||
-    filtros.estado !== FILTROS_ORDEN_VACIOS.estado;
+    filtros.estado !== FILTROS_ORDEN_VACIOS.estado ||
+    filtros.totalMin.trim() !== "" ||
+    filtros.totalMax.trim() !== "";
 
   const handleBusqueda = (value: string) => {
     setBusqueda(value);
@@ -202,7 +225,6 @@ function ComprasScreen() {
   };
 
   const openNuevo = () => {
-    setPrefill(null);
     setFormOrden(null);
     setFormModo("INSERCION");
     setFormOpen(true);
@@ -252,8 +274,7 @@ function ComprasScreen() {
       const nueva: OrdenCompra = {
         id: nuevoId,
         proveedor_id: Number(draft.proveedorId),
-        // Si nació de una adjudicación, queda vinculada a la cotización elegida.
-        cotizacion_id: prefill ? prefill.cotizacionId : null,
+        cotizacion_id: null,
         usuario_id: USUARIO_SESION.id,
         fecha: `${draft.fecha}T12:00:00Z`,
         fecha_entrega: draft.fechaEntrega ? `${draft.fechaEntrega}T12:00:00Z` : null,
@@ -275,7 +296,6 @@ function ComprasScreen() {
       };
       setOrdenes((prev) => [nueva, ...prev]);
       setFormOpen(false);
-      setPrefill(null);
       showToast("success", TITULO_ACCIONES.INSERCION);
     } else if (formModo === "EDICION" && formOrden) {
       let detalleId = Math.max(0, ...ordenes.flatMap((o) => o._detalles.map((d) => d.id)));
@@ -345,7 +365,7 @@ function ComprasScreen() {
   // ── Filtrado cotizaciones ───────────────────────────────────────────
   const filtradasCot = useMemo(() => {
     const q = busquedaCot.trim().toLowerCase();
-    return solicitudesVisibles.filter((s) => {
+    const lista = solicitudesDemo.filter((s) => {
       const matchBusqueda =
         !q ||
         codigoSolicitud(s.id).toLowerCase().includes(q) ||
@@ -359,7 +379,13 @@ function ComprasScreen() {
       const matchEstado = filtrosCot.estado === "Todas" || s.estado === filtrosCot.estado;
       return matchBusqueda && matchEstado;
     });
-  }, [solicitudesVisibles, busquedaCot, filtrosCot]);
+    // BACKEND: el ORDER BY fecha lo resuelve la consulta SQL; acá es solo demo.
+    return lista.sort((a, b) =>
+      filtrosCot.ordenFecha === "antiguas"
+        ? Date.parse(a.fecha) - Date.parse(b.fecha)
+        : Date.parse(b.fecha) - Date.parse(a.fecha),
+    );
+  }, [solicitudesDemo, busquedaCot, filtrosCot]);
 
   const totalPagesCot = Math.max(1, Math.ceil(filtradasCot.length / pageSizeCot));
   const safePageCot = Math.min(pageCot, totalPagesCot);
@@ -402,42 +428,86 @@ function ComprasScreen() {
     showToast("success", "Cotización registrada correctamente");
   };
 
-  const handleAdjudicar = (cotizacionId: number) => {
+  const handleAdjudicar = (asignaciones: AsignacionArticulo[]) => {
     if (!aComparar) return;
     const solicitud = aComparar;
-    const cotizacion = solicitud._cotizaciones.find((c) => c.id === cotizacionId);
-    if (!cotizacion) return;
 
-    // Snapshot para precargar la nueva orden (HU-COMP-02). Al vivir ambos tabs
-    // en el mismo módulo, el handoff es directo por estado: se cambia al tab
-    // de órdenes y se abre el formulario INSERCION con el banner de origen.
-    const snapshot: OrdenPrefill = {
-      solicitudCodigo: codigoSolicitud(solicitud.id),
-      cotizacionId: cotizacion.id,
-      proveedorId: String(cotizacion.proveedor_id),
-      condicionPago: cotizacion.condicion_pago,
-      notas:
-        solicitud.notas ??
-        `Generada desde la solicitud ${codigoSolicitud(solicitud.id)}.`,
-      lineas: solicitud._articulos_solicitados.map((a) => ({
-        articuloId: String(a.articulo_id),
-        cantidad: String(a.cantidad_estimada),
-        precio: String(
-          cotizacion._detalles.find((d) => d.articulo_id === a.articulo_id)?.precio ?? "",
-        ),
-      })),
-    };
+    // Agrupar por cotización: cada proveedor recibe su propia orden solo con
+    // los artículos que le asignaron en la comparación (adjudicación split).
+    const porCotizacion = new Map<number, AsignacionArticulo[]>();
+    asignaciones.forEach((a) => {
+      const grupo = porCotizacion.get(a.cotizacionId) ?? [];
+      grupo.push(a);
+      porCotizacion.set(a.cotizacionId, grupo);
+    });
 
     // BACKEND: PATCH /api/solicitudes-cotizacion/:id/adjudicar. El back crea
-    // la orden_compra vinculada (orden_compra.cotizacion_id).
-    adjudicar(solicitud.id, cotizacionId);
+    // las orden_compra en transacción (una por proveedor, cada una vinculada
+    // por orden_compra.cotizacion_id) y registra la auditoría.
+    adjudicarPorArticulo(solicitud.id);
+
+    const depositoEntrega = depositosIniciales.find(
+      (d) => d.id === DEPOSITO_ENTREGA_DEFAULT_ID,
+    );
+
+    setOrdenes((prev) => {
+      let nuevoId = Math.max(0, ...prev.map((o) => o.id));
+      let detalleId = Math.max(0, ...prev.flatMap((o) => o._detalles.map((d) => d.id)));
+      const nuevas: OrdenCompra[] = [];
+      porCotizacion.forEach((lineas, cotizacionId) => {
+        const cotizacion = solicitud._cotizaciones.find((c) => c.id === cotizacionId);
+        if (!cotizacion) return;
+        const detallesBase = lineas.map((l) => {
+          const solicitado = solicitud._articulos_solicitados.find(
+            (x) => x.articulo_id === l.articuloId,
+          );
+          return {
+            articulo_id: l.articuloId,
+            cantidad: solicitado?.cantidad_estimada ?? 0,
+            precio_acordado:
+              cotizacion._detalles.find((d) => d.articulo_id === l.articuloId)?.precio ?? 0,
+          };
+        });
+        const subtotal = round2(
+          detallesBase.reduce((acc, d) => acc + d.cantidad * d.precio_acordado, 0),
+        );
+        nuevas.push({
+          id: ++nuevoId,
+          proveedor_id: cotizacion.proveedor_id,
+          cotizacion_id: cotizacion.id,
+          usuario_id: USUARIO_SESION.id,
+          fecha: new Date().toISOString(),
+          fecha_entrega: null,
+          direccion_entrega: depositoEntrega?.ubicacion ?? "",
+          condicion_pago: cotizacion.condicion_pago,
+          notas:
+            solicitud.notas ??
+            `Generada desde la solicitud ${codigoSolicitud(solicitud.id)}.`,
+          subtotal,
+          descuento: 0,
+          gastos_envio: 0,
+          total: subtotal,
+          estado: "Pendiente",
+          _proveedor: { ...cotizacion._proveedor },
+          _usuario: { id: USUARIO_SESION.id, nombre: USUARIO_SESION.nombre },
+          _detalles: detallesBase.map((d) => ({
+            id: ++detalleId,
+            orden_compra_id: nuevoId,
+            ...d,
+          })),
+        });
+      });
+      return [...nuevas, ...prev];
+    });
+
     setAComparar(null);
-    showToast("success", `Adjudicada a ${cotizacion._proveedor.razon_social}`);
+    showToast(
+      "success",
+      `Se generaron ${porCotizacion.size} ${
+        porCotizacion.size === 1 ? "orden de compra" : "órdenes de compra"
+      } pendientes`,
+    );
     setTab("ordenes");
-    setPrefill(snapshot);
-    setFormOrden(null);
-    setFormModo("INSERCION");
-    setFormOpen(true);
   };
 
   const handleCancelarSolicitud = (solicitud: SolicitudCotizacion) => {
@@ -582,7 +652,6 @@ function ComprasScreen() {
                   setLoading(true);
                   window.setTimeout(() => {
                     setOrdenes(SIMULAR_VACIO ? [] : ordenesCompraIniciales);
-                    setSolicitudesVisibles(SIMULAR_VACIO_COT ? [] : solicitudes);
                     setLoading(false);
                   }, 900);
                 }}
@@ -671,7 +740,6 @@ function ComprasScreen() {
         modo={formModo}
         orden={formOrden}
         ordenes={ordenes}
-        prefill={prefill}
         cotizacionCodigo={(() => {
           if (!formOrden?.cotizacion_id) return null;
           const solicitud = solicitudes.find((s) =>
@@ -681,7 +749,6 @@ function ComprasScreen() {
         })()}
         onClose={() => setFormOpen(false)}
         onSave={handleSave}
-        onEditFromRead={() => setFormModo("EDICION")}
         onCancelFromRead={(orden) => {
           setFormOpen(false);
           setACancelarOrden(orden);

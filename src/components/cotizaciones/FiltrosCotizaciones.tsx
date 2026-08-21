@@ -3,12 +3,14 @@
 import { SlidersHorizontal, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { OrdenamientoSelect, type OrdenFecha } from "@/components/ui/OrdenamientoSelect";
 import type { EstadoSolicitud } from "@/data/cotizaciones";
 
 export type FiltroEstadoSolicitud = EstadoSolicitud | "Todas";
 
 export interface FiltrosSolicitud {
   estado: FiltroEstadoSolicitud;
+  ordenFecha: OrdenFecha;
 }
 
 interface FiltrosCotizacionesProps {
@@ -30,7 +32,10 @@ const ESTADOS_FILTRO: FiltroEstadoSolicitud[] = [
   "Cancelada",
 ];
 
-export const FILTROS_SOLICITUD_VACIOS: FiltrosSolicitud = { estado: "Todas" };
+export const FILTROS_SOLICITUD_VACIOS: FiltrosSolicitud = {
+  estado: "Todas",
+  ordenFecha: "recientes",
+};
 
 function buildTags(filtros: FiltrosSolicitud, onChange: (filtros: FiltrosSolicitud) => void) {
   const tags: { label: string; onRemove: () => void }[] = [];
@@ -129,6 +134,11 @@ export function FiltrosCotizaciones({
                   ))}
                 </select>
               </label>
+              <OrdenamientoSelect
+                value={filtros.ordenFecha}
+                onChange={(ordenFecha) => onChange({ ...filtros, ordenFecha })}
+                disabled={disabled}
+              />
               <Button
                 variant="ghost"
                 size="sm"

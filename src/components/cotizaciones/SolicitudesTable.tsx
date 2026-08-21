@@ -1,9 +1,8 @@
 "use client";
 
-import { Ban, GitCompareArrows, Plus, SearchX } from "lucide-react";
+import { GitCompareArrows, Plus, SearchX, Trash2 } from "lucide-react";
 import type { SolicitudCotizacion } from "@/data/cotizaciones";
 import { codigoSolicitud } from "@/data/cotizaciones";
-import { articulosIniciales } from "@/data/articulos";
 import { formatFecha } from "@/data/ordenes-compra";
 import { EstadoSolicitudBadge } from "./EstadoSolicitudBadge";
 
@@ -18,21 +17,7 @@ interface SolicitudesTableProps {
   onCancelar: (solicitud: SolicitudCotizacion) => void;
 }
 
-const HEADERS = ["N°", "Artículos", "Cotizaciones", "Fecha", "Estado", "Acciones"];
-
-// BACKEND: el nombre del artículo llega resuelto por el JOIN del detalle.
-function nombreArticulo(articuloId: number): string {
-  return (
-    articulosIniciales.find((a) => a.id === articuloId)?.nombre ?? `Artículo #${articuloId}`
-  );
-}
-
-function resumenArticulos(solicitud: SolicitudCotizacion): string {
-  const nombres = solicitud._articulos_solicitados.map((a) => nombreArticulo(a.articulo_id));
-  const visibles = nombres.slice(0, 2).join(", ");
-  const restantes = nombres.length - 2;
-  return restantes > 0 ? `${visibles} +${restantes} más` : visibles;
-}
+const HEADERS = ["N°", "Fecha", "Cotizaciones", "Estado", "Acciones"];
 
 export function SolicitudesTable({
   solicitudes,
@@ -47,7 +32,7 @@ export function SolicitudesTable({
   if (loading) {
     return (
       <div className="overflow-hidden rounded-md border border-border bg-surface shadow-card">
-        <div className="hidden grid-cols-6 gap-4 border-b border-border bg-cream-50 px-4 py-3 lg:grid">
+        <div className="hidden grid-cols-5 gap-4 border-b border-border bg-cream-50 px-4 py-3 lg:grid">
           {HEADERS.map((h) => (
             <span key={h} className="text-xs font-extrabold uppercase tracking-wide text-text-secondary">
               {h}
@@ -61,9 +46,8 @@ export function SolicitudesTable({
             aria-hidden="true"
           >
             <div className="h-6 w-20 animate-pulse rounded bg-cream-100" />
-            <div className="h-4 w-52 animate-pulse rounded bg-cream-100" />
-            <div className="h-4 w-28 animate-pulse rounded bg-cream-100" />
             <div className="hidden h-4 w-24 animate-pulse rounded bg-cream-100 lg:block" />
+            <div className="h-4 w-28 animate-pulse rounded bg-cream-100" />
             <div className="h-6 w-24 animate-pulse rounded-pill bg-cream-100" />
             <div className="ml-auto flex gap-1 lg:ml-0">
               <div className="h-11 w-11 animate-pulse rounded-pill bg-cream-100" />
@@ -116,9 +100,9 @@ export function SolicitudesTable({
   return (
     <div className="overflow-hidden rounded-md border border-border bg-surface shadow-card">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[880px] border-collapse text-left">
+        <table className="w-full min-w-[720px] border-collapse text-left">
           <caption className="sr-only">
-            Listado de solicitudes de cotización con acciones de comparar, registrar cotización y cancelar
+            Listado de solicitudes de cotización con acciones de comparar, ver propuestas, registrar cotización y cancelar
           </caption>
           <thead>
             <tr className="border-b border-border bg-cream-50">
@@ -135,7 +119,7 @@ export function SolicitudesTable({
           </thead>
           <tbody>
             {solicitudes.map((solicitud) => {
-              const abierta = solicitud.estado === "Abierta";
+              const gestionable = solicitud.estado === "Abierta";
               const comparables = solicitud._cotizaciones.length >= 2;
               return (
                 <tr
@@ -147,22 +131,12 @@ export function SolicitudesTable({
                       {codigoSolicitud(solicitud.id)}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-col">
-                      <span className="max-w-64 truncate text-sm font-bold text-text-primary">
-                        {resumenArticulos(solicitud)}
-                      </span>
-                      <span className="max-w-56 truncate text-xs text-text-secondary">
-                        Creada por {solicitud._usuario.nombre}
-                      </span>
-                    </div>
+                  <td className="px-4 py-3 text-sm font-medium text-text-primary">
+                    {formatFecha(solicitud.fecha)}
                   </td>
                   <td className="px-4 py-3 text-sm font-medium text-text-primary">
                     {solicitud._cotizaciones.length}{" "}
-                    {solicitud._cotizaciones.length === 1 ? "proveedor" : "proveedores"}
-                  </td>
-                  <td className="px-4 py-3 text-sm font-medium text-text-primary">
-                    {formatFecha(solicitud.fecha)}
+                    {solicitud._cotizaciones.length === 1 ? "cotización" : "cotizaciones"}
                   </td>
                   <td className="px-4 py-3">
                     <EstadoSolicitudBadge estado={solicitud.estado} />
@@ -184,7 +158,7 @@ export function SolicitudesTable({
                       >
                         <GitCompareArrows className="h-5 w-5" aria-hidden="true" />
                       </button>
-                      {abierta && (
+                      {gestionable && (
                         <>
                           <button
                             type="button"
@@ -202,7 +176,7 @@ export function SolicitudesTable({
                             title="Cancelar solicitud"
                             className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-pill text-text-secondary transition-colors duration-fast ease-out hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
                           >
-                            <Ban className="h-5 w-5" aria-hidden="true" />
+                            <Trash2 className="h-5 w-5" aria-hidden="true" />
                           </button>
                         </>
                       )}

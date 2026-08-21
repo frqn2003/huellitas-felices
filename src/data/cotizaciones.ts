@@ -3,6 +3,8 @@
 // detalles; los campos `_usuario`, `_proveedor`, `_articulos_solicitados` y
 // `_detalles` son la información relacionada que el back obtiene con JOINs.
 
+// Estados del ciclo de vida: Abierta (esperando cotizaciones) →
+// Adjudicada | Cancelada.
 export type EstadoSolicitud = "Abierta" | "Adjudicada" | "Cancelada";
 
 export interface SolicitudDetalle {
@@ -10,6 +12,8 @@ export interface SolicitudDetalle {
   solicitud_id: number;
   articulo_id: number;
   cantidad_estimada: number;
+  /** Aclaración opcional para el proveedor sobre este artículo. */
+  nota: string | null;
 }
 
 export interface CotizacionDetalle {
@@ -84,9 +88,15 @@ export const solicitudesIniciales: SolicitudCotizacion[] = [
     cotizacion_id_adjudicada: null,
     _usuario: { id: 3, nombre: "Ana Martínez" },
     _articulos_solicitados: [
-      { id: 1, solicitud_id: 1, articulo_id: 1, cantidad_estimada: 50 },
-      { id: 2, solicitud_id: 1, articulo_id: 2, cantidad_estimada: 100 },
-      { id: 3, solicitud_id: 1, articulo_id: 5, cantidad_estimada: 200 },
+      {
+        id: 1,
+        solicitud_id: 1,
+        articulo_id: 1,
+        cantidad_estimada: 50,
+        nota: "Presentación en cajas de 20 unidades.",
+      },
+      { id: 2, solicitud_id: 1, articulo_id: 2, cantidad_estimada: 100, nota: null },
+      { id: 3, solicitud_id: 1, articulo_id: 5, cantidad_estimada: 200, nota: null },
     ],
     _cotizaciones: [
       {
@@ -139,7 +149,7 @@ export const solicitudesIniciales: SolicitudCotizacion[] = [
     cotizacion_id_adjudicada: null,
     _usuario: { id: 3, nombre: "Ana Martínez" },
     _articulos_solicitados: [
-      { id: 4, solicitud_id: 2, articulo_id: 7, cantidad_estimada: 10 },
+      { id: 4, solicitud_id: 2, articulo_id: 7, cantidad_estimada: 10, nota: null },
     ],
     _cotizaciones: [
       {
@@ -164,7 +174,7 @@ export const solicitudesIniciales: SolicitudCotizacion[] = [
     cotizacion_id_adjudicada: 3,
     _usuario: { id: 1, nombre: "Carlos García" },
     _articulos_solicitados: [
-      { id: 5, solicitud_id: 3, articulo_id: 3, cantidad_estimada: 25 },
+      { id: 5, solicitud_id: 3, articulo_id: 3, cantidad_estimada: 25, nota: null },
     ],
     _cotizaciones: [
       {
@@ -186,5 +196,19 @@ export const solicitudesIniciales: SolicitudCotizacion[] = [
         _detalles: [{ id: 8, cotizacion_id: 6, articulo_id: 3, precio: 5290 }],
       },
     ],
+  },
+  {
+    // Abierta sin cotizaciones registradas todavía.
+    id: 4,
+    usuario_id: 3,
+    fecha: "2025-06-19T08:00:00Z",
+    estado: "Abierta",
+    notas: "Sugerido por bajo stock de guantes; falta definir cantidades.",
+    cotizacion_id_adjudicada: null,
+    _usuario: { id: 3, nombre: "Ana Martínez" },
+    _articulos_solicitados: [
+      { id: 6, solicitud_id: 4, articulo_id: 5, cantidad_estimada: 150, nota: null },
+    ],
+    _cotizaciones: [],
   },
 ];

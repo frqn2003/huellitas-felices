@@ -11,8 +11,14 @@ import {
 } from "@/data/cotizaciones";
 
 export interface NuevaSolicitudInput {
-  lineas: { articuloId: string; cantidad: string }[];
+  lineas: { articuloId: string; cantidad: string; nota: string }[];
   notas: string;
+}
+
+/** Artículo → cotización elegida en la comparación (adjudicación por artículo). */
+export interface AsignacionArticulo {
+  articuloId: number;
+  cotizacionId: number;
 }
 
 export interface NuevaCotizacionInput {
@@ -27,7 +33,8 @@ interface CotizacionesContextValue {
   solicitudes: SolicitudCotizacion[];
   crearSolicitud: (input: NuevaSolicitudInput) => void;
   registrarCotizacion: (solicitudId: number, input: NuevaCotizacionInput) => void;
-  adjudicar: (solicitudId: number, cotizacionId: number) => void;
+  /** Marca Adjudicada; las órdenes por proveedor las genera el llamador. */
+  adjudicarPorArticulo: (solicitudId: number) => void;
   cancelarSolicitud: (solicitudId: number) => void;
 }
 
@@ -36,7 +43,11 @@ const CotizacionesContext = createContext<CotizacionesContextValue | null>(null)
 // BACKEND: cada operación reemplaza una llamada real:
 // - crearSolicitud      → POST /api/solicitudes-cotizacion
 // - registrarCotizacion → POST /api/solicitudes-cotizacion/:id/cotizaciones
-// - adjudicar           → PATCH /api/solicitudes-cotizacion/:id/adjudicar
+// - adjudicarPorArticulo→ PATCH /api/solicitudes-cotizacion/:id/adjudicar
+//                         (adjudicación por artículo: el back recibe las
+//                         asignaciones línea→cotización y crea N orden_compra,
+//                         una por proveedor, en transacción; el front solo
+//                         marca el estado porque las órdenes ya están creadas)
 // - cancelarSolicitud   → PATCH /api/solicitudes-cotizacion/:id/cancelar
 // El estado inicial viene de GET /api/solicitudes-cotizacion.
 export function CotizacionesProvider({ children }: { children: ReactNode }) {
@@ -62,6 +73,7 @@ export function CotizacionesProvider({ children }: { children: ReactNode }) {
           solicitud_id: nuevoId,
           articulo_id: Number(l.articuloId),
           cantidad_estimada: Number(l.cantidad),
+          nota: l.nota.trim() || null,
         })),
         _cotizaciones: [],
       };
@@ -108,11 +120,14 @@ export function CotizacionesProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  const adjudicar = useCallback((solicitudId: number, cotizacionId: number) => {
+  // Adjudicación por artículo: cada línea puede ir a un proveedor distinto.
+  // cotizacion_id_adjudicada queda null porque puede haber varias ganadoras;
+  // el detalle por línea lo persiste el back con las asignaciones.
+  const adjudicarPorArticulo = useCallback((solicitudId: number) => {
     setSolicitudes((prev) =>
       prev.map((s) =>
         s.id === solicitudId
-          ? { ...s, estado: "Adjudicada", cotizacion_id_adjudicada: cotizacionId }
+          ? { ...s, estado: "Adjudicada", cotizacion_id_adjudicada: null }
           : s,
       ),
     );
@@ -125,8 +140,14 @@ export function CotizacionesProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ solicitudes, crearSolicitud, registrarCotizacion, adjudicar, cancelarSolicitud }),
-    [solicitudes, crearSolicitud, registrarCotizacion, adjudicar, cancelarSolicitud],
+    () => ({
+      solicitudes,
+      crearSolicitud,
+      registrarCotizacion,
+      adjudicarPorArticulo,
+      cancelarSolicitud,
+    }),
+    [solicitudes, crearSolicitud, registrarCotizacion, adjudicarPorArticulo, cancelarSolicitud],
   );
 
   return <CotizacionesContext.Provider value={value}>{children}</CotizacionesContext.Provider>;

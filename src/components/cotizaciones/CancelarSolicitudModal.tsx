@@ -1,6 +1,6 @@
 "use client";
 
-import { Ban } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import type { SolicitudCotizacion } from "@/data/cotizaciones";
@@ -24,7 +24,7 @@ export function CancelarSolicitudModal({
       open={!!solicitud}
       onClose={onClose}
       title="Cancelar solicitud de cotización"
-      icon={<Ban className="h-5 w-5 text-destructive" aria-hidden="true" />}
+      icon={<Trash2 className="h-5 w-5 text-destructive" aria-hidden="true" />}
       maxWidth="max-w-md"
       footer={
         <>

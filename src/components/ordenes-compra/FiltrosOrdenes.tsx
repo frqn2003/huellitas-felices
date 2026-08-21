@@ -4,13 +4,18 @@ import { SlidersHorizontal, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { PROVEEDORES } from "@/data/articulos";
 import { Button } from "@/components/ui/Button";
+import { OrdenamientoSelect, type OrdenFecha } from "@/components/ui/OrdenamientoSelect";
+import { RangoNumerico } from "@/components/ui/RangoNumerico";
 import type { EstadoOrden } from "@/data/ordenes-compra";
 
-export type EstadoFiltroOrden = "Activas" | EstadoOrden | "Todas";
+export type EstadoFiltroOrden = EstadoOrden | "Todas";
 
 export interface FiltrosOrden {
   estado: EstadoFiltroOrden;
   proveedorId: string;
+  ordenFecha: OrdenFecha;
+  totalMin: string;
+  totalMax: string;
 }
 
 interface FiltrosOrdenesProps {
@@ -25,9 +30,8 @@ interface FiltrosChipsProps {
   onChange: (filtros: FiltrosOrden) => void;
 }
 
-// Por defecto se muestran solo órdenes activas (no canceladas), según el criterio.
+// Los estados del filtro replican la tabla fija de estados de orden_compra.
 const ESTADOS_FILTRO: EstadoFiltroOrden[] = [
-  "Activas",
   "Pendiente",
   "Enviada",
   "Recibida Parcial",
@@ -36,14 +40,26 @@ const ESTADOS_FILTRO: EstadoFiltroOrden[] = [
   "Todas",
 ];
 
-export const FILTROS_ORDEN_VACIOS: FiltrosOrden = { estado: "Activas", proveedorId: "" };
+export const FILTROS_ORDEN_VACIOS: FiltrosOrden = {
+  estado: "Todas",
+  proveedorId: "",
+  ordenFecha: "recientes",
+  totalMin: "",
+  totalMax: "",
+};
+
+function etiquetaRango(min: string, max: string): string {
+  if (min.trim() !== "" && max.trim() !== "") return `${min} – ${max}`;
+  if (min.trim() !== "") return `desde ${min}`;
+  return `hasta ${max}`;
+}
 
 function buildTags(filtros: FiltrosOrden, onChange: (filtros: FiltrosOrden) => void) {
   const tags: { label: string; onRemove: () => void }[] = [];
-  if (filtros.estado !== "Activas") {
+  if (filtros.estado !== "Todas") {
     tags.push({
       label: `Estado: ${filtros.estado}`,
-      onRemove: () => onChange({ ...filtros, estado: "Activas" }),
+      onRemove: () => onChange({ ...filtros, estado: "Todas" }),
     });
   }
   if (filtros.proveedorId) {
@@ -51,6 +67,12 @@ function buildTags(filtros: FiltrosOrden, onChange: (filtros: FiltrosOrden) => v
     tags.push({
       label: `Proveedor: ${proveedor?.nombre ?? filtros.proveedorId}`,
       onRemove: () => onChange({ ...filtros, proveedorId: "" }),
+    });
+  }
+  if (filtros.totalMin.trim() !== "" || filtros.totalMax.trim() !== "") {
+    tags.push({
+      label: `Total ($): ${etiquetaRango(filtros.totalMin, filtros.totalMax)}`,
+      onRemove: () => onChange({ ...filtros, totalMin: "", totalMax: "" }),
     });
   }
   return tags;
@@ -151,6 +173,21 @@ export function FiltrosOrdenes({ filtros, onChange, disabled = false, hideChips 
                   ))}
                 </select>
               </label>
+              <OrdenamientoSelect
+                value={filtros.ordenFecha}
+                onChange={(ordenFecha) => onChange({ ...filtros, ordenFecha })}
+                disabled={disabled}
+              />
+              {/* BACKEND: el rango de total se traduce a WHERE total BETWEEN
+                  en la consulta SQL; acá filtra la demo en el front. */}
+              <RangoNumerico
+                label="Total ($)"
+                valor={{ min: filtros.totalMin, max: filtros.totalMax }}
+                onChange={({ min, max }) =>
+                  onChange({ ...filtros, totalMin: min, totalMax: max })
+                }
+                disabled={disabled}
+              />
               <Button
                 variant="ghost"
                 size="sm"
