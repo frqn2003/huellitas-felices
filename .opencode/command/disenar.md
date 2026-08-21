@@ -1,5 +1,5 @@
 ---
-description: Diseña una pantalla completa de Huellitas Felices desde un brief (HU + wireframe). Flujo: audit UX → visual ui-ux-pro-max (tokens Pet Bliss) → código hardcodeado → verificación técnica → checkpoint de revisión. La subida a GitHub se hace con /subir.
+description: Diseña una pantalla completa de Huellitas Felices desde un brief (HU + wireframe). Flujo: audit UX → reuso de componentes (inventario) → visual ui-ux-pro-max (tokens Pet Bliss) → código hardcodeado → verificación técnica → checkpoint de revisión. La subida a GitHub se hace con /subir.
 agent: build
 ---
 
@@ -16,9 +16,11 @@ Vas a diseñar, codear y verificar una pantalla de **Huellitas Felices** (sistem
 
 1. `docs/briefs/$ARGUMENTS.md` — la HU, wireframe, datos y criterios de aceptación.
 2. `design-system/huellitas-felices/MASTER.md` — **tokens OBLIGATORIOS** (Pet Bliss). Sus reglas reemplazan al catálogo de cualquier skill.
-3. `AGENTS.md` — acuerdos del equipo y reglas técnicas.
-4. Si existe `design-system/huellitas-felices/pages/[pantalla].md`, tiene prioridad sobre el MASTER.
-5. Si NO existe el archivo de página en `design-system/huellitas-felices/pages/`, crearlo documentando los tokens/reglas específicos de esta pantalla.
+3. `design-system/huellitas-felices/componentes.md` — **inventario de componentes existentes** (para reusar antes de crear).
+4. `docs/errores-comunes.md` — log de errores del equipo. Leer las "Reglas activas" y tenerlas presentes durante todo el diseño.
+5. `AGENTS.md` — acuerdos del equipo y reglas técnicas.
+6. Si existe `design-system/huellitas-felices/pages/[pantalla].md`, tiene prioridad sobre el MASTER.
+7. Si NO existe el archivo de página en `design-system/huellitas-felices/pages/`, crearlo documentando los tokens/reglas específicos de esta pantalla.
 
 ## Paso 2 — Audit UX (antes de codear)
 
@@ -42,7 +44,21 @@ Usá la skill `ui-ux-pro-max` como guía de composición, estados y anti-pattern
 - Radios: 8/12/16px, pill para botones/chips. Sombras discretas. Motion 150/250/500ms.
 - Composición: overlaps, formas orgánicas, alternancia de fondos, una sola acción clara por viewport.
 
-## Paso 4 — Codear (componentes reutilizables + página)
+## Paso 4 — Buscar y reusar componentes (antes de codear)
+
+**Regla dura: reusar antes de crear. Nada de duplicar componentes que ya existen.**
+
+1. **Consultá el inventario** `design-system/huellitas-felices/componentes.md` (leído en el paso 1) y armá la lista de piezas que va a necesitar la pantalla: tablas, filtros, modales, badges, forms, tabs, paginación, toasts.
+2. **Verificá contra el código real**: el inventario puede estar desactualizado; ante duda, buscá en `src/components/**` (glob/grep por nombre o propósito).
+3. **Clasificá cada pieza** en una de tres categorías y presentalo como lista explícita antes de codear:
+   - **Reusar tal cual:** existe en `ui/` y cubre la necesidad (Button, Modal, StatusBadge, Pagination, etc.).
+   - **Extender:** existe algo similar pero le falta una prop/variante → extender el componente existente manteniendo retrocompatibilidad con quienes ya lo usan.
+   - **Crear nuevo:** no hay equivalente razonable → justificar por qué no conviene reusar ni extender ninguno.
+4. Si un badge/estado de negocio es necesario (ej: estado de orden), construiló **sobre `StatusBadge`** (mapear estado → variante + label + icono), nunca con colores propios.
+
+Este listado (reusar/extender/crear) forma parte del plan que se muestra al usuario en el checkpoint final.
+
+## Paso 5 — Codear (componentes reutilizables + página)
 
 - Componentes **reutilizables** en `src/components/` (pensados 1 a 1 para React), no pantallas sueltas.
 - Página en `src/app/<ruta>/page.tsx` con **datos hardcodeados** del brief (en español).
@@ -52,25 +68,28 @@ Usá la skill `ui-ux-pro-max` como guía de composición, estados y anti-pattern
 - Iconos **Lucide**, animaciones **Framer Motion** (respetando `prefers-reduced-motion`).
 - Estados: vacío, cargando, error, con datos — según corresponda a la pantalla.
 - Accesibilidad: contraste ≥4.5:1, focus visible, touch targets ≥44×44px, `alt` en imágenes.
+- **Al terminar:** actualizar `design-system/huellitas-felices/componentes.md` con los componentes nuevos creados (y ajustar filas de los que se extendieron).
 
-## Paso 5 — Verificación técnica (sin navegador)
+## Paso 6 — Verificación técnica (sin navegador)
 
 Verificá el código sin levantar navegador:
 
 1. `npm run lint` (errores solo en `src/`; los de `.opencode/skills/` y `.agents/skills/` son preexistentes y no son responsabilidad tuya).
 2. `npx tsc --noEmit`.
 3. Checklist de accesibilidad sobre el código: contraste de tokens usados, focus visible, touch targets ≥44px, `aria-label` en iconos-acción, `alt`/`aria` en imágenes, `prefers-reduced-motion` respetado.
+4. Repasá las **"Reglas activas"** del log `docs/errores-comunes.md` y verificá que ninguna se esté repitiendo.
 
 Corregí todo lo que falle antes de pasar al checkpoint. **No se usan test de navegador ni screenshots automáticos.**
 
-## Paso 6 — CHECKPOINT: revisión del usuario (sin git)
+## Paso 7 — CHECKPOINT: revisión del usuario (sin git)
 
 **IMPORTANTE: este comando NO hace commit ni push. La subida se hace aparte con el comando `/subir`.**
 
-1. Presentá un resumen de lo creado: archivos, componentes, ruta, resultado del audit y de la verificación técnica.
+1. Presentá un resumen de lo creado: archivos, componentes (marcando cuáles se reusaron, extendieron o crearon), ruta, resultado del audit y de la verificación técnica.
 2. Decile al usuario que pruebe la pantalla: `npm run dev` y abrir la ruta en el navegador.
-3. Si pidió ajustes, aplicálos y volvé a correr el paso 5.
+3. Si pidió ajustes, aplicálos y volvé a correr el paso 6.
 4. Recordale que cuando quiera publicar los cambios use **`/subir`** (revisa el diff, propone el mensaje de commit referenciando la HU y pushea a GitHub con su confirmación).
+5. Si durante la sesión apareció un error digno de registro (propio o del feedback del usuario), sugerile registrarlo con **`/error`**. No lo registres vos por tu cuenta.
 
 ## Recordatorio de reglas
 
@@ -78,3 +97,5 @@ Corregí todo lo que falle antes de pasar al checkpoint. **No se usan test de na
 - NO inventar colores, fuentes ni estilos fuera del MASTER Pet Bliss.
 - UI en español, tono amigable pero profesional (Pet Bliss: "playful, never childish").
 - Componentes reutilizables, nada de pantallas sueltas.
+- **Reusar antes de crear:** consultar el inventario `design-system/huellitas-felices/componentes.md` y mantenerlo actualizado con lo nuevo.
+- El log `docs/errores-comunes.md` solo se alimenta con `/error` (a propósito, decisión del usuario).
