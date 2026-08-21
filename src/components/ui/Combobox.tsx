@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 export interface ComboboxOption {
   value: string;
   label: string;
+  tone?: "neutral" | "warning" | "danger";
 }
 
 interface ComboboxProps {
@@ -55,7 +56,20 @@ export function Combobox({
 
   const filtered = useMemo(() => {
     const q = (query ?? "").trim().toLowerCase();
-    return options.filter((o) => !q || o.label.toLowerCase().includes(q)).slice(0, maxResults);
+    const toneOrder: Record<NonNullable<ComboboxOption["tone"]>, number> = {
+      danger: 0,
+      warning: 1,
+      neutral: 2,
+    };
+
+    return [...options]
+      .filter((o) => !q || o.label.toLowerCase().includes(q))
+      .sort(
+        (a, b) =>
+          (toneOrder[a.tone ?? "neutral"] ?? 99) -
+          (toneOrder[b.tone ?? "neutral"] ?? 99),
+      )
+      .slice(0, maxResults);
   }, [options, query, maxResults]);
 
   useEffect(() => {
@@ -127,7 +141,9 @@ export function Combobox({
           role="combobox"
           aria-expanded={open}
           aria-controls={listboxId}
-          aria-activedescendant={open && activeIndex >= 0 ? `${id}-opt-${activeIndex}` : undefined}
+          aria-activedescendant={
+            open && activeIndex >= 0 ? `${id}-opt-${activeIndex}` : undefined
+          }
           aria-autocomplete="list"
           aria-invalid={error ? true : undefined}
           aria-describedby={describedBy || undefined}
@@ -148,7 +164,9 @@ export function Combobox({
           onBlur={onBlur}
           onKeyDown={handleKeyDown}
           className="h-11 min-h-11 w-full cursor-text rounded-sm border bg-surface px-4 pr-11 text-base text-text-primary transition-colors duration-fast ease-out placeholder:text-text-secondary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20 disabled:cursor-not-allowed disabled:bg-cream-100 disabled:opacity-70"
-          style={{ borderColor: error ? "var(--color-destructive)" : undefined }}
+          style={{
+            borderColor: error ? "var(--color-destructive)" : undefined,
+          }}
         />
         <button
           type="button"
@@ -177,33 +195,49 @@ export function Combobox({
             className="absolute left-0 right-0 top-[calc(100%+4px)] z-20 overflow-hidden rounded-md border border-border bg-surface shadow-card"
           >
             {filtered.length === 0 ? (
-              <p role="status" className="px-4 py-3 text-sm font-medium text-text-secondary">
+              <p
+                role="status"
+                className="px-4 py-3 text-sm font-medium text-text-secondary"
+              >
                 {noResultsText}
               </p>
             ) : (
               <ul className="max-h-64 overflow-y-auto py-1">
-                {filtered.map((option, index) => (
-                  <li
-                    key={option.value}
-                    id={`${id}-opt-${index}`}
-                    role="option"
-                    aria-selected={option.value === value}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => seleccionar(option)}
-                    className={`flex min-h-11 cursor-pointer items-center px-4 py-2 text-sm font-semibold text-text-primary transition-colors duration-fast ease-out hover:bg-brand-900/10 focus-visible:outline-none ${
-                      index === activeIndex ? "bg-brand-900/10 text-brand-900" : ""
-                    }`}
-                  >
-                    {option.label}
-                  </li>
-                ))}
+                {filtered.map((option, index) => {
+                  const toneClass =
+                    option.tone === "danger"
+                      ? "bg-status-danger/10 text-status-danger-strong border-l-4 border-status-danger"
+                      : option.tone === "warning"
+                        ? "bg-status-warning/10 text-status-warning-strong border-l-4 border-status-warning"
+                        : "bg-surface text-text-primary border-l-4 border-transparent";
+
+                  return (
+                    <li
+                      key={option.value}
+                      id={`${id}-opt-${index}`}
+                      role="option"
+                      aria-selected={option.value === value}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => seleccionar(option)}
+                      className={`flex min-h-11 cursor-pointer items-center border-l-4 px-4 py-2 text-sm font-semibold transition-colors duration-fast ease-out hover:brightness-95 focus-visible:outline-none ${
+                        toneClass
+                      } ${index === activeIndex ? "ring-1 ring-brand-900/15" : ""}`}
+                    >
+                      {option.label}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
         )}
       </div>
       {error ? (
-        <p id={errorId} role="alert" className="text-sm font-semibold text-destructive">
+        <p
+          id={errorId}
+          role="alert"
+          className="text-sm font-semibold text-destructive"
+        >
           {error}
         </p>
       ) : hint ? (

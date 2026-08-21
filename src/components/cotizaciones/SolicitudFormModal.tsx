@@ -3,7 +3,7 @@
 import { FilePlus2, PackageMinus, Plus, Trash2 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { Combobox } from "@/components/ui/Combobox";
+import { Combobox, type ComboboxOption } from "@/components/ui/Combobox";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { articulosIniciales } from "@/data/articulos";
@@ -33,7 +33,9 @@ function validarLinea(linea: LineaDraft, lineas: LineaDraft[]): LineaErrors {
   const errores: LineaErrors = {};
   if (!linea.articuloId) {
     errores.articuloId = "Seleccioná un artículo.";
-  } else if (lineas.some((l) => l.key !== linea.key && l.articuloId === linea.articuloId)) {
+  } else if (
+    lineas.some((l) => l.key !== linea.key && l.articuloId === linea.articuloId)
+  ) {
     errores.articuloId = "Ese artículo ya está en la solicitud.";
   }
   const cantidad = parseImporte(linea.cantidad);
@@ -58,37 +60,29 @@ export function SolicitudFormModal({
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const contadorLineas = useRef(1);
 
-  // BACKEND: sugeridos desde GET /api/fichas-stock?estado=bajo|critico.
-  // Agrupados por artículo (una ficha por depósito puede repetirlo).
-  const bajoStock = useMemo(() => {
-    const porArticulo = new Map<
-      number,
-      { articuloId: number; nombre: string; codigo: string; unidad: string; stock: number; critico: boolean }
-    >();
+  // BACKEND: estado desde GET /api/fichas-stock. Se conserva el peor estado
+  // cuando un artículo tiene fichas en más de un depósito.
+  const estadoStockPorArticulo = useMemo(() => {
+    const estados = new Map<number, "normal" | "bajo" | "critico">();
     fichasStockIniciales.forEach((f) => {
-      if (f.estadoCalculado === "normal") return;
-      const previa = porArticulo.get(f.articuloId);
-      if (previa) {
-        previa.stock += f.stockActual;
-        previa.critico = previa.critico || f.estadoCalculado === "critico";
-        return;
+      const estado = f.estadoCalculado as "normal" | "bajo" | "critico";
+      const previo = estados.get(f.articuloId);
+      if (
+        !previo ||
+        (estado === "critico" && previo !== "critico") ||
+        (estado === "bajo" && previo === "normal")
+      ) {
+        estados.set(f.articuloId, estado);
       }
-      porArticulo.set(f.articuloId, {
-        articuloId: f.articuloId,
-        nombre: f.articulo.nombre,
-        codigo: f.articulo.codigo,
-        unidad: f.articulo.unidadMedida,
-        stock: f.stockActual,
-        critico: f.estadoCalculado === "critico",
-      });
     });
-    return [...porArticulo.values()];
+    return estados;
   }, []);
 
   const showError = (key: string, field: keyof LineaErrors) =>
     touched[key] ? errors[key]?.[field] : undefined;
 
-  const touchLinea = (key: string) => setTouched((prev) => ({ ...prev, [key]: true }));
+  const touchLinea = (key: string) =>
+    setTouched((prev) => ({ ...prev, [key]: true }));
 
   const validarTodo = (
     lineasActuales: LineaDraft[],
@@ -100,13 +94,19 @@ export function SolicitudFormModal({
     return next;
   };
 
-  const actualizarLinea = (key: string, patch: Partial<Omit<LineaDraft, "key">>) => {
+  const actualizarLinea = (
+    key: string,
+    patch: Partial<Omit<LineaDraft, "key">>,
+  ) => {
     const next = lineas.map((l) => (l.key === key ? { ...l, ...patch } : l));
     setLineas(next);
     if (touched[key]) setErrors(validarTodo(next));
   };
 
-  const agregarLinea = (preseleccion?: { articuloId: string; cantidad: string }) => {
+  const agregarLinea = (preseleccion?: {
+    articuloId: string;
+    cantidad: string;
+  }) => {
     contadorLineas.current += 1;
     const nueva: LineaDraft = {
       key: `n-${contadorLineas.current}`,
@@ -120,30 +120,6 @@ export function SolicitudFormModal({
     if (preseleccion) touchLinea(nueva.key);
   };
 
-  // Chip de bajo stock → agrega la línea con el artículo precargado.
-  // Cantidad sugerida: umbral mínimo (como pidió el usuario).
-  const agregarDesdeChip = (articuloId: number) => {
-    if (lineas.some((l) => l.articuloId === String(articuloId))) return;
-    const ficha = fichasStockIniciales.find((f) => f.articuloId === articuloId);
-    const sugerido = ficha ? ficha.stockMinimo : 0;
-    
-    // Buscar si hay una fila vacía para reusarla en lugar de agregar una nueva
-    const indexVacia = lineas.findIndex((l) => !l.articuloId && !l.cantidad && !l.nota);
-    
-    if (indexVacia !== -1) {
-      actualizarLinea(lineas[indexVacia].key, {
-        articuloId: String(articuloId),
-        cantidad: String(Math.round(sugerido)),
-      });
-      touchLinea(lineas[indexVacia].key);
-    } else {
-      agregarLinea({
-        articuloId: String(articuloId),
-        cantidad: String(Math.round(sugerido)),
-      });
-    }
-  };
-
   const eliminarLinea = (key: string) => {
     // El botón se deshabilita con una sola fila: nunca llegan a cero.
     const next = lineas.filter((l) => l.key !== key);
@@ -152,16 +128,80 @@ export function SolicitudFormModal({
   };
 
   // BACKEND: poblar desde GET /api/articulos?activo=true.
-  const articuloOptions = articulosIniciales
+  const articuloOptions: ComboboxOption[] = articulosIniciales
     .filter((a) => a.activo)
-    .map((a) => ({ value: String(a.id), label: `${a.codigo} · ${a.nombre}` }));
+    .map((a) => {
+      const estado = estadoStockPorArticulo.get(a.id) ?? "normal";
+      const tone: ComboboxOption["tone"] =
+        estado === "critico"
+          ? "danger"
+          : estado === "bajo"
+            ? "warning"
+            : "neutral";
+
+      return {
+        value: String(a.id),
+        tone,
+        // El texto permite encontrar rápidamente artículos escribiendo
+        // "bajo stock", "crítico" o "mínimo" en el buscador.
+        label: `${a.codigo} · ${a.nombre}`,
+      };
+    });
+
+  const bajoStock = useMemo(() => {
+    const sugeridos = fichasStockIniciales
+      .filter((f) => {
+        const activo = articulosIniciales.some(
+          (a) => a.id === f.articuloId && a.activo,
+        );
+        return (
+          activo &&
+          (f.estadoCalculado === "bajo" || f.estadoCalculado === "critico")
+        );
+      })
+      .map((f) => {
+        const articulo = articulosIniciales.find((a) => a.id === f.articuloId);
+        return {
+          articuloId: f.articuloId,
+          nombre: articulo?.nombre ?? "Artículo",
+          stock: f.stockActual,
+          unidad: articulo?.unidadMedida ?? "unidad",
+          critico: f.estadoCalculado === "critico",
+        };
+      });
+
+    return sugeridos.filter(
+      (item, index, arr) =>
+        arr.findIndex((otro) => otro.articuloId === item.articuloId) === index,
+    );
+  }, []);
+
+  const agregarDesdeChip = (articuloId: number) => {
+    const ficha = fichasStockIniciales.find((f) => f.articuloId === articuloId);
+    const articulo = articulosIniciales.find((a) => a.id === articuloId);
+    const cantidad = ficha ? String(ficha.stockMinimo) : "1";
+    const yaExiste = lineas.some((l) => l.articuloId === String(articuloId));
+
+    if (yaExiste) return;
+
+    agregarLinea({
+      articuloId: String(articuloId),
+      cantidad,
+    });
+
+    if (articulo && articulo.nombre) {
+      setTouched((prev) => ({ ...prev, [String(articuloId)]: true }));
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const nextErrors = validarTodo(lineas);
     setErrors(nextErrors);
     setTouched(Object.fromEntries(lineas.map((l) => [l.key, true])));
-    const hayError = lineas.some((l) => Object.values(nextErrors[l.key] ?? {}).length > 0);
+    const hayError = lineas.some(
+      (l) => Object.values(nextErrors[l.key] ?? {}).length > 0,
+    );
     if (hayError) return;
     onSave({
       lineas: lineas.map((l) => ({
@@ -191,71 +231,16 @@ export function SolicitudFormModal({
         </>
       }
     >
-      <form id="solicitud-form" onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
-        <div
-          className="flex flex-col gap-1 rounded-sm border border-border/60 bg-cream-50 px-4 py-3"
-          role="note"
-        >
-          <p className="text-xs font-extrabold uppercase tracking-wide text-text-secondary">
-            Número de solicitud
-          </p>
-          <p className="font-mono text-base font-bold text-brand-900">
-            Se asigna automáticamente
-          </p>
-          <p className="text-xs font-medium text-text-secondary">
-            {/* BACKEND: el número lo genera el back (secuencia SC-XXXX) al confirmar. */}
-            Al confirmar se genera el número SC-XXXX; no se puede modificar.
-          </p>
-        </div>
-
+      <form
+        id="solicitud-form"
+        onSubmit={handleSubmit}
+        noValidate
+        className="flex flex-col gap-5"
+      >
         <fieldset className="flex flex-col gap-3 rounded-md border border-border bg-cream-50 p-4">
           <legend className="px-2 font-display text-sm font-extrabold uppercase tracking-tight text-brand-900">
             Artículos a cotizar
           </legend>
-
-          {bajoStock.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <p className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wide text-text-secondary">
-                <PackageMinus className="h-4 w-4" aria-hidden="true" />
-                Sugeridos por bajo stock
-              </p>
-              <div className="flex max-h-28 flex-wrap gap-2 overflow-y-auto pr-1">
-                {bajoStock.map((a) => {
-                  const yaAgregado = lineas.some(
-                    (l) => l.articuloId === String(a.articuloId),
-                  );
-                  return (
-                    <button
-                      key={a.articuloId}
-                      type="button"
-                      onClick={() => agregarDesdeChip(a.articuloId)}
-                      disabled={yaAgregado}
-                      title={
-                        yaAgregado
-                          ? "Ya está en la solicitud"
-                          : `Agregar ${a.nombre} (quedan ${a.stock} ${a.unidad.toLowerCase()})`
-                      }
-                      aria-label={`Agregar ${a.nombre}, stock actual ${a.stock} ${a.unidad}${yaAgregado ? ", ya agregado" : ""}`}
-                      className={`inline-flex h-11 cursor-pointer items-center gap-1.5 rounded-pill border px-3 text-xs font-bold transition-colors duration-fast ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900 disabled:cursor-not-allowed disabled:opacity-45 ${
-                        a.critico
-                          ? "border-status-danger/40 bg-status-danger/10 text-status-danger-strong hover:bg-status-danger/20"
-                          : "border-status-warning/40 bg-status-warning/10 text-status-warning-strong hover:bg-status-warning/20"
-                      }`}
-                    >
-                      <span
-                        aria-hidden="true"
-                        className={`h-2 w-2 rounded-full ${a.critico ? "bg-status-danger" : "bg-status-warning"}`}
-                      />
-                      {a.nombre}
-                      <span className="font-semibold opacity-80">
-                        · quedan {a.stock}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
 
           <div className="flex flex-col gap-4">
             {lineas.map((linea) => (
@@ -271,9 +256,13 @@ export function SolicitudFormModal({
                     value={linea.articuloId}
                     options={articuloOptions}
                     onChange={(value) => {
-                      const patch: Partial<Omit<LineaDraft, "key">> = { articuloId: value };
+                      const patch: Partial<Omit<LineaDraft, "key">> = {
+                        articuloId: value,
+                      };
                       if (!linea.cantidad && value) {
-                        const ficha = fichasStockIniciales.find((f) => f.articuloId === Number(value));
+                        const ficha = fichasStockIniciales.find(
+                          (f) => f.articuloId === Number(value),
+                        );
                         if (ficha) patch.cantidad = String(ficha.stockMinimo);
                       }
                       actualizarLinea(linea.key, patch);
@@ -289,7 +278,9 @@ export function SolicitudFormModal({
                     requiredMark
                     inputMode="decimal"
                     value={linea.cantidad}
-                    onChange={(e) => actualizarLinea(linea.key, { cantidad: e.target.value })}
+                    onChange={(e) =>
+                      actualizarLinea(linea.key, { cantidad: e.target.value })
+                    }
                     onBlur={() => touchLinea(linea.key)}
                     error={showError(linea.key, "cantidad")}
                   />
@@ -316,7 +307,9 @@ export function SolicitudFormModal({
                   <input
                     type="text"
                     value={linea.nota}
-                    onChange={(e) => actualizarLinea(linea.key, { nota: e.target.value })}
+                    onChange={(e) =>
+                      actualizarLinea(linea.key, { nota: e.target.value })
+                    }
                     placeholder="Ej.: presentación en cajas de 20 unidades..."
                     aria-label={`Anotación para el artículo de la fila ${lineas.indexOf(linea) + 1}`}
                     className="rounded-sm border border-border bg-surface px-3 py-2 text-sm text-text-primary transition-colors duration-fast ease-out placeholder:text-text-secondary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
@@ -325,7 +318,12 @@ export function SolicitudFormModal({
               </div>
             ))}
           </div>
-          <Button variant="ghost" size="md" type="button" onClick={() => agregarLinea()}>
+          <Button
+            variant="ghost"
+            size="md"
+            type="button"
+            onClick={() => agregarLinea()}
+          >
             <Plus className="h-4 w-4" aria-hidden="true" />
             Agregar artículo
           </Button>
@@ -342,14 +340,37 @@ export function SolicitudFormModal({
             className="rounded-sm border border-border bg-surface px-4 py-2.5 text-base text-text-primary transition-colors duration-fast ease-out placeholder:text-text-secondary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
           />
         </label>
-
-        <div className="flex flex-col gap-2 rounded-sm border border-border/60 bg-cream-50 px-4 py-3" role="note">
+        <div
+          className="flex flex-col gap-1 rounded-sm border border-border/60 bg-cream-50 px-4 py-3"
+          role="note"
+        >
+          <p className="text-xs font-extrabold uppercase tracking-wide text-text-secondary">
+            Número de solicitud
+          </p>
+          <p className="font-mono text-base font-bold text-brand-900">
+            Se asigna automáticamente
+          </p>
+          <p className="text-xs font-medium text-text-secondary">
+            {/* BACKEND: el número lo genera el back (secuencia SC-XXXX) al confirmar. */}
+            Al confirmar se genera el número SC-XXXX; no se puede modificar.
+          </p>
+        </div>
+        <div
+          className="flex flex-col gap-2 rounded-sm border border-border/60 bg-cream-50 px-4 py-3"
+          role="note"
+        >
           <p className="text-xs font-extrabold uppercase tracking-wide text-text-secondary">
             Validaciones
           </p>
           <ul className="flex flex-col gap-1 text-sm font-medium text-text-secondary">
-            <li>Cada artículo necesita una cantidad estimada mayor a 0; no se pueden repetir.</li>
-            <li>La solicitud queda Abierta hasta que registres las cotizaciones recibidas.</li>
+            <li>
+              Cada artículo necesita una cantidad estimada mayor a 0; no se
+              pueden repetir.
+            </li>
+            <li>
+              La solicitud queda Abierta hasta que registres las cotizaciones
+              recibidas.
+            </li>
           </ul>
         </div>
       </form>
