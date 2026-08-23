@@ -1,0 +1,30 @@
+# Postgres local para desarrollo.
+# Existe porque todavía no tenemos acceso a la base del servidor: con esto se
+# desarrolla todo el backend igual, y cuando llegue el acceso se corren las
+# mismas migraciones contra la base real.
+#
+#   docker compose up -d      levantar
+#   docker compose down       parar (los datos quedan en el volumen)
+#   docker compose down -v    parar y BORRAR los datos
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: huellitas-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: huellitas_felices
+      POSTGRES_USER: huellitas
+      POSTGRES_PASSWORD: local
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U huellitas -d huellitas_felices"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:

@@ -341,6 +341,14 @@ La numeración arranca en `0007` asumiendo que el DER actual ya vino de migracio
 
 ## 8. Decisiones que necesito de ustedes
 
+> ✅ **Actualización — cerradas por el equipo.** Ver [`GUIA-IMPLEMENTACION.md`](GUIA-IMPLEMENTACION.md) §2:
+> - **A3 / punto 4** → formas de pago pasa a tabla catálogo + N:M. **(D-A)**
+> - **B1** → no se crea `sucursal`: **depósito = sucursal**, se elimina `deposito.sucursal_id`. **(D-B)**
+> - **B3** → las 4 tablas de cotizaciones **quedan fuera de alcance**. **(D-C)**
+>
+> Siguen abiertas: **B6** (cabecera-detalle de movimientos), **M1** (`numero_lote`/`fecha_vencimiento`), **M3** (`categoria`/`unidad_medida`).
+> Los puntos 1 y 2 de abajo quedaron respondidos: **no hay acceso a la base**, así que el baseline se reconstruye desde el DER (ver `GUIA-IMPLEMENTACION.md` §4).
+
 1. **¿La base tiene datos que importen, o es solo seed?** Define si las migraciones `0011` y `0012` pueden ser destructivas o necesitan backfill.
 2. **¿Hay migraciones versionadas o la base se armó a mano?** Si es lo segundo, primer paso: baseline con `pg_dump`.
 3. **B6 — ¿opción A (cabecera-detalle) u opción B (plano + `numero`)?** Recomiendo A; es la única que cumple el criterio de HU-STK-04 tal como está escrito.
