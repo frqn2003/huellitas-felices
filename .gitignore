@@ -48,3 +48,6 @@ next-env.d.ts
 # artefactos locales del agente
 __pycache__/
 dev-server.log
+
+# imagenes subidas por los usuarios (no son codigo)
+/public/uploads/

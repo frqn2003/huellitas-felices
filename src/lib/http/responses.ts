@@ -32,6 +32,20 @@ export function errorResponse(e: unknown) {
 
   console.error("[api] error no manejado:", e);
 
+  // 42703 = undefined_column, 42P01 = undefined_table.
+  // Casi siempre significa lo mismo en este proyecto: el código asume una
+  // corrección de db/correcciones/ que todavía no se pegó en el SQL Editor.
+  // El mensaje va al log del server, no al cliente.
+  if (typeof e === "object" && e !== null && "code" in e) {
+    const codigoPg = (e as { code: string }).code;
+    if (codigoPg === "42703" || codigoPg === "42P01") {
+      console.error(
+        "[api] ↑ la base no tiene esa columna/tabla. " +
+          "Revisa si falta aplicar alguna correccion de db/correcciones/ (ver su README.md).",
+      );
+    }
+  }
+
   return NextResponse.json(
     {
       error: {

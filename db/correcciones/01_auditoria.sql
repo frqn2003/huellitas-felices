@@ -1,19 +1,22 @@
 -- =========================================================
--- 0005 · FALTABA: bitácora de auditoría
+-- 0002 · FALTA: bitácora de auditoría
 -- =========================================================
--- POR QUÉ: "Registra en bitácora de auditoría cada alta, modificación y baja,
--- con usuario responsable, fecha, hora y valores anterior y nuevo" es criterio
--- de aceptación de LAS 5 HU del Sprint 1. Sin esta tabla ninguna se puede
--- marcar como terminada.
+-- QUÉ PROBLEMA RESUELVE
+--   "Registra en bitácora de auditoría cada alta, modificación y baja, con
+--    usuario responsable, fecha, hora y valores anterior y nuevo" es criterio
+--    de aceptación de LAS 5 HU del Sprint 1. La tabla no existe, así que hoy
+--    ninguna HU puede darse por terminada.
 --
--- Se implementa por TRIGGER y no en la aplicación por dos razones:
+-- POR QUÉ POR TRIGGER Y NO DESDE LA APLICACIÓN
 --   1. HU-SIS-06 exige que "ningún usuario, incluido el administrador, pueda
---      editar o eliminar entradas" → se garantiza en el motor, no por confianza.
---   2. Un trigger no se puede olvidar en un endpoint nuevo.
+--      editar o eliminar entradas". Eso se garantiza en el motor.
+--   2. Un trigger no se puede olvidar al agregar un endpoint nuevo.
+--   3. Esta base YA usa triggers para el stock y los códigos: es coherente.
 --
--- El usuario responsable viaja por variable de sesión (app.usuario_id), que la
--- app fija con withAuditUser() al abrir cada transacción de escritura.
--- Ver src/lib/audit/audit.ts
+-- QUÉ TIENE QUE HACER LA APLICACIÓN
+--   Solo una cosa: decir QUIÉN está operando, con
+--   `await withAuditUser(client, usuarioId)` como primera línea de cada
+--   transacción que escriba (ver src/lib/audit/audit.ts).
 -- =========================================================
 
 CREATE TABLE auditoria (
@@ -28,18 +31,20 @@ CREATE TABLE auditoria (
   fecha_hora     timestamp NOT NULL DEFAULT now()
 );
 
-COMMENT ON TABLE auditoria IS 'HU-SIS-06. Append-only: solo INSERT. Retención mínima 12 meses.';
+COMMENT ON TABLE  auditoria IS 'HU-SIS-06. Append-only: solo INSERT. Retencion minima 12 meses.';
 COMMENT ON COLUMN auditoria.accion IS 'alta | modificacion | baja | login';
-COMMENT ON COLUMN auditoria.usuario_id IS 'NULL solo si el trigger no encontró app.usuario_id (indica un bug: la app no llamó a withAuditUser).';
+COMMENT ON COLUMN auditoria.usuario_id IS 'NULL indica un BUG: la app no llamo a withAuditUser() antes de escribir.';
 
-CREATE INDEX idx_auditoria_entidad     ON auditoria (entidad, entidad_id);
-CREATE INDEX idx_auditoria_usuario     ON auditoria (usuario_id);
-CREATE INDEX idx_auditoria_fecha       ON auditoria (fecha_hora DESC);
+CREATE INDEX idx_auditoria_entidad ON auditoria (entidad, entidad_id);
+CREATE INDEX idx_auditoria_usuario ON auditoria (usuario_id);
+CREATE INDEX idx_auditoria_fecha   ON auditoria (fecha_hora DESC);
 
 
 -- ---------------------------------------------------------
--- Trigger genérico: sirve para cualquier tabla auditada
+-- Trigger genérico, sirve para cualquier tabla
 -- ---------------------------------------------------------
+-- TG_TABLE_NAME lo da Postgres: es el nombre de la tabla que disparó.
+-- TG_ARGV[0] es el argumento que le pasamos al enganchar el trigger (el módulo).
 CREATE OR REPLACE FUNCTION fn_auditar() RETURNS trigger AS $$
 DECLARE
   v_usuario_id int;
@@ -49,16 +54,17 @@ DECLARE
   v_nuevo      jsonb;
   v_entidad_id int;
 BEGIN
-  -- current_setting con missing_ok=true: si la app no fijó el usuario,
-  -- se audita con NULL en vez de romper la operación.
+  -- El `true` de current_setting es missing_ok: si la app no fijó el usuario,
+  -- audita con NULL en vez de hacer fallar la operación entera.
   v_usuario_id := NULLIF(current_setting('app.usuario_id', true), '')::int;
 
   IF TG_OP = 'INSERT' THEN
     v_accion := 'alta';
     v_nuevo := to_jsonb(NEW);
     v_entidad_id := NEW.id;
+
   ELSIF TG_OP = 'UPDATE' THEN
-    -- Una baja lógica es un UPDATE de estado, pero se audita como baja.
+    -- Una baja lógica es técnicamente un UPDATE, pero se audita como baja.
     IF to_jsonb(OLD) ? 'estado'
        AND OLD.estado::text = 'activo'
        AND NEW.estado::text = 'inactivo' THEN
@@ -69,6 +75,7 @@ BEGIN
     v_anterior := to_jsonb(OLD);
     v_nuevo := to_jsonb(NEW);
     v_entidad_id := NEW.id;
+
   ELSE
     v_accion := 'baja';
     v_anterior := to_jsonb(OLD);
@@ -78,13 +85,13 @@ BEGIN
   INSERT INTO auditoria (usuario_id, accion, modulo, entidad, entidad_id, valor_anterior, valor_nuevo)
   VALUES (v_usuario_id, v_accion, v_modulo, TG_TABLE_NAME, v_entidad_id, v_anterior, v_nuevo);
 
-  RETURN NULL; -- AFTER trigger
+  RETURN NULL;  -- AFTER trigger: el valor de retorno se ignora
 END;
 $$ LANGUAGE plpgsql;
 
 
 -- ---------------------------------------------------------
--- Tablas auditadas (una por HU del sprint)
+-- Tablas auditadas — una por HU del sprint
 -- ---------------------------------------------------------
 CREATE TRIGGER tg_auditar_proveedor
   AFTER INSERT OR UPDATE OR DELETE ON proveedor
@@ -102,6 +109,10 @@ CREATE TRIGGER tg_auditar_ficha_stock
   AFTER INSERT OR UPDATE OR DELETE ON ficha_stock
   FOR EACH ROW EXECUTE FUNCTION fn_auditar('stock');
 
+CREATE TRIGGER tg_auditar_movimiento
+  AFTER INSERT OR UPDATE OR DELETE ON movimiento_stock
+  FOR EACH ROW EXECUTE FUNCTION fn_auditar('movimientos');
+
 CREATE TRIGGER tg_auditar_orden_compra
   AFTER INSERT OR UPDATE OR DELETE ON orden_compra
   FOR EACH ROW EXECUTE FUNCTION fn_auditar('compras');
@@ -110,15 +121,17 @@ CREATE TRIGGER tg_auditar_usuario
   AFTER INSERT OR UPDATE OR DELETE ON usuario
   FOR EACH ROW EXECUTE FUNCTION fn_auditar('usuarios');
 
--- movimiento_stock se audita en 0008, después de partirlo en cabecera/detalle.
-
 
 -- ---------------------------------------------------------
 -- Append-only de verdad
 -- ---------------------------------------------------------
--- Ejecutar con el rol de la aplicación cuando exista.
--- Con el owner de la base no aplica (el owner siempre puede todo), así que
--- el rol de app es parte del setup de producción.
+-- Con el rol `postgres` (el que usa la app hoy) no aplica: es dueño de la base
+-- y siempre puede todo. Cuando exista un rol de aplicación restringido:
 --
 --   REVOKE UPDATE, DELETE, TRUNCATE ON auditoria FROM app_huellitas;
 --   GRANT  INSERT, SELECT                ON auditoria TO   app_huellitas;
+--
+-- ⚠️ OJO CON SUPABASE: el event trigger `rls_auto_enable` habilita Row Level
+--    Security en toda tabla nueva de `public`, así que `auditoria` nace con RLS
+--    activo. Hoy no molesta porque `postgres` tiene BYPASSRLS. Pero un rol
+--    restringido sin políticas vería la tabla VACÍA, sin ningún error.

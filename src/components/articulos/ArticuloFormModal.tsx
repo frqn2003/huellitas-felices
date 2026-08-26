@@ -2,8 +2,7 @@
 
 import { PackagePlus, Pencil, Upload } from "lucide-react";
 import { useRef, useState } from "react";
-import type { Articulo, Categoria, Proveedor, UnidadMedida } from "@/data/articulos";
-import { CATEGORIAS, PROVEEDORES, UNIDADES } from "@/data/articulos";
+import type { Articulo, CatalogosArticulo } from "@/data/articulos";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
@@ -11,13 +10,25 @@ import { Modal } from "@/components/ui/Modal";
 
 export type FormModo = "INSERCION" | "EDICION" | "LECTURA";
 
+/**
+ * Lo que el formulario le manda al backend.
+ *
+ * DOS CAMBIOS respecto de cómo era con datos hardcodeados:
+ *
+ *  1. NO lleva `codigo`. Lo genera la base con un trigger, a partir del prefijo
+ *     de la categoría (MED-000001). El front no puede ni debe inventarlo: si
+ *     dos personas dieran de alta a la vez, generarían el mismo.
+ *
+ *  2. Categoría, unidad y fabricante viajan como **id**, no como texto. En la
+ *     base son tablas con foreign key, no strings sueltos. Los ids salen de
+ *     GET /api/articulos/catalogos.
+ */
 export interface ArticuloDraft {
-  codigo: string;
   nombre: string;
   descripcion: string;
-  fabricante: string;
-  unidadMedida: UnidadMedida;
-  categoria: Categoria;
+  fabricanteId: string;
+  unidadMedidaId: string;
+  categoriaId: string;
   proveedorId: string;
   activo: boolean;
   imagen: string;
@@ -28,40 +39,39 @@ interface ArticuloFormModalProps {
   modo: FormModo;
   articulo: Articulo | null;
   articulos: Articulo[];
+  catalogos: CatalogosArticulo;
   onClose: () => void;
   onSave: (draft: ArticuloDraft) => void;
   onEditFromRead: () => void;
 }
 
-function nextCodigo(articulos: Articulo[]): string {
-  const nums = articulos
-    .map((a) => Number.parseInt(a.codigo.replace(/\D+/g, ""), 10))
-    .filter((n) => !Number.isNaN(n));
-  const max = nums.length ? Math.max(...nums) : 0;
-  return `ART${String(max + 1).padStart(3, "0")}`;
-}
+// `nextCodigo()` se eliminó: el código lo genera el trigger de la base.
 
-function initialDraft(articulo: Articulo | null, articulos: Articulo[]): ArticuloDraft {
+function initialDraft(
+  articulo: Articulo | null,
+  catalogos: CatalogosArticulo,
+): ArticuloDraft {
   if (articulo) {
     return {
-      codigo: articulo.codigo,
       nombre: articulo.nombre,
       descripcion: articulo.descripcion,
-      fabricante: articulo.fabricante,
-      unidadMedida: articulo.unidadMedida,
-      categoria: articulo.categoria,
+      fabricanteId: String(articulo.fabricanteId),
+      unidadMedidaId: String(articulo.unidadMedidaId),
+      categoriaId: String(articulo.categoriaId),
       proveedorId: articulo.proveedorPreferido ? String(articulo.proveedorPreferido.id) : "",
       activo: articulo.activo,
       imagen: articulo.imagen,
     };
   }
+  // En alta se preselecciona la primera opción de cada catálogo: los tres son
+  // obligatorios (NOT NULL en la base), así que un select vacío solo sirve para
+  // que el usuario descubra el error al guardar.
   return {
-    codigo: nextCodigo(articulos),
     nombre: "",
     descripcion: "",
-    fabricante: "",
-    unidadMedida: "Unidad",
-    categoria: "Medicamentos",
+    fabricanteId: String(catalogos.fabricantes[0]?.id ?? ""),
+    unidadMedidaId: String(catalogos.unidadesMedida[0]?.id ?? ""),
+    categoriaId: String(catalogos.categorias[0]?.id ?? ""),
     proveedorId: "",
     activo: true,
     imagen: "",
@@ -74,15 +84,7 @@ function validateDraft(
   propioId: number | undefined,
 ): Partial<Record<keyof ArticuloDraft, string>> {
   const next: Partial<Record<keyof ArticuloDraft, string>> = {};
-  if (!d.codigo.trim()) {
-    next.codigo = "El código es obligatorio.";
-  } else if (
-    articulos.some(
-      (a) => a.codigo.toLowerCase() === d.codigo.trim().toLowerCase() && a.id !== propioId,
-    )
-  ) {
-    next.codigo = "Ya existe un artículo con ese código.";
-  }
+  // Ya no se valida el código: lo genera la base.
   if (!d.nombre.trim()) {
     next.nombre = "El nombre es obligatorio.";
   } else if (
@@ -92,26 +94,34 @@ function validateDraft(
   ) {
     next.nombre = "Ya existe un artículo activo con ese nombre.";
   }
-  if (!d.unidadMedida) next.unidadMedida = "Seleccioná una unidad de medida.";
-  if (!d.categoria) next.categoria = "Seleccioná una categoría.";
+  if (!d.unidadMedidaId) next.unidadMedidaId = "Seleccioná una unidad de medida.";
+  if (!d.categoriaId) next.categoriaId = "Seleccioná una categoría.";
+  if (!d.fabricanteId) next.fabricanteId = "Seleccioná un fabricante.";
   return next;
+
+  // NOTA: la validación de nombre duplicado también corre en el servidor
+  // (articulo.service.ts). Acá es solo para dar feedback inmediato: el front
+  // puede tener una lista desactualizada, así que la verdad la tiene el back —
+  // si el POST devuelve 409 NOMBRE_DUPLICADO, se muestra ese mensaje.
 }
 
 function ArticuloFormFields({
   articulo,
   articulos,
+  catalogos,
   modo,
   onSave,
 }: {
   articulo: Articulo | null;
   articulos: Articulo[];
+  catalogos: CatalogosArticulo;
   modo: FormModo;
   onSave: (draft: ArticuloDraft) => void;
 }) {
   const isLectura = modo === "LECTURA";
   const isEdicion = modo === "EDICION";
 
-  const [draft, setDraft] = useState<ArticuloDraft>(() => initialDraft(articulo, articulos));
+  const [draft, setDraft] = useState<ArticuloDraft>(() => initialDraft(articulo, catalogos));
   const [errors, setErrors] = useState<Partial<Record<keyof ArticuloDraft, string>>>({});
   const [touched, setTouched] = useState<Partial<Record<keyof ArticuloDraft, boolean>>>({});
   const [imagenError, setImagenError] = useState<string | null>(null);
@@ -138,8 +148,8 @@ function ArticuloFormFields({
       setImagenError("La imagen no puede superar 2 MB.");
       return;
     }
-    // BACKEND: el back recibe la imagen (base64 en el POST/PUT o multipart en
-    // POST /api/articulos/:id/imagen) y devuelve la URL para el campo `imagen`.
+    // Se manda como data URL base64 en el POST/PUT. El back la escribe en
+    // disco (src/lib/uploads.ts) y devuelve la ruta pública en `imagen`.
     const reader = new FileReader();
     reader.onload = () => {
       setImagenError(null);
@@ -164,7 +174,7 @@ function ArticuloFormFields({
     e.preventDefault();
     const nextErrors = validateDraft(draft, articulos, articulo?.id);
     setErrors(nextErrors);
-    setTouched({ codigo: true, nombre: true, unidadMedida: true, categoria: true });
+    setTouched({ nombre: true, unidadMedidaId: true, categoriaId: true, fabricanteId: true });
     if (Object.keys(nextErrors).length > 0) return;
     onSave(draft);
   };
@@ -175,16 +185,15 @@ function ArticuloFormFields({
     <form id="articulo-form" onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
       <div className="flex flex-col gap-4 sm:flex-row">
         <div className="flex-1">
+          {/* El código lo genera la base al guardar (trigger fn_generar_cod_articulo,
+              con el prefijo de la categoría: MED-000001). Nunca es editable. */}
           <Input
             id="codigo"
-            label="Código único"
-            requiredMark
-            value={draft.codigo}
-            onChange={(e) => setField("codigo", e.target.value)}
-            onBlur={() => setTouched((t) => ({ ...t, codigo: true }))}
-            error={showError("codigo")}
-            readOnly={isLectura || isEdicion}
-            hint={isEdicion ? "El código no se puede modificar en edición." : undefined}
+            label="Código"
+            value={articulo?.codigo ?? ""}
+            readOnly
+            hint={articulo ? undefined : "Se genera automáticamente al guardar."}
+            onChange={() => {}}
           />
         </div>
         <div className="flex-1">
@@ -209,14 +218,24 @@ function ArticuloFormFields({
         hint="Ej: Para infecciones bacterianas"
         readOnly={isLectura}
       />
-      <Input
+      {/* Antes era texto libre. Ahora `fabricante` es una TABLA con foreign key:
+          escribir "Nipro" y "nipro medical" creaba dos fabricantes distintos y
+          rompía el agrupado. Las opciones salen de GET /api/articulos/catalogos. */}
+      <Select
         id="fabricante"
         label="Fabricante"
-        value={draft.fabricante}
-        onChange={(e) => setField("fabricante", e.target.value)}
-        hint="Ej: Laboratorios Pharma S.A."
-        readOnly={isLectura}
-      />
+        requiredMark
+        value={draft.fabricanteId}
+        onChange={(e) => setField("fabricanteId", e.target.value)}
+        error={showError("fabricanteId")}
+        disabled={isLectura}
+      >
+        {catalogos.fabricantes.map((f) => (
+          <option key={f.id} value={f.id}>
+            {f.nombre}
+          </option>
+        ))}
+      </Select>
       <p className="text-sm font-bold text-text-primary">Imagen</p>
       {isLectura ? (
         <div className="flex flex-col gap-3 rounded-sm border border-border bg-surface p-4">
@@ -317,14 +336,14 @@ function ArticuloFormFields({
             id="unidad"
             label="Unidad de medida"
             requiredMark
-            value={draft.unidadMedida}
-            onChange={(e) => setField("unidadMedida", e.target.value as UnidadMedida)}
-            error={showError("unidadMedida")}
+            value={draft.unidadMedidaId}
+            onChange={(e) => setField("unidadMedidaId", e.target.value)}
+            error={showError("unidadMedidaId")}
             disabled={isLectura}
           >
-            {UNIDADES.map((u) => (
-              <option key={u} value={u}>
-                {u}
+            {catalogos.unidadesMedida.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.nombre}
               </option>
             ))}
           </Select>
@@ -334,20 +353,21 @@ function ArticuloFormFields({
             id="categoria"
             label="Categoría"
             requiredMark
-            value={draft.categoria}
-            onChange={(e) => setField("categoria", e.target.value as Categoria)}
-            error={showError("categoria")}
+            value={draft.categoriaId}
+            onChange={(e) => setField("categoriaId", e.target.value)}
+            error={showError("categoriaId")}
             disabled={isLectura}
           >
-            {CATEGORIAS.map((c) => (
-              <option key={c} value={c}>
-                {c}
+            {catalogos.categorias.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nombre}
               </option>
             ))}
           </Select>
         </div>
       </div>
-      {/* BACKEND: poblar las opciones desde GET /api/proveedores (id + nombre). */}
+      {/* Opcional por criterio de HU-STK-01. Solo proveedores ACTIVOS: uno dado
+          de baja no puede elegirse (regla de HU-PROV-01, la aplica el repo). */}
       <Select
         id="proveedor"
         label="Proveedor preferido"
@@ -355,8 +375,8 @@ function ArticuloFormFields({
         onChange={(e) => setField("proveedorId", e.target.value)}
         disabled={isLectura}
       >
-        <option value="">[ Seleccionar ]</option>
-        {PROVEEDORES.map((p: Proveedor) => (
+        <option value="">[ Sin proveedor preferido ]</option>
+        {catalogos.proveedores.map((p) => (
           <option key={p.id} value={p.id}>
             {p.nombre}
           </option>
@@ -395,6 +415,7 @@ export function ArticuloFormModal({
   modo,
   articulo,
   articulos,
+  catalogos,
   onClose,
   onSave,
   onEditFromRead,
@@ -438,6 +459,7 @@ export function ArticuloFormModal({
         key={formKey}
         articulo={articulo}
         articulos={articulos}
+        catalogos={catalogos}
         modo={modo}
         onSave={onSave}
       />

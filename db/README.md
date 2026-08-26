@@ -1,68 +1,94 @@
 # Base de datos
 
-## Puesta en marcha (primera vez)
+La base vive en **Supabase** y **el equipo la edita ahí directamente**, en el SQL
+Editor. Esa es la fuente de verdad.
 
-```bash
-docker compose up -d
-cp .env.example .env.local
-npm install
-npm run db:reset
+Este repo no la reemplaza: la **espeja**, para que el schema quede versionado en
+git, sirva de entregable y se pueda recuperar si el proyecto de Supabase se
+pausa o se pierde.
+
+## El flujo de trabajo
+
+```
+   cambiás algo en el SQL Editor de Supabase
+                    ↓
+            npm run db:dump          ← lee la base, reescribe db/schema.sql
+                    ↓
+   git diff db/schema.sql            ← revisás qué cambió
+                    ↓
+            git commit
 ```
 
-`db:reset` recrea el schema desde cero y carga los seeds. Es lo que hay que
-correr antes de una demo para que arranque siempre igual.
+Nada más. No hay que escribir el cambio dos veces.
 
 ## Comandos
 
 | Comando | Qué hace |
 |---|---|
-| `npm run db:migrate` | aplica las migraciones pendientes |
-| `npm run db:status` | lista qué está aplicado y qué falta |
-| `npm run db:seed` | carga catálogos + datos de demo |
-| `npm run db:reset` | borra todo, migra de cero y carga seeds |
+| `npm run db:dump` | lee la base y reescribe `db/schema.sql` |
+| `npm run db:info` | qué tablas hay y cuántas filas |
+| `npm run db:info:full` | + columnas, constraints, índices, triggers y funciones |
+| `npm run db:seed` | carga catálogos y datos de demo (idempotente) |
 
-## Estructura
+## Qué hay acá
 
 ```
 db/
-├── migrations/   se aplican UNA vez, en orden, registradas en la tabla _migracion
-├── seeds/        se pueden correr muchas veces (ON CONFLICT DO NOTHING)
-└── dev/          utilidades manuales — el runner NO las toca
+├── schema.sql       ← GENERADO. El DDL completo. No editar a mano.
+├── correcciones/    ← SQL para pegar en Supabase, una sola vez cada uno
+├── seeds/           ← catálogos + datos de demo (se pueden correr muchas veces)
+└── dev/             ← utilidades manuales (vaciar tablas)
 ```
 
-### Migraciones
+### `schema.sql`
 
-| Archivo | Qué hace |
-|---|---|
-| `0001_baseline.sql` | el DDL tal como lo pasó el equipo, sin cambios de diseño |
-| `0002_fusion_usuario.sql` | `empleado` se absorbe en `usuario` |
-| `0003_deposito_sucursal.sql` | depósito = sucursal (D-B) |
-| `0004_formas_pago.sql` | formas de pago pasa a catálogo + N:M (D-A) |
-| `0005_auditoria.sql` | bitácora + trigger genérico |
-| `0006_constraints.sql` | UNIQUE parciales, tipos de FK, CHECKs de importes |
-| `0007_articulo_ajustes.sql` | imagen, timestamps, quita lote/vencimiento |
-| `0008_movimiento_cabecera.sql` | movimiento en cabecera-detalle + vista plana |
-| `0009_orden_compra_ajustes.sql` | `condicion_pago`, secuencia de `cod_ord` |
+Lo genera `npm run db:dump`. Corre de arriba a abajo sobre una base vacía y
+reconstruye todo: enums, secuencias, tablas, constraints, índices, funciones y
+triggers.
 
-Cada migración de corrección arranca con un bloque `POR QUÉ` que explica qué
-problema resuelve y qué criterio de aceptación lo pide.
+Las tablas se crean primero sin foreign keys y las FK se agregan al final con
+`ALTER TABLE`, así el archivo no depende de qué tabla se creó antes que cuál.
 
-### Reglas
+**No editarlo a mano.** Cualquier cambio se hace en Supabase y se vuelve a
+dumpear; si no, el próximo dump lo pisa.
 
-1. **Una migración ya corrida no se edita.** Si algo salió mal, se agrega otra.
-2. **Una migración = un cambio con sentido propio.** No mezclar cosas que no
-   tienen que ver entre sí.
-3. **Probar con `db:reset` antes de commitear.** Que corra desde cero es la
-   única garantía de que otro la va a poder aplicar.
-4. Cada migración corre en su propia transacción: si falla, no deja nada a medias.
+### `correcciones/`
 
-## ⚠️ El baseline es una hipótesis
+Arreglos puntuales que todavía **no están aplicados** en la base. Se pegan en el
+SQL Editor, en orden, una sola vez cada uno. Ver `correcciones/README.md`.
 
-`0001_baseline.sql` se reconstruyó del código que pasó el equipo, **sin acceso
-a la base del servidor**. Un DDL no muestra si alguien agregó un índice o un
-constraint a mano después.
+Los dos primeros son urgentes: falta la tabla de auditoría (criterio de las 5 HU
+del sprint) y hay un bug de concurrencia en el trigger del stock.
 
-Cuando haya acceso, correr las queries de verificación de
-[`../docs/backend/AJUSTES-DER.md`](../docs/backend/AJUSTES-DER.md) §6 y comparar
-contra este archivo. Si algo difiere, se corrige el baseline (todavía no está
-aplicado en ningún lado que importe) o se agrega una migración.
+### `seeds/`
+
+`01_catalogos.sql` son datos de operación: sin roles, categorías, unidades,
+fabricantes, depósitos, formas de pago, estados y orígenes, el sistema no
+funciona. `02_demo.sql` son datos de prueba, descartables.
+
+Los dos son idempotentes: se pueden correr muchas veces sin duplicar.
+
+## Lo que la base hace sola (y la app NO debe repetir)
+
+Esta base tiene lógica de negocio en triggers. Importa saberlo antes de escribir
+un service:
+
+| Trigger | Qué hace | Consecuencia |
+|---|---|---|
+| `trg_actualizar_stock` | actualiza `ficha_stock.stock_actual` y rechaza egresos que dejarían negativo | **el service NO debe tocar el stock** — si lo hace, se cuenta doble |
+| `trg_generar_cod_articulo` | genera `codigo` con el prefijo de la categoría (`MED-000001`) | el API **no manda** `codigo` |
+| `trg_generar_cod_orden_compra` | genera `cod_ord` (`OC-000001`) si viene vacío | el API **no manda** `cod_ord` |
+| `tg_auditar_*` | escribe en `auditoria` (después de la corrección 01) | la app solo llama a `withAuditUser()` |
+
+Códigos de error propios que agregan las correcciones: `HF001` stock
+insuficiente, `HF002` ficha inexistente, `HF003` movimiento inmutable. Los
+traduce `src/lib/http/errors.ts`.
+
+## Supabase: RLS
+
+El event trigger `rls_auto_enable` habilita Row Level Security en **toda tabla
+nueva** de `public`. Hoy no molesta porque el rol `postgres` tiene `BYPASSRLS` y
+es con el que se conecta la app.
+
+Es una mina para más adelante: un rol de aplicación restringido, sin políticas,
+vería todas las tablas **vacías** — sin ningún error, solo cero filas.

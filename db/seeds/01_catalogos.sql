@@ -1,13 +1,20 @@
 -- =========================================================
--- SEED 01 · CATÁLOGOS (tablas de referencia fijas)
+-- SEED 01 · CATÁLOGOS
 -- =========================================================
--- Idempotente: se puede correr varias veces sin duplicar.
--- Estos datos NO son de prueba: son parte del funcionamiento del sistema.
+-- Estos datos NO son de prueba: sin ellos el sistema no funciona. Un artículo
+-- necesita una categoría, un movimiento necesita un origen, una orden necesita
+-- un estado.
+--
+-- Idempotente: se puede correr muchas veces sin duplicar (todo va con
+-- ON CONFLICT DO NOTHING sobre la columna única de cada catálogo).
+--
+-- Corre DESPUÉS de las migraciones: usa los nombres de columna ya renombrados
+-- en 0006 (forma_pago.nombre, unidad_medida.nombre) y `deposito` sin sucursal_id (0004).
 -- =========================================================
 
 
 -- ---------------------------------------------------------
--- ROL
+-- ROLES
 -- ---------------------------------------------------------
 INSERT INTO rol (nombre) VALUES
   ('Administrador'),
@@ -20,54 +27,38 @@ ON CONFLICT (nombre) DO NOTHING;
 
 
 -- ---------------------------------------------------------
--- ESTADO_ORDEN_COMPRA  ← ESTO FALTABA Y ROMPÍA LA BASE
+-- ESTADOS DE ORDEN DE COMPRA
 -- ---------------------------------------------------------
--- El DDL define `estado_id smallint NOT NULL REFERENCES estado_orden_compra(id)
--- DEFAULT 1`, pero la tabla nunca se poblaba. Resultado: TODO insert en
--- orden_compra fallaba con violacion de FK (no existe la fila id=1).
---
--- Los 5 estados son la "tabla de referencia fija" que pide HU-COMP-02.
--- es_final marca los estados desde los que ya no se puede transicionar,
--- y es lo que usa puedeTransicionar() en el service de compras.
-INSERT INTO estado_orden_compra (id, nombre, es_final) VALUES
-  (1, 'Pendiente',        false),
-  (2, 'Enviada',          false),
-  (3, 'Recibida Parcial', false),
-  (4, 'Recibida Total',   true),
-  (5, 'Cancelada',        true)
-ON CONFLICT (id) DO NOTHING;
-
-SELECT setval('estado_orden_compra_id_seq', (SELECT MAX(id) FROM estado_orden_compra));
-
--- NOTA DE ALCANCE: 'Recibida Parcial' y 'Recibida Total' NO son alcanzables en
--- el Sprint 1. Solo se llega a ellas desde HU-COMP-03 (Recepcion de Mercaderia),
--- que es Sprint 2. Estan en el catalogo para que la maquina de estados quede
--- completa, pero ninguna transicion del Sprint 1 las produce.
-
-
--- ---------------------------------------------------------
--- ORIGEN_MOVIMIENTO
--- ---------------------------------------------------------
--- Recordar: `tipo` solo distingue ingreso/egreso. El "por que" del movimiento
--- vive aca. Por eso transferencia y ajuste son ORIGENES, no tipos.
---
--- Se limpian dos cosas del listado original:
---   · Estaban 'transferencia_sucursal' Y 'transferencia' (redundantes) →
---     queda 'transferencia', que es lo que usa el front.
---   · El comentario del DDL decia 'ajuste_manual' pero el insert ponia
---     'ajuste' → queda 'ajuste'.
-
--- Alcanzables en Sprint 1:
-INSERT INTO origen_movimiento (nombre) VALUES
-  ('recepcion_compra'),      -- ingreso por HU-COMP-03 / carga manual
-  ('venta'),                 -- egreso
-  ('transferencia'),         -- par egreso+ingreso entre depositos (HU-STK-02)
-  ('ajuste'),                -- correccion manual de inventario
-  ('merma')                  -- perdida, rotura, vencimiento
+-- `es_final` marca los estados desde los que ya no se puede transicionar. Es lo
+-- que consulta puedeTransicionar() en el service de compras, en vez de tener la
+-- máquina de estados hardcodeada en el código.
+INSERT INTO estado_orden_compra (nombre, es_final) VALUES
+  ('Pendiente',        false),
+  ('Enviada',          false),
+  ('Recibida Parcial', false),
+  ('Recibida Total',   true),
+  ('Cancelada',        true)
 ON CONFLICT (nombre) DO NOTHING;
 
--- Reservados para sprints siguientes (modulos clinicos):
+-- NOTA DE ALCANCE: 'Recibida Parcial' y 'Recibida Total' NO son alcanzables en
+-- el Sprint 1. Solo se llega desde HU-COMP-03 (Recepción de Mercadería), que es
+-- Sprint 2. Están para que la máquina de estados quede completa.
+
+
+-- ---------------------------------------------------------
+-- ORÍGENES DE MOVIMIENTO
+-- ---------------------------------------------------------
+-- Recordar: el enum `tipo` solo distingue ingreso/egreso. El "por qué" del
+-- movimiento vive acá. Por eso transferencia y ajuste son ORÍGENES, no tipos:
+-- una transferencia ES un egreso más un ingreso.
 INSERT INTO origen_movimiento (nombre) VALUES
+  -- Alcanzables en Sprint 1
+  ('recepcion_compra'),
+  ('venta'),
+  ('transferencia'),
+  ('ajuste'),
+  ('merma'),
+  -- Reservados para los módulos clínicos de sprints siguientes
   ('receta'),
   ('internacion'),
   ('urgencia'),
@@ -79,11 +70,10 @@ ON CONFLICT (nombre) DO NOTHING;
 
 
 -- ---------------------------------------------------------
--- FORMA_PAGO
+-- FORMAS DE PAGO
 -- ---------------------------------------------------------
--- Ya se cargo en la migracion 0004 (necesitaba existir para migrar los datos
--- de la columna vieja). Se repite aca por si se corre el seed sobre una base
--- limpiada con db/dev/truncate.sql.
+-- Los acentos importan: el front manda "Cheque a 30 días" con tilde. Si el
+-- valor guardado no coincide EXACTO, el select no lo encuentra.
 INSERT INTO forma_pago (nombre) VALUES
   ('Contado'),
   ('Cuenta Corriente'),
@@ -93,10 +83,52 @@ ON CONFLICT (nombre) DO NOTHING;
 
 
 -- ---------------------------------------------------------
--- DEPOSITO (= sucursal, decision D-B)
+-- CATEGORÍAS DE ARTÍCULO
 -- ---------------------------------------------------------
--- Las 3 sucursales del enunciado. Son datos de operacion, no de prueba:
--- sin depositos no se puede crear ninguna ficha de stock.
+-- El `prefijo` alimenta el trigger que genera el código: un artículo de
+-- Medicamentos sale MED-000001. Por eso el prefijo es UNIQUE — dos categorías
+-- con el mismo prefijo harían códigos ambiguos.
+--
+-- Los nombres son los que el front tiene en CATEGORIAS (src/data/articulos.ts).
+INSERT INTO categoria (nombre, prefijo) VALUES
+  ('Medicamentos', 'MED'),
+  ('Insumos',      'INS'),
+  ('Alimentos',    'ALI'),
+  ('Accesorios',   'ACC')
+ON CONFLICT (nombre) DO NOTHING;
+
+
+-- ---------------------------------------------------------
+-- UNIDADES DE MEDIDA
+-- ---------------------------------------------------------
+-- Valores exactos de UNIDADES en src/data/articulos.ts.
+INSERT INTO unidad_medida (nombre) VALUES
+  ('Unidad'),
+  ('Kg'),
+  ('L'),
+  ('mL'),
+  ('Caja')
+ON CONFLICT (nombre) DO NOTHING;
+
+
+-- ---------------------------------------------------------
+-- FABRICANTES
+-- ---------------------------------------------------------
+-- Es catálogo y no dato de demo porque `articulo.fabricante_id` es NOT NULL:
+-- sin al menos un fabricante no se puede dar de alta ningún artículo.
+INSERT INTO fabricante (nombre, pais) VALUES
+  ('Laboratorios Pharma S.A.', 'Argentina'),
+  ('Nipro Medical',            'Japón'),
+  ('PetFood Co',               'Argentina'),
+  ('Vetmed Labs',              'Brasil')
+ON CONFLICT (nombre) DO NOTHING;
+
+
+-- ---------------------------------------------------------
+-- DEPÓSITOS (= sucursales, decisión D-B)
+-- ---------------------------------------------------------
+-- Las 3 sucursales del enunciado. Son datos de operación: sin depósitos no se
+-- puede crear ninguna ficha de stock.
 INSERT INTO deposito (nombre, ubicacion) VALUES
   ('Centro', 'Av. Principal 123'),
   ('Norte',  'Calle Norte 456'),

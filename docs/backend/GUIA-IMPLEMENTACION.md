@@ -127,37 +127,37 @@ No se crean `solicitud_cotizacion`, `solicitud_detalle`, `cotizacion` ni `cotiza
 
 ---
 
-## 4. Cómo trabajar sin acceso a la base
+## 4. La base: Supabase, sin migraciones
 
-**No esperar el acceso.** El orden que desbloquea todo:
+La base está en **Supabase** y el equipo la edita **directamente en el SQL
+Editor**. Esa es la fuente de verdad.
 
-1. **Postgres local con Docker** (5 minutos, cero instalación):
-   ```yaml
-   # docker-compose.yml en la raíz
-   services:
-     db:
-       image: postgres:16-alpine
-       environment:
-         POSTGRES_DB: huellitas_felices
-         POSTGRES_USER: huellitas
-         POSTGRES_PASSWORD: local
-       ports: ["5432:5432"]
-       volumes: ["pgdata:/var/lib/postgresql/data"]
-   volumes: { pgdata: {} }
-   ```
-   ```bash
-   docker compose up -d
-   ```
+El repo la espeja:
 
-2. **Reconstruir el baseline desde la imagen del DER** como `db/migrations/0001_baseline.sql`. Es el estado *presunto* de la base remota. Cuando llegue el acceso, se compara con la realidad y se corrige — pero mientras tanto no bloquea.
+```
+   cambiás en el SQL Editor  →  npm run db:dump  →  git commit
+```
 
-3. **Escribir los ajustes como migraciones** `0002`+ (§12). Se corren sobre la local.
+`db:dump` lee la base y reescribe `db/schema.sql` con el DDL completo. El cambio
+se hace **una sola vez**, en Supabase.
 
-4. **Desarrollar todo**: capas, endpoints, reglas, conexión del front.
+**Por qué no usamos migraciones.** Un sistema de migraciones (archivos numerados
+que se aplican una vez y quedan registrados) resuelve el problema de que cada
+persona tenga su propia base y haya que sincronizarlas. Acá hay **una sola base
+compartida**: escribir el cambio en Supabase y además en un archivo sería
+hacerlo dos veces.
 
-5. **Cuando llegue el acceso**: correr las queries de verificación de [`AJUSTES-DER.md`](AJUSTES-DER.md) §6, diffear contra el baseline, ajustar lo que difiera, y correr las mismas migraciones.
+Lo que sí conservamos del enfoque: **el schema versionado en git**. Sin eso no
+hay entregable para la cátedra, no se ve qué cambió ni cuándo, y no hay forma de
+reconstruir la base si el proyecto de Supabase se pausa o se pierde.
 
-> Cuanto antes se pida el acceso, mejor — pero el trabajo arranca hoy.
+**Conexión.** Supabase → Connect → Direct → **session pooler** (host
+`pooler.supabase.com`, puerto 5432; la *direct connection* es IPv6 only y falla
+en redes IPv4). La URL termina en `?sslmode=no-verify`.
+
+**Correcciones pendientes.** `db/correcciones/` tiene SQL para pegar en el SQL
+Editor que arregla lo que hoy falta o está mal en la base. Ver
+`db/correcciones/README.md`.
 
 ---
 
@@ -702,32 +702,40 @@ Los tipos de `src/data/*.ts` se quedan y pasan a ser el contrato compartido: son
 
 ---
 
-## 12. Migraciones
+## 12. Cambios de estructura en la base
 
-Numeradas desde cero, porque no tenemos el dump de la base real (§4).
+No hay migraciones (ver §4). El flujo es:
 
-| # | Archivo | Contenido |
+1. Aplicás el cambio en el **SQL Editor de Supabase**.
+2. `npm run db:dump` → reescribe `db/schema.sql`.
+3. `git diff db/schema.sql` → revisás que cambió lo que esperabas y nada más.
+4. Commit.
+
+**`db/schema.sql` no se edita a mano.** Es generado; el próximo dump lo pisa.
+
+**Corré el dump después de cada cambio, no una vez por mes.** El valor está en
+que el diff de git muestre qué se tocó, y para eso tiene que estar al día.
+
+### Correcciones pendientes
+
+`db/correcciones/` tiene SQL escrito y todavía **sin aplicar**. Se pega en el SQL
+Editor, en orden, una sola vez cada uno:
+
+| # | Qué arregla | Urgencia |
 |---|---|---|
-| `0001` | `baseline.sql` | El DER reconstruido de la imagen. Estado presunto, a validar cuando haya acceso. |
-| `0002` | `fusion_usuario.sql` | Absorber `empleado` en `usuario`; `movimiento_stock.empleado_id` → `usuario_id`; drop `empleado`. |
-| `0003` | `deposito_sucursal.sql` | `ALTER TABLE deposito DROP COLUMN sucursal_id` + seed Centro/Norte/Sur. **(D-B)** |
-| `0004` | `formas_pago.sql` | `forma_pago` + `proveedor_forma_pago`; drop `proveedor.forma_pago`. **(D-A)** |
-| `0005` | `auditoria.sql` | Tabla + trigger genérico + `app.usuario_id` + `REVOKE UPDATE, DELETE`. |
-| `0006` | `constraints.sql` | Los `UNIQUE` parciales (`WHERE estado = 'Activo'`) + tipo de FK `estado_id`. |
-| `0007` | `articulo_ajustes.sql` | `imagen_url`, `created_at`, `updated_at`; drop `numero_lote`/`fecha_vencimiento`; CHECK de categoría y unidad. |
-| `0008` | `movimiento_cabecera.sql` | Cabecera + detalle + vista plana + `CHECK` de origen por tipo. |
-| `0009` | `orden_compra_ajustes.sql` | `condicion_pago` + rename `plazo_entrega_d_habitual` → `plazo_entrega_dias`. |
+| 01 | crea `auditoria` + trigger genérico | 🔴 criterio de aceptación de las 5 HU |
+| 02 | `fn_actualizar_stock` pierde egresos concurrentes | 🔴 bug |
+| 03 | saca `deposito.sucursal_id` (FK huérfana) | 🟠 bloquea HU-STK-02 |
+| 04 | UNIQUE parciales, CHECKs, índices de FK | 🟠 la base no tiene ni un CHECK |
+| 05 | timestamps de artículo, saca lote/vencimiento, renombres | 🟡 |
+| 06 | N:M proveedor ↔ forma de pago (D-A) | 🟡 |
+| 07 | cabecera-detalle de movimientos | ⏸️ pendiente de decisión |
 
-Reglas: **una migración = un cambio con sentido propio**; nunca editar una ya corrida (se agrega otra); toda migración se prueba con `db:reset` desde cero antes de commitear.
+Cada archivo arranca con un bloque `POR QUÉ`: qué problema resuelve y qué
+criterio del Excel lo exige. Eso es lo que un `ALTER TABLE` suelto no deja
+registrado.
 
-```json
-// package.json
-"db:migrate": "node scripts/migrate.js",
-"db:seed":    "node scripts/seed.js",
-"db:reset":   "node scripts/migrate.js --fresh && node scripts/seed.js"
-```
-
-`db:reset` no es un lujo: es lo que permite que la demo del sprint arranque siempre igual.
+Después de aplicar cada uno: `npm run db:dump` y commit.
 
 ---
 

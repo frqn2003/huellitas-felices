@@ -59,12 +59,20 @@ export class BusinessRuleError extends AppError {
   readonly status = 409;
 }
 
-/** 401 — sin sesión válida. */
+/**
+ * 401 — sin sesión válida.
+ *
+ * En el Sprint 1 no hay login (HU-SIS-04 es Sprint 2), así que la sesión sale
+ * del stub de lib/auth/session.ts. Si aparece este error, casi siempre es que
+ * la tabla `usuario` está vacía — no un problema de permisos.
+ */
 export class UnauthorizedError extends AppError {
   readonly status = 401;
 
-  constructor() {
-    super("SIN_SESION", "Necesitás iniciar sesión.");
+  constructor(
+    mensaje = "No hay una sesión activa. Si es la primera vez, corré `npm run db:seed` para cargar los usuarios.",
+  ) {
+    super("SIN_SESION", mensaje);
   }
 }
 
@@ -129,6 +137,29 @@ export function traducirErrorPostgres(e: unknown): AppError | null {
       );
     }
     return new ValidationError("DATO_INVALIDO", "Algún valor no cumple las reglas de la base.");
+  }
+
+  // P0001 = raise_exception: viene de un RAISE EXCEPTION dentro de un trigger.
+  // La base de este proyecto tiene reglas de negocio en triggers (fn_actualizar_stock
+  // rechaza los egresos que dejarian stock negativo), asi que sin este mapeo esas
+  // reglas devolverian 500 en vez de un 409 con un mensaje util.
+  //
+  // Se matchea por texto, que es fragil. El arreglo de fondo es que el trigger
+  // declare su propio SQLSTATE (RAISE EXCEPTION ... USING ERRCODE = 'HF001') y/o
+  // que exista un CHECK (stock_actual >= 0), que daria un 23514 con nombre de
+  // constraint estable.
+  if (codigo === "P0001") {
+    const mensaje = (e as { message?: string }).message ?? "";
+    if (/stock insuficiente/i.test(mensaje)) {
+      return new BusinessRuleError(
+        "STOCK_INSUFICIENTE",
+        "No hay stock suficiente para registrar este egreso.",
+      );
+    }
+    return new BusinessRuleError(
+      "REGLA_RECHAZADA",
+      "La operación fue rechazada por una regla de la base de datos.",
+    );
   }
 
   // 23503 = foreign_key_violation

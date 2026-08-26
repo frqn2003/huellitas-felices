@@ -15,9 +15,11 @@ import type { FiltrosProveedor, ProveedorInput, ProveedorRow } from "./proveedor
 
 // Columnas explícitas, nunca SELECT *: si mañana alguien agrega una columna a
 // la tabla, no debería aparecer sola en la respuesta de la API.
+// `rubro` NO existe en esta base (si estaba en una version anterior del DDL).
+// `calificacion` si existe pero es HU-PROV-02, fuera del Sprint 1: no se expone.
 const COLUMNAS = `
   id, razon_social, cuit, direccion, telefono, email, contacto,
-  rubro, plazo_entrega_dias, estado, calificacion
+  plazo_entrega_dias, estado, calificacion
 `;
 
 // ---------------------------------------------------------
@@ -151,8 +153,8 @@ export async function insert(
 ): Promise<ProveedorRow> {
   const { rows } = await client.query<ProveedorRow>(
     `INSERT INTO proveedor
-       (razon_social, cuit, direccion, telefono, email, contacto, rubro, plazo_entrega_dias)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       (razon_social, cuit, direccion, telefono, email, contacto, plazo_entrega_dias)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING ${COLUMNAS}`,
     [
       data.razonSocial,
@@ -161,7 +163,6 @@ export async function insert(
       data.telefono ?? null,
       data.email ?? null,
       data.contacto ?? null,
-      data.rubro ?? null,
       data.plazoEntregaDias ?? null,
     ],
   );
@@ -181,8 +182,7 @@ export async function update(
          telefono = $5,
          email = $6,
          contacto = $7,
-         rubro = $8,
-         plazo_entrega_dias = $9
+         plazo_entrega_dias = $8
      WHERE id = $1
      RETURNING ${COLUMNAS}`,
     [
@@ -193,7 +193,6 @@ export async function update(
       data.telefono ?? null,
       data.email ?? null,
       data.contacto ?? null,
-      data.rubro ?? null,
       data.plazoEntregaDias ?? null,
     ],
   );

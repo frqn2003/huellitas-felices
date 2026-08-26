@@ -37,7 +37,6 @@ export const crearProveedorSchema = z.object({
     .or(z.literal("").transform(() => undefined)),
 
   contacto: z.string().trim().max(100).optional(),
-  rubro: z.string().trim().max(60).optional(),
 
   plazoEntregaDias: z
     .number()

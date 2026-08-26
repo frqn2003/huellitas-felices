@@ -38,11 +38,12 @@ Cuando no quede ninguno, el backend está terminado.
 
 ## 2. Cómo arrancar (10 minutos)
 
+La base está en Supabase y ya existe: no hay que crear nada.
+
 ```bash
-docker compose up -d      # levanta Postgres en el puerto 5432
-cp .env.example .env.local
 npm install
-npm run db:reset          # crea las tablas y carga los datos
+cp .env.example .env.local     # y completá DATABASE_URL con la password
+npm run db:info                # ¿conecta? ¿qué tablas hay?
 npm run dev
 ```
 
@@ -52,16 +53,16 @@ Y probá que responda:
 curl http://localhost:3000/api/proveedores
 ```
 
-Si te devuelve un JSON con 4 proveedores, funciona todo: la base, las
-migraciones, el pool de conexiones y las cuatro capas.
+Si te devuelve JSON con los proveedores, funciona todo: la conexión, el pool y
+las cuatro capas.
 
-> Si `docker` no existe en tu máquina, instalá Docker Desktop. Es la única
-> dependencia externa del proyecto.
+> **La connection string** sale de Supabase → Connect → Direct → **session
+> pooler** (host `pooler.supabase.com`, puerto 5432). Terminala en
+> `?sslmode=no-verify`, si no Node falla con
+> `self-signed certificate in certificate chain`.
 >
-> ⚠️ **Ojo:** las migraciones nunca se ejecutaron todavía (se escribieron en una
-> máquina sin Docker). Es muy posible que la primera corrida tire algún error.
-> Eso es normal y es información: leé el mensaje, arreglá el `.sql`, `db:reset`
-> de nuevo.
+> ⚠️ Si `/api/proveedores` tira error de columna inexistente, es porque falta
+> aplicar las correcciones de `db/correcciones/` (el módulo asume la 05 y la 06).
 
 ---
 
@@ -390,18 +391,87 @@ Para generar `MOV-0001`, `OC-0001`.
 el mismo número. Una secuencia de Postgres (`nextval`) garantiza que cada
 llamada devuelva un valor distinto, incluso en paralelo.
 
-### Migración
+### Estructura vs. datos (la confusión más común)
 
-Un archivo `.sql` con un cambio de estructura, que se aplica una sola vez y queda
-registrado.
+Son dos cosas distintas y se manejan distinto:
 
-**Por qué no tocar la base a mano:** si creás una tabla desde una consola, tu
-compañero no la tiene. Con migraciones, `npm run db:migrate` pone cualquier
-máquina al día, y `db:reset` reconstruye todo desde cero — que es lo que querés
-antes de una demo.
+| | Qué es | Dónde vive | ¿Va al repo? |
+|---|---|---|---|
+| **Estructura** (schema) | tablas, columnas, triggers, índices | Supabase → espejada en `db/schema.sql` | ✅ sí, con `db:dump` |
+| **Datos** (filas) | los artículos, proveedores y movimientos que cargan los usuarios | Supabase, y nada más | ❌ nunca |
 
-Reglas: **una migración ya corrida no se edita nunca** (si algo salió mal, se
-agrega otra), y siempre probá con `db:reset` antes de commitear.
+**La app lee los datos en vivo.** Cada `GET /api/articulos` abre una conexión y
+hace un `SELECT` contra Supabase en ese momento. No hay copia local ni paso de
+build: alguien carga un artículo desde su máquina, vos refrescás y lo ves.
+
+Eso es lo que estamos reemplazando. Hoy los datos están escritos a mano en
+`src/data/articulos.ts` y para agregar uno hay que editar el archivo y
+commitear. Al conectar cada módulo, eso desaparece.
+
+**Cuándo correr `npm run db:dump`:**
+
+| Qué hiciste | ¿Dump? |
+|---|---|
+| Cargar un artículo, un proveedor, una orden | ❌ no |
+| Registrar 500 movimientos de stock | ❌ no |
+| Borrar datos de prueba | ❌ no |
+| Agregar una columna, crear una tabla | ✅ sí |
+| Modificar un trigger o una función | ✅ sí |
+| Agregar un índice o un CHECK | ✅ sí |
+
+Regla corta: **`CREATE` / `ALTER` / `DROP` → dump. `INSERT` / `UPDATE` /
+`DELETE` → no.**
+
+En la práctica el schema cambia unas pocas veces por sprint; los datos cambian
+todo el día.
+
+> **La excepción:** `db/seeds/` sí tiene datos en el repo. Son dos casos
+> puntuales: `01_catalogos.sql` (roles, categorías, unidades... sin eso el
+> sistema no arranca, porque `articulo.categoria_id` es NOT NULL) y
+> `02_demo.sql` (datos de prueba descartables). Los datos que cargan los
+> usuarios nunca van al repo.
+
+### El schema en el repo (por qué existe `db/schema.sql`)
+
+La base la edita el equipo directamente en el **SQL Editor de Supabase**. Esa es
+la fuente de verdad, y está bien que lo sea.
+
+El problema: si el schema vive SOLO ahí, no está versionado. No se ve qué cambió
+ni cuándo, no hay entregable para la cátedra, y si el proyecto de Supabase se
+pausa o se pierde no hay con qué reconstruirlo.
+
+Por eso el flujo es:
+
+```
+   cambiás en el SQL Editor  →  npm run db:dump  →  git commit
+```
+
+`db:dump` lee la base y reescribe `db/schema.sql` con el DDL completo. **El
+cambio se hace una sola vez**, en Supabase; el dump lo espeja.
+
+Dos cosas que importan:
+
+- **`db/schema.sql` no se edita a mano.** Es generado. Si lo tocás, el próximo
+  dump lo pisa.
+- **Corré el dump después de cada cambio de estructura**, no una vez por mes. El
+  valor está en que el `git diff` muestre qué se tocó, y para eso tiene que
+  estar al día.
+
+> Si cada uno tuviera su propia base, esto se resolvería con **migraciones**:
+> archivos numerados que se aplican una vez y quedan registrados, de modo que
+> cualquier máquina se pone al día sola. Acá no hacen falta — con una sola base
+> compartida serían escribir el mismo cambio dos veces.
+
+### `db/correcciones/`
+
+Aparte están las **correcciones**: SQL que arregla cosas que hoy están mal en la
+base (falta la tabla de auditoría, hay un bug de concurrencia en el trigger del
+stock, no hay ni un CHECK). Se pegan en el SQL Editor, en orden, una sola vez.
+
+Cada archivo arranca con un bloque `POR QUÉ` que explica el problema y el
+criterio de aceptación que lo exige. Eso es lo que un `ALTER TABLE` suelto en el
+SQL Editor no te deja: dentro de dos meses nadie se acuerda por qué el trigger
+del stock quedó escrito así, y alguien lo "simplifica" de vuelta al bug.
 
 ---
 
@@ -492,6 +562,8 @@ proveedores y las migraciones.
 | Un `CHECK` rechaza algo que el front manda | los strings no coinciden **exacto**, casi siempre por un acento (`"Cheque a 30 días"` ≠ `"Cheque a 30 dias"`) |
 | El primer registro sale numerado `0002` | `setval` sin el tercer parámetro en `false` |
 | `ALTER COLUMN ... SET NOT NULL` falla | hay filas con NULL; hay que hacer un `UPDATE` defensivo antes |
+| `self-signed certificate in certificate chain` al conectar a Supabase | la URL dice `sslmode=require`; tiene que decir `sslmode=no-verify` |
+| Error de host raro y la password tiene un `@` | falta percent-encodear: `@` → `%40` |
 
 ---
 

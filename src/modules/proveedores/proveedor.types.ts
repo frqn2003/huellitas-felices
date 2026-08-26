@@ -16,7 +16,6 @@ export type ProveedorRow = {
   telefono: string | null;
   email: string | null;
   contacto: string | null;
-  rubro: string | null;
   plazo_entrega_dias: number | null;
   estado: "activo" | "inactivo";
   calificacion: string | null;
@@ -38,7 +37,6 @@ export type ProveedorInput = {
   telefono?: string;
   email?: string;
   contacto?: string;
-  rubro?: string;
   plazoEntregaDias?: number;
   formaPagoIds: number[];
 };

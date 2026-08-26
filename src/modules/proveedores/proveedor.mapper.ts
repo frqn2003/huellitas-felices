@@ -43,10 +43,10 @@ export function toApi(row: ProveedorRow, formasPago: string[]): Proveedor {
     estado: row.estado === "activo" ? "Activo" : "Inactivo",
   };
 
-  // NOTA: `rubro` y `calificacion` existen en la tabla pero NO se exponen.
-  // `calificacion` es HU-PROV-02 (Evaluación de Desempeño), fuera del Sprint 1,
-  // y `rubro` no aparece en ningún criterio ni en el front. Cuando entre
-  // HU-PROV-02 se agregan acá y a la interfaz del front a la vez.
+  // NOTA: `calificacion` existe en la tabla pero NO se expone: es HU-PROV-02
+  // (Evaluación de Desempeño), fuera del Sprint 1. Cuando entre esa HU se
+  // agrega acá y a la interfaz del front a la vez.
+  // `rubro` no existe en esta versión de la base (sí estaba en el DDL anterior).
 }
 
 /** Mapea un listado resolviendo las formas de pago en una sola query. */

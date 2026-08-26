@@ -30,7 +30,7 @@ Para alguien que viene del front y nunca hizo backend:
 
 ### Construido vs. especificado
 
-Los tres documentos son mayormente **prescriptivos**: describen cómo hay que
+Los documentos son mayormente **prescriptivos**: describen cómo hay que
 construir, no cómo está construido. Lo que existe hoy:
 
 | | Estado |
@@ -38,16 +38,26 @@ construir, no cómo está construido. Lo que existe hoy:
 | `src/lib/` (db, http, auth, audit) | ✅ construido, `tsc` + `eslint` limpios |
 | `src/modules/proveedores/` | ✅ construido — módulo de referencia |
 | `/api/proveedores` + `/api/formas-pago` | ✅ construido |
-| `db/migrations/0001`–`0009` | 📝 escritas, **nunca ejecutadas** |
-| Los otros 5 módulos (artículos, stock, movimientos, compras, catálogos) | 📋 especificación, sin código |
+| `db/correcciones/01`–`06` | 📝 escritas contra la base REAL, **sin aplicar todavía** |
+| `db/correcciones/07` | ⏸️ escrita, esperando decisión |
+| Los otros 5 módulos | 📋 especificación, sin código |
 | Conexión del front | 📋 el front sigue 100% hardcodeado |
 | Tests | 📋 ninguno escrito |
 
-⚠️ **Ninguna migración corrió en ninguna parte** — ni en el servidor (sin acceso)
-ni en local (sin Docker en la máquina donde se escribieron). Se revisaron a mano.
-La primera corrida real puede sacar errores.
+### La base
 
-El detalle completo está en `GUIA-IMPLEMENTACION.md` §0.
+Conectada a **Supabase** y ya inspeccionada con `npm run db:info:full`. Trae
+15 tablas y **lógica de negocio en triggers** — el stock lo actualiza la base,
+no la aplicación. Ver `db/README.md`.
+
+**No usamos migraciones.** El equipo edita el schema directamente en el SQL
+Editor de Supabase, así que el repo lo espeja con `npm run db:dump` →
+`db/schema.sql`. Con una sola base compartida, las migraciones serían escribir
+el mismo cambio dos veces.
+
+Aparte, `db/correcciones/` tiene SQL para pegar en el SQL Editor que arregla lo
+que hoy falta o está mal (auditoría, el bug del trigger de stock, los CHECK).
+⚠️ **Todavía no se aplicó ninguna.**
 
 ## Decisiones cerradas
 
@@ -58,7 +68,21 @@ El detalle completo está en `GUIA-IMPLEMENTACION.md` §0.
 
 ## Decisiones abiertas
 
-- **B6** Movimientos: ¿cabecera-detalle (recomendado) o tabla plana con `numero`?
-- **M1** ¿Se quitan `numero_lote` y `fecha_vencimiento` de `articulo`?
-- **M3** ¿`categoria` y `unidad_medida` pasan a tabla catálogo o alcanza un `CHECK`?
-- Manejo de `articulo.imagen`, canal de notificación de stock crítico, edición de OC enviada, anulación de movimientos (`GUIA-IMPLEMENTACION.md` §17).
+- **Cabecera-detalle de movimientos** — migración escrita en
+  `db/migrations/pendientes/0008`. ¿Se aplica (cumple el criterio textual de
+  HU-STK-04) o el movimiento se queda plano?
+- **`numero_lote` / `fecha_vencimiento`** — la migración `0006` los elimina por
+  estar mal normalizados y fuera de alcance. Si prefieren conservarlos, hay que
+  comentar esas dos líneas.
+- **`orden_compra.forma_pago_id`** usa el mismo catálogo que el proveedor. En el
+  front son dos listas distintas (formas de pago del proveedor vs. condiciones
+  de pago de la orden). ¿Se unifican a propósito?
+- Canal de la notificación de stock crítico, edición de OC ya enviada
+  (`GUIA-IMPLEMENTACION.md` §17).
+
+## Resueltas por la versión nueva de la base
+
+- `empleado` fusionado en `usuario` (D-D) ✅
+- `categoria`, `unidad_medida` y `fabricante` como tablas catálogo ✅
+- `articulo.imagen_url` ✅
+- `estado_orden_compra` poblado — era una violación de FK esperando ✅
