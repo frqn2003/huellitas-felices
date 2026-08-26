@@ -66,12 +66,12 @@ WHERE NOT EXISTS (SELECT 1 FROM proveedor p WHERE p.cuit = v.cuit);
 INSERT INTO proveedor_forma_pago (proveedor_id, forma_pago_id)
 SELECT p.id, f.id
 FROM (VALUES
-  ('30-71234567-8', 'Cuenta Corriente'),
+  ('30-71234567-8', 'Cta. cte. 30 días'),
   ('30-71234567-8', 'Transferencia'),
   ('30-70987654-2', 'Contado'),
   ('27-65432198-3', 'Cheque a 30 días'),
   ('27-65432198-3', 'Contado'),
-  ('30-69876543-1', 'Cuenta Corriente')
+  ('30-69876543-1', 'Cta. cte. 30 días')
 ) AS v(cuit, forma)
 JOIN proveedor  p ON p.cuit   = v.cuit
 JOIN forma_pago f ON f.nombre = v.forma
@@ -156,7 +156,7 @@ SELECT p.id, us.id, e.id, fp.id, d.id, v.fecha::timestamp, v.entrega::timestamp,
        v.notas, v.subtotal, v.descuento, v.envio, v.total
 FROM (VALUES
   ('27-65432198-3', '30111222', 'Pendiente', 'Contado',          'Centro', '2026-08-01 10:00:00', '2026-08-06 10:00:00', 'Pedido mensual de antibióticos',     9800.00, 5.00, 300.00,  9610.00),
-  ('30-71234567-8', '32444555', 'Enviada',   'Cuenta Corriente', 'Norte',  '2026-08-03 14:30:00', '2026-08-05 14:30:00', 'Reposición de alimento balanceado', 25500.00, 0.00, 500.00, 26000.00)
+  ('30-71234567-8', '32444555', 'Enviada',   'Cta. cte. 30 días', 'Norte',  '2026-08-03 14:30:00', '2026-08-05 14:30:00', 'Reposición de alimento balanceado', 25500.00, 0.00, 500.00, 26000.00)
 ) AS v(cuit, dni, estado, forma, deposito, fecha, entrega, notas, subtotal, descuento, envio, total)
 JOIN proveedor           p  ON p.cuit    = v.cuit
 JOIN usuario             us ON us.dni    = v.dni

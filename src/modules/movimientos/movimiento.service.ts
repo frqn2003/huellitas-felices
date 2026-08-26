@@ -22,6 +22,11 @@ export async function registrar(
     return withTransaction(async (client) => {
         await withAuditUser(client, usuarioId);
 
+        // UN número para toda la operación: las N líneas de este registro (y las
+        // dos puntas de una transferencia) comparten `numero`, que es lo que la
+        // pantalla usa para mostrarlas juntas. Lo genera la secuencia de la base.
+        const numero = await repo.proximoNumero(client);
+
         const alertas: AlertaStock[] = [];
         const esTransferencia = input.tipo === "Transferencia";
 
@@ -99,6 +104,7 @@ export async function registrar(
 
             const idMovOrigen = await repo.insertMovimiento(
                 {
+                    codMov: numero,
                     fichaStockId: ficha.id,
                     origenId: input.origenId ?? null,
                     origenEntidadId: input.origenEntidadId ?? null,
@@ -117,6 +123,7 @@ export async function registrar(
                 const fichaDest = fichasDestino[i].ficha!;
                 const idMovDestino = await repo.insertMovimiento(
                     {
+                        codMov: numero,
                         fichaStockId: fichaDest.id,
                         origenId: input.origenId ?? null,
                         origenEntidadId: input.origenEntidadId ?? null,
@@ -166,7 +173,9 @@ export async function registrar(
             }
         }
 
-        const rows = await repo.findAll();
+        // Con el client de la transacción: desde el pool, estas filas todavía no
+        // existen (falta el COMMIT) y la respuesta saldría vacía.
+        const rows = await repo.findAll({}, client);
         const creados = rows.filter((r) => idsInsertados.includes(r.id));
 
         return {

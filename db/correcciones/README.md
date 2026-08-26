@@ -25,6 +25,9 @@ y commitear el `db/schema.sql` actualizado.
 | 05 | `articulo_ajustes.sql` | timestamps, saca lote/vencimiento, renombres | 🟡 el front espera `createdAt` |
 | 06 | `proveedor_formas_pago.sql` | N:M proveedor ↔ forma de pago | 🟡 decisión D-A, el front maneja varias |
 | 08 | `articulo_proveedor_preferido.sql` | devuelve `articulo.proveedor_preferido_id` | 🟠 el criterio de HU-STK-01 lo pide y el formulario lo muestra |
+| 09 | `cotizaciones.sql` | crea las 4 tablas de cotizaciones + FK de `orden_compra.cotizacion_id` | 🔴 sin esto **no funciona ningún endpoint de HU-COMP-02** |
+| 10 | `catalogo_condiciones_pago.sql` | deja UNA sola lista de condiciones de pago | 🔴 va **junto con el 09**; sin esto no se puede guardar una orden |
+| 11 | `numero_movimiento.sql` | `movimiento_stock.cod_mov` generado por la base | 🟠 **bug**: hoy el número sale del id y las líneas de un mismo movimiento no comparten número |
 
 Los 01 y 02 conviene aplicarlos ya. Los demás pueden esperar a que el equipo los
 revise.
@@ -33,6 +36,13 @@ revise.
 04, 05 y 08 aplicadas.** Sin ellas, `/api/articulos` va a fallar por columnas
 que no existen (`created_at`, `proveedor_preferido_id`) o por nombres viejos
 (`unidad_medida.unidad` en vez de `nombre`).
+
+⚠️ **El módulo de Compras (HU-COMP-02) está escrito contra la base CON las
+correcciones 09 y 10 aplicadas**, y el de Movimientos (HU-STK-04) con la 11.
+Las 4 tablas de cotizaciones no existen todavía: hasta que se pegue el 09,
+`/api/solicitudes-cotizacion` devuelve 500. Sin el 10, guardar una orden falla
+porque la condición de pago elegida no está en el catálogo. Sin el 11,
+`/api/movimientos-stock` falla por la columna `cod_mov`.
 
 ## Pendiente de decisión
 

@@ -12,7 +12,7 @@ function normalizarTipo(tipo: string): TipoMovimiento {
 export function toApi(row: MovimientoStockRow): MovimientoStock {
     return {
         id: row.id,
-        numero: row.numero ?? `MOV-${String(row.id).padStart(4, "0")}`,
+        numero: row.numero,
         fichaStockId: row.ficha_stock_id,
         fichaStock: {
             articuloNombre: row.articulo_nombre,

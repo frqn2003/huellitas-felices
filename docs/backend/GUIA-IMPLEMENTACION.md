@@ -17,7 +17,8 @@
 | `/api/proveedores` (3 rutas) + `/api/formas-pago` | ✅ **construido** |
 | `db/migrations/0001`–`0009` | 📝 **escritas, NUNCA ejecutadas** — ver aviso abajo |
 | `db/seeds/`, `db/dev/`, `scripts/` | 📝 escritos, nunca ejecutados |
-| §9.3–§9.6 (artículos, stock, movimientos, compras) | 📋 **especificación** — no hay código |
+| §9.3 (artículos), §9.5 (movimientos), §9.6 (compras) | ✅ **construido** — `src/modules/{articulos,movimientos,compras}/` |
+| §9.4 (stock) | 📋 **especificación** — no hay código |
 | §9.1 (catálogos) | 📋 especificación parcial — ver la nota de esa sección |
 | §11 (conexión del front) | 📋 especificación — el front sigue 100% hardcodeado |
 | §13 (testing) | 📋 especificación — no hay ni un test escrito |
@@ -96,7 +97,15 @@ ALTER TABLE deposito DROP COLUMN sucursal_id;
 
 ⚠️ **Deuda técnica consciente, con punto de quiebre conocido.** HU-SUC-01 (Sprint 2+) pide que la sucursal tenga *"horarios de atención y datos fiscales"*, y HU-VTA-03 le cuelga una caja. Eso son atributos de sucursal, no de depósito. Cuando entren esas HU va a haber que separar las tablas de nuevo. Para Sprint 1 es una simplificación válida; **dejarlo asentado en el acta** para que no aparezca como sorpresa después.
 
-### D-C · Cotizaciones queda fuera de alcance
+### D-C · Cotizaciones queda fuera de alcance — ❌ **REVERTIDA**
+
+> 🔴 **Esta decisión se dio de baja al implementar HU-COMP-02.** Las 4 tablas se crean en `db/correcciones/09_cotizaciones.sql` y el módulo `compras/` implementa el circuito completo (solicitud → cotizaciones → comparación → adjudicación → órdenes).
+>
+> **Por qué se revirtió:** D-C daba por equivalentes dos cosas distintas. HU-COMP-01 (necesidades de compra) es el *disparador* de la compra; la cotización es el paso de *selección de proveedor*. Que no haya necesidades no elimina la selección — y el criterio de HU-COMP-02 la pide textual. Con D-C, un criterio de aceptación quedaba sin cubrir y `/cotizaciones`, que el front ya tiene entero, se quedaba en mock.
+>
+> **Consecuencias actualizadas:** `orden_compra.cotizacion_id` ya **no** es columna muerta (tiene FK y se llena al adjudicar), y `/cotizaciones` **sí** se conecta. Lo único que sigue sin cubrirse de HU-COMP-02 es "generar la orden a partir de una o más necesidades pendientes", que depende de HU-COMP-01 y esa sí está descartada.
+>
+> El texto original queda abajo como registro de lo que se había decidido.
 
 No se crean `solicitud_cotizacion`, `solicitud_detalle`, `cotizacion` ni `cotizacion_detalle`. Cierra el bloqueante **B3** por descarte.
 
@@ -121,9 +130,9 @@ No se crean `solicitud_cotizacion`, `solicitud_detalle`, `cotizacion` ni `cotiza
 | Artículos | HU-STK-01 | `articulo` | 5 |
 | Stock | HU-STK-02 | `deposito`, `ficha_stock` | 6 |
 | Movimientos | HU-STK-04 | `movimiento_stock_cab`, `movimiento_stock_det`, `origen_movimiento` | 3 |
-| Compras | HU-COMP-02 (parcial) | `orden_compra`, `orden_compra_detalle`, `estado_orden_compra` | 7 |
+| Compras | HU-COMP-02 | `orden_compra`, `orden_compra_detalle`, `estado_orden_compra`, `solicitud_cotizacion`, `solicitud_detalle`, `cotizacion`, `cotizacion_detalle` | 10 |
 
-**Fuera:** cotizaciones (D-C), sucursal como entidad propia (D-B), lotes y vencimientos (HU-STK-05), lista de precios (HU-STK-03), recepción de mercadería (HU-COMP-03).
+**Fuera:** sucursal como entidad propia (D-B), lotes y vencimientos (HU-STK-05), lista de precios (HU-STK-03), recepción de mercadería (HU-COMP-03), necesidades de compra (HU-COMP-01, descartada en el acta).
 
 ---
 
@@ -596,7 +605,7 @@ Detalles que se pasan por alto y duelen después:
 - **`proximoNumero` dentro de la transacción**, con secuencia de Postgres, no con `MAX(numero)+1` — dos requests simultáneos sacarían el mismo número.
 - El signo lo pone el service: Ingreso `+`, Egreso `−`, Ajuste según corresponda, Transferencia `−` en origen y `+` en destino.
 
-### 9.6 `compras/` — HU-COMP-02 (parcial) · 📋 especificación
+### 9.6 `compras/` — HU-COMP-02 · ✅ CONSTRUIDO
 
 ```ts
 // orden.repo.ts
@@ -631,7 +640,10 @@ puedeTransicionar(estadoActual, estadoDestino): boolean
 - `calcularTotales`: `total = subtotal − (subtotal × descuento/100) + gastosEnvio`, redondeado a 2 decimales. **Se recalcula siempre**, el número del front se descarta.
 - `puedeTransicionar` se apoya en `estado_orden_compra.es_final`, que ya está en el DER. Nada hardcodeado.
 - `Recibida Parcial` / `Recibida Total` **no son alcanzables en Sprint 1** (llegan de HU-COMP-03). Están en el catálogo pero sin transición que las produzca.
-- `cotizacion_id` siempre `NULL` (decisión D-C).
+- `cotizacion_id` se llena al adjudicar y queda `NULL` en las órdenes cargadas a mano (D-C revertida, ver §2).
+- El lado cotizaciones vive en `cotizacion.{types,schema,repo,mapper,service}.ts` del mismo módulo: `crear`, `registrarCotizacion`, `adjudicar` y `cancelar`. La adjudicación reusa `orden.service.crearEnTransaccion()` para que las órdenes generadas pasen por las mismas validaciones que una orden manual.
+- `proximoCodOrd()` no hizo falta: el número lo genera el trigger `trg_generar_cod_orden_compra` (BEFORE INSERT) que ya estaba en la base.
+- `remito()` y `crearNotaReclamo()` quedaron **sin implementar**: no están en los criterios de HU-COMP-02 y la nota de reclamo no tiene tabla en el DER.
 
 ---
 

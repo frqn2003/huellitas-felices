@@ -70,13 +70,21 @@ ON CONFLICT (nombre) DO NOTHING;
 
 
 -- ---------------------------------------------------------
--- FORMAS DE PAGO
+-- FORMAS / CONDICIONES DE PAGO
 -- ---------------------------------------------------------
--- Los acentos importan: el front manda "Cheque a 30 días" con tilde. Si el
--- valor guardado no coincide EXACTO, el select no lo encuentra.
+-- UN SOLO catálogo para las dos preguntas: qué formas acepta un proveedor
+-- (HU-PROV-01, N:M) y qué condición se pactó en una compra (HU-COMP-02, una
+-- sola). Se expone por GET /api/formas-pago y GET /api/condiciones-pago.
+--
+-- Esta lista es la fuente de verdad: el front NO tiene su propia const. Los
+-- acentos y los puntos son parte del valor, porque es el texto que se muestra.
+--
+-- 'Cuenta Corriente' ya no está: sin plazo era ambigua (cuenta corriente ES un
+-- plazo). La corrección 10 migra los datos viejos a 'Cta. cte. 30 días'.
 INSERT INTO forma_pago (nombre) VALUES
   ('Contado'),
-  ('Cuenta Corriente'),
+  ('Cta. cte. 30 días'),
+  ('Cta. cte. 60 días'),
   ('Transferencia'),
   ('Cheque a 30 días')
 ON CONFLICT (nombre) DO NOTHING;

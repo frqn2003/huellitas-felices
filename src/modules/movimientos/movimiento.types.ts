@@ -3,7 +3,8 @@ import type { TipoMovimiento } from "@/data/movimientos";
 /** Fila resultante del SELECT con JOINs a artículo, depósito, origen y usuario. */
 export type MovimientoStockRow = {
     id: number;
-    numero: string | null;
+    /** cod_mov de la base (MOV-000001). Se comparte entre las lineas de un mismo movimiento. */
+    numero: string;
     ficha_stock_id: number;
     articulo_id: number;
     articulo_nombre: string;

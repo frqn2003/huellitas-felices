@@ -1,18 +1,29 @@
-import type { PoolClient } from "pg";
-import { query } from "@/lib/db/client";
+import type { Pool, PoolClient } from "pg";
+import { pool } from "@/lib/db/client";
 import type {
     FichaStockRow,
     FiltrosMovimiento,
     MovimientoStockRow,
 } from "./movimiento.types";
 
-export async function findAll(f: FiltrosMovimiento = {}): Promise<MovimientoStockRow[]> {
+/**
+ * El `ejecutor` por defecto es el pool, pero hay que pasarle el client cuando se
+ * lee DENTRO de una transacción abierta: desde otra conexión, las filas recién
+ * insertadas no existen hasta el COMMIT. Sin esto, el POST devolvía la lista de
+ * movimientos vacía.
+ */
+type Ejecutor = Pool | PoolClient;
+
+export async function findAll(
+    f: FiltrosMovimiento = {},
+    ejecutor: Ejecutor = pool,
+): Promise<MovimientoStockRow[]> {
     const condiciones: string[] = [];
     const params: unknown[] = [];
 
     if (f.busqueda) {
         params.push(`%${f.busqueda}%`);
-        condiciones.push(`(a.nombre ILIKE $${params.length} OR CAST(m.id AS TEXT) ILIKE $${params.length})`);
+        condiciones.push(`(a.nombre ILIKE $${params.length} OR m.cod_mov ILIKE $${params.length})`);
     }
 
     if (f.tipo) {
@@ -42,10 +53,10 @@ export async function findAll(f: FiltrosMovimiento = {}): Promise<MovimientoStoc
 
     const where = condiciones.length ? `WHERE ${condiciones.join(" AND ")}` : "";
 
-    return query<MovimientoStockRow>(
+    const { rows } = await ejecutor.query<MovimientoStockRow>(
         `SELECT
        m.id,
-       'MOV-' || LPAD(m.id::text, 4, '0') AS numero,
+       m.cod_mov AS numero,
        m.ficha_stock_id,
        a.id AS articulo_id,
        a.nombre AS articulo_nombre,
@@ -75,6 +86,7 @@ export async function findAll(f: FiltrosMovimiento = {}): Promise<MovimientoStoc
      ORDER BY m.fecha_hora DESC, m.id DESC`,
         params,
     );
+    return rows;
 }
 
 export async function findFicha(
@@ -122,8 +134,29 @@ export async function lockFicha(id: number, client: PoolClient): Promise<FichaSt
     return rows[0];
 }
 
+/**
+ * Próximo número de movimiento, sacado de la secuencia de la base.
+ *
+ * Se pide UNA vez por operación y el mismo número se escribe en todas las
+ * líneas que esa operación genera: `src/data/movimientos.ts:9` define `numero`
+ * como el agrupador de los N artículos de un mismo registro, y las dos puntas
+ * de una transferencia también son una sola operación.
+ *
+ * Va contra el `client` de la transacción, no contra el pool: si la transacción
+ * termina en ROLLBACK igual se pierde ese número (las secuencias no se
+ * revierten, a propósito, para no bloquear a otras transacciones). Un salto en
+ * la numeración es aceptable; dos movimientos con el mismo número no lo sería.
+ */
+export async function proximoNumero(client: PoolClient): Promise<string> {
+    const { rows } = await client.query<{ numero: string }>(
+        `SELECT 'MOV-' || LPAD(nextval('movimiento_stock_cod_seq')::text, 6, '0') AS numero`,
+    );
+    return rows[0].numero;
+}
+
 export async function insertMovimiento(
     data: {
+        codMov: string;
         fichaStockId: number;
         origenId: number | null;
         origenEntidadId: number | null;
@@ -138,6 +171,7 @@ export async function insertMovimiento(
 ): Promise<number> {
     const { rows } = await client.query<{ id: number }>(
         `INSERT INTO movimiento_stock (
+       cod_mov,
        ficha_stock_id,
        origen_id,
        origen_entidad_id,
@@ -147,9 +181,10 @@ export async function insertMovimiento(
        motivo,
        fecha_hora,
        movimiento_vinculado_id
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8::timestamp, now()), $9)
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::timestamp, now()), $10)
      RETURNING id`,
         [
+            data.codMov,
             data.fichaStockId,
             data.origenId ?? 1, // Fallback al catálogo de origen
             data.origenEntidadId ?? null,
