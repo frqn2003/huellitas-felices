@@ -32,11 +32,11 @@ interface FiltrosChipsProps {
 
 // Los estados del filtro replican la tabla fija de estados de orden_compra.
 const ESTADOS_FILTRO: EstadoFiltroOrden[] = [
-  "Pendiente",
-  "Enviada",
-  "Recibida Parcial",
-  "Recibida Total",
-  "Cancelada",
+  "pendiente",
+  "enviada",
+  "recibida_parcial",
+  "recibida_total",
+  "cancelada",
   "Todas",
 ];
 

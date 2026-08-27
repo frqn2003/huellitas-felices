@@ -27,6 +27,8 @@ CREATE SEQUENCE IF NOT EXISTS articulo_cod_seq;
 CREATE SEQUENCE IF NOT EXISTS articulo_id_seq;
 CREATE SEQUENCE IF NOT EXISTS auditoria_id_seq;
 CREATE SEQUENCE IF NOT EXISTS categoria_id_seq;
+CREATE SEQUENCE IF NOT EXISTS cotizacion_detalle_id_seq;
+CREATE SEQUENCE IF NOT EXISTS cotizacion_id_seq;
 CREATE SEQUENCE IF NOT EXISTS deposito_id_seq;
 CREATE SEQUENCE IF NOT EXISTS estado_orden_compra_id_seq;
 CREATE SEQUENCE IF NOT EXISTS fabricante_id_seq;
@@ -41,6 +43,8 @@ CREATE SEQUENCE IF NOT EXISTS orden_compra_id_seq;
 CREATE SEQUENCE IF NOT EXISTS origen_movimiento_id_seq;
 CREATE SEQUENCE IF NOT EXISTS proveedor_id_seq;
 CREATE SEQUENCE IF NOT EXISTS rol_id_seq;
+CREATE SEQUENCE IF NOT EXISTS solicitud_cotizacion_id_seq;
+CREATE SEQUENCE IF NOT EXISTS solicitud_detalle_id_seq;
 CREATE SEQUENCE IF NOT EXISTS unidad_medida_id_seq;
 CREATE SEQUENCE IF NOT EXISTS usuario_id_seq;
 
@@ -80,6 +84,21 @@ CREATE TABLE categoria (
   id integer(32,0) DEFAULT nextval('categoria_id_seq'::regclass) NOT NULL,
   nombre character varying(100) NOT NULL,
   prefijo character varying(5) DEFAULT 'ART'::character varying NOT NULL
+);
+
+CREATE TABLE cotizacion (
+  id integer(32,0) DEFAULT nextval('cotizacion_id_seq'::regclass) NOT NULL,
+  solicitud_id integer(32,0) NOT NULL,
+  proveedor_id integer(32,0) NOT NULL,
+  forma_pago_id integer(32,0) NOT NULL,
+  fecha_recepcion timestamp without time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE cotizacion_detalle (
+  id integer(32,0) DEFAULT nextval('cotizacion_detalle_id_seq'::regclass) NOT NULL,
+  cotizacion_id integer(32,0) NOT NULL,
+  articulo_id integer(32,0) NOT NULL,
+  precio numeric(12,2) NOT NULL
 );
 
 CREATE TABLE deposito (
@@ -171,7 +190,6 @@ CREATE TABLE origen_movimiento (
 CREATE TABLE proveedor (
   id integer(32,0) DEFAULT nextval('proveedor_id_seq'::regclass) NOT NULL,
   razon_social character varying(150) NOT NULL,
-  forma_pago_id integer(32,0) NOT NULL,
   cuit character varying(20) NOT NULL,
   direccion character varying(255),
   telefono character varying(30),
@@ -182,9 +200,30 @@ CREATE TABLE proveedor (
   calificacion numeric(3,1)
 );
 
+CREATE TABLE proveedor_forma_pago (
+  proveedor_id integer(32,0) NOT NULL,
+  forma_pago_id integer(32,0) NOT NULL
+);
+
 CREATE TABLE rol (
   id integer(32,0) DEFAULT nextval('rol_id_seq'::regclass) NOT NULL,
   nombre character varying(50) NOT NULL
+);
+
+CREATE TABLE solicitud_cotizacion (
+  id integer(32,0) DEFAULT nextval('solicitud_cotizacion_id_seq'::regclass) NOT NULL,
+  usuario_id integer(32,0) NOT NULL,
+  fecha timestamp without time zone DEFAULT now() NOT NULL,
+  estado character varying(20) DEFAULT 'Abierta'::character varying NOT NULL,
+  notas text
+);
+
+CREATE TABLE solicitud_detalle (
+  id integer(32,0) DEFAULT nextval('solicitud_detalle_id_seq'::regclass) NOT NULL,
+  solicitud_id integer(32,0) NOT NULL,
+  articulo_id integer(32,0) NOT NULL,
+  cantidad_estimada numeric(12,2) NOT NULL,
+  nota text
 );
 
 CREATE TABLE unidad_medida (
@@ -215,6 +254,11 @@ ALTER TABLE auditoria ADD CONSTRAINT auditoria_pkey PRIMARY KEY (id);
 ALTER TABLE categoria ADD CONSTRAINT categoria_pkey PRIMARY KEY (id);
 ALTER TABLE categoria ADD CONSTRAINT categoria_nombre_key UNIQUE (nombre);
 ALTER TABLE categoria ADD CONSTRAINT categoria_prefijo_key UNIQUE (prefijo);
+ALTER TABLE cotizacion ADD CONSTRAINT cotizacion_pkey PRIMARY KEY (id);
+ALTER TABLE cotizacion ADD CONSTRAINT uq_cotizacion_solicitud_proveedor UNIQUE (solicitud_id, proveedor_id);
+ALTER TABLE cotizacion_detalle ADD CONSTRAINT ck_cd_precio CHECK ((precio >= (0)::numeric));
+ALTER TABLE cotizacion_detalle ADD CONSTRAINT cotizacion_detalle_pkey PRIMARY KEY (id);
+ALTER TABLE cotizacion_detalle ADD CONSTRAINT uq_cd_cotizacion_articulo UNIQUE (cotizacion_id, articulo_id);
 ALTER TABLE deposito ADD CONSTRAINT deposito_pkey PRIMARY KEY (id);
 ALTER TABLE estado_orden_compra ADD CONSTRAINT estado_orden_compra_pkey PRIMARY KEY (id);
 ALTER TABLE estado_orden_compra ADD CONSTRAINT estado_orden_compra_nombre_key UNIQUE (nombre);
@@ -242,8 +286,14 @@ ALTER TABLE orden_compra_detalle ADD CONSTRAINT orden_compra_detalle_pkey PRIMAR
 ALTER TABLE origen_movimiento ADD CONSTRAINT origen_movimiento_pkey PRIMARY KEY (id);
 ALTER TABLE origen_movimiento ADD CONSTRAINT origen_movimiento_nombre_key UNIQUE (nombre);
 ALTER TABLE proveedor ADD CONSTRAINT proveedor_pkey PRIMARY KEY (id);
+ALTER TABLE proveedor_forma_pago ADD CONSTRAINT proveedor_forma_pago_pkey PRIMARY KEY (proveedor_id, forma_pago_id);
 ALTER TABLE rol ADD CONSTRAINT rol_pkey PRIMARY KEY (id);
 ALTER TABLE rol ADD CONSTRAINT rol_nombre_key UNIQUE (nombre);
+ALTER TABLE solicitud_cotizacion ADD CONSTRAINT ck_solicitud_estado CHECK (((estado)::text = ANY ((ARRAY['Abierta'::character varying, 'Adjudicada'::character varying, 'Cancelada'::character varying])::text[])));
+ALTER TABLE solicitud_cotizacion ADD CONSTRAINT solicitud_cotizacion_pkey PRIMARY KEY (id);
+ALTER TABLE solicitud_detalle ADD CONSTRAINT ck_sd_cantidad CHECK ((cantidad_estimada > (0)::numeric));
+ALTER TABLE solicitud_detalle ADD CONSTRAINT solicitud_detalle_pkey PRIMARY KEY (id);
+ALTER TABLE solicitud_detalle ADD CONSTRAINT uq_sd_solicitud_articulo UNIQUE (solicitud_id, articulo_id);
 ALTER TABLE unidad_medida ADD CONSTRAINT unidad_medida_pkey PRIMARY KEY (id);
 ALTER TABLE unidad_medida ADD CONSTRAINT unidad_medida_unidad_key UNIQUE (nombre);
 ALTER TABLE usuario ADD CONSTRAINT usuario_pkey PRIMARY KEY (id);
@@ -257,6 +307,11 @@ ALTER TABLE articulo ADD CONSTRAINT articulo_categoria_id_fkey FOREIGN KEY (cate
 ALTER TABLE articulo ADD CONSTRAINT articulo_fabricante_id_fkey FOREIGN KEY (fabricante_id) REFERENCES fabricante(id);
 ALTER TABLE articulo ADD CONSTRAINT articulo_unidad_medida_id_fkey FOREIGN KEY (unidad_medida_id) REFERENCES unidad_medida(id);
 ALTER TABLE auditoria ADD CONSTRAINT auditoria_usuario_id_fkey FOREIGN KEY (usuario_id) REFERENCES usuario(id) ON DELETE SET NULL;
+ALTER TABLE cotizacion ADD CONSTRAINT cotizacion_forma_pago_id_fkey FOREIGN KEY (forma_pago_id) REFERENCES forma_pago(id);
+ALTER TABLE cotizacion ADD CONSTRAINT cotizacion_proveedor_id_fkey FOREIGN KEY (proveedor_id) REFERENCES proveedor(id);
+ALTER TABLE cotizacion ADD CONSTRAINT cotizacion_solicitud_id_fkey FOREIGN KEY (solicitud_id) REFERENCES solicitud_cotizacion(id) ON DELETE CASCADE;
+ALTER TABLE cotizacion_detalle ADD CONSTRAINT cotizacion_detalle_articulo_id_fkey FOREIGN KEY (articulo_id) REFERENCES articulo(id);
+ALTER TABLE cotizacion_detalle ADD CONSTRAINT cotizacion_detalle_cotizacion_id_fkey FOREIGN KEY (cotizacion_id) REFERENCES cotizacion(id) ON DELETE CASCADE;
 ALTER TABLE ficha_stock ADD CONSTRAINT ficha_stock_articulo_id_fkey FOREIGN KEY (articulo_id) REFERENCES articulo(id);
 ALTER TABLE ficha_stock ADD CONSTRAINT ficha_stock_deposito_id_fkey FOREIGN KEY (deposito_id) REFERENCES deposito(id);
 ALTER TABLE movimiento_stock_cab ADD CONSTRAINT movimiento_stock_cab_deposito_id_fkey FOREIGN KEY (deposito_id) REFERENCES deposito(id);
@@ -265,6 +320,7 @@ ALTER TABLE movimiento_stock_cab ADD CONSTRAINT movimiento_stock_cab_origen_id_f
 ALTER TABLE movimiento_stock_cab ADD CONSTRAINT movimiento_stock_cab_usuario_id_fkey FOREIGN KEY (usuario_id) REFERENCES usuario(id);
 ALTER TABLE movimiento_stock_det ADD CONSTRAINT movimiento_stock_det_ficha_stock_id_fkey FOREIGN KEY (ficha_stock_id) REFERENCES ficha_stock(id);
 ALTER TABLE movimiento_stock_det ADD CONSTRAINT movimiento_stock_det_movimiento_id_fkey FOREIGN KEY (movimiento_id) REFERENCES movimiento_stock_cab(id) ON DELETE CASCADE;
+ALTER TABLE orden_compra ADD CONSTRAINT orden_compra_cotizacion_id_fkey FOREIGN KEY (cotizacion_id) REFERENCES cotizacion(id);
 ALTER TABLE orden_compra ADD CONSTRAINT orden_compra_deposito_id_fkey FOREIGN KEY (deposito_id) REFERENCES deposito(id);
 ALTER TABLE orden_compra ADD CONSTRAINT orden_compra_estado_id_fkey FOREIGN KEY (estado_id) REFERENCES estado_orden_compra(id);
 ALTER TABLE orden_compra ADD CONSTRAINT orden_compra_forma_pago_id_fkey FOREIGN KEY (forma_pago_id) REFERENCES forma_pago(id);
@@ -272,7 +328,11 @@ ALTER TABLE orden_compra ADD CONSTRAINT orden_compra_proveedor_id_fkey FOREIGN K
 ALTER TABLE orden_compra ADD CONSTRAINT orden_compra_usuario_id_fkey FOREIGN KEY (usuario_id) REFERENCES usuario(id);
 ALTER TABLE orden_compra_detalle ADD CONSTRAINT orden_compra_detalle_articulo_id_fkey FOREIGN KEY (articulo_id) REFERENCES articulo(id);
 ALTER TABLE orden_compra_detalle ADD CONSTRAINT orden_compra_detalle_orden_compra_id_fkey FOREIGN KEY (orden_compra_id) REFERENCES orden_compra(id);
-ALTER TABLE proveedor ADD CONSTRAINT proveedor_forma_pago_id_fkey FOREIGN KEY (forma_pago_id) REFERENCES forma_pago(id);
+ALTER TABLE proveedor_forma_pago ADD CONSTRAINT proveedor_forma_pago_forma_pago_id_fkey FOREIGN KEY (forma_pago_id) REFERENCES forma_pago(id);
+ALTER TABLE proveedor_forma_pago ADD CONSTRAINT proveedor_forma_pago_proveedor_id_fkey FOREIGN KEY (proveedor_id) REFERENCES proveedor(id) ON DELETE CASCADE;
+ALTER TABLE solicitud_cotizacion ADD CONSTRAINT solicitud_cotizacion_usuario_id_fkey FOREIGN KEY (usuario_id) REFERENCES usuario(id);
+ALTER TABLE solicitud_detalle ADD CONSTRAINT solicitud_detalle_articulo_id_fkey FOREIGN KEY (articulo_id) REFERENCES articulo(id);
+ALTER TABLE solicitud_detalle ADD CONSTRAINT solicitud_detalle_solicitud_id_fkey FOREIGN KEY (solicitud_id) REFERENCES solicitud_cotizacion(id) ON DELETE CASCADE;
 ALTER TABLE usuario ADD CONSTRAINT usuario_rol_id_fkey FOREIGN KEY (rol_id) REFERENCES rol(id);
 
 
@@ -285,6 +345,7 @@ CREATE INDEX idx_articulo_estado ON public.articulo USING btree (estado);
 CREATE INDEX idx_auditoria_fecha ON public.auditoria USING btree (fecha_hora DESC);
 CREATE INDEX idx_auditoria_tabla_registro ON public.auditoria USING btree (tabla, registro_id);
 CREATE INDEX idx_auditoria_usuario ON public.auditoria USING btree (usuario_id);
+CREATE INDEX idx_cd_cotizacion ON public.cotizacion_detalle USING btree (cotizacion_id);
 CREATE INDEX idx_ficha_articulo ON public.ficha_stock USING btree (articulo_id);
 CREATE INDEX idx_ficha_deposito ON public.ficha_stock USING btree (deposito_id);
 CREATE INDEX idx_mov_cab_deposito ON public.movimiento_stock_cab USING btree (deposito_id);
@@ -297,6 +358,8 @@ CREATE INDEX idx_oc_proveedor ON public.orden_compra USING btree (proveedor_id);
 CREATE INDEX idx_ocd_orden ON public.orden_compra_detalle USING btree (orden_compra_id);
 CREATE INDEX idx_proveedor_estado ON public.proveedor USING btree (estado);
 CREATE UNIQUE INDEX uq_proveedor_cuit_activo ON public.proveedor USING btree (cuit) WHERE (estado = 'activo'::estado_activo_inactivo);
+CREATE INDEX idx_pfp_forma_pago ON public.proveedor_forma_pago USING btree (forma_pago_id);
+CREATE INDEX idx_sd_solicitud ON public.solicitud_detalle USING btree (solicitud_id);
 CREATE UNIQUE INDEX uq_usuario_dni_activo ON public.usuario USING btree (dni) WHERE (estado = 'activo'::estado_activo_inactivo);
 CREATE UNIQUE INDEX uq_usuario_email_activo ON public.usuario USING btree (lower((email)::text)) WHERE (estado = 'activo'::estado_activo_inactivo);
 
@@ -491,6 +554,7 @@ $function$
 
 CREATE TRIGGER trg_auditoria_articulo AFTER INSERT OR DELETE OR UPDATE ON public.articulo FOR EACH ROW EXECUTE FUNCTION fn_auditoria();
 CREATE TRIGGER trg_generar_cod_articulo BEFORE INSERT ON public.articulo FOR EACH ROW EXECUTE FUNCTION fn_generar_cod_articulo();
+CREATE TRIGGER trg_auditoria_cotizacion AFTER INSERT ON public.cotizacion FOR EACH ROW EXECUTE FUNCTION fn_auditoria();
 CREATE TRIGGER trg_auditoria_deposito AFTER INSERT OR UPDATE ON public.deposito FOR EACH ROW EXECUTE FUNCTION fn_auditoria();
 CREATE TRIGGER trg_auditoria_movimiento_stock_cab AFTER INSERT ON public.movimiento_stock_cab FOR EACH ROW EXECUTE FUNCTION fn_auditoria();
 CREATE TRIGGER trg_generar_numero_movimiento BEFORE INSERT ON public.movimiento_stock_cab FOR EACH ROW EXECUTE FUNCTION fn_generar_numero_movimiento();
@@ -499,6 +563,7 @@ CREATE TRIGGER trg_auditoria_orden_compra_estado AFTER UPDATE ON public.orden_co
 CREATE TRIGGER trg_auditoria_orden_compra_insert AFTER INSERT ON public.orden_compra FOR EACH ROW EXECUTE FUNCTION fn_auditoria();
 CREATE TRIGGER trg_generar_cod_orden_compra BEFORE INSERT ON public.orden_compra FOR EACH ROW EXECUTE FUNCTION fn_generar_cod_orden_compra();
 CREATE TRIGGER trg_auditoria_proveedor AFTER INSERT OR DELETE OR UPDATE ON public.proveedor FOR EACH ROW EXECUTE FUNCTION fn_auditoria();
+CREATE TRIGGER trg_auditoria_solicitud_cotizacion AFTER INSERT OR UPDATE ON public.solicitud_cotizacion FOR EACH ROW EXECUTE FUNCTION fn_auditoria();
 CREATE TRIGGER trg_auditoria_usuario AFTER INSERT OR DELETE OR UPDATE ON public.usuario FOR EACH ROW EXECUTE FUNCTION fn_auditoria();
 
 
@@ -521,4 +586,7 @@ COMMENT ON COLUMN proveedor.calificacion IS 'Evaluacion de desempeño';
 COMMENT ON COLUMN rol.nombre IS 'Administrador, Gerente, Veterinario, Recepcionista, Personal de deposito, Cajero';
 COMMENT ON TABLE articulo IS 'El costo de compra y el precio de venta NO se almacenan aqui: ver Lista de Precios y Recepcion de Mercaderia';
 COMMENT ON TABLE auditoria IS 'Bitácora general: cada fila es un evento (alta/modificación/baja) de una entidad auditada.';
+COMMENT ON TABLE forma_pago IS 'Catalogo unico de condiciones de pago (HU-PROV-01 y HU-COMP-02). Se expone por GET /api/formas-pago y GET /api/condiciones-pago: mismo catalogo, dos preguntas distintas (que acepta un proveedor / que se pacto en una compra). El front NO debe tener su propia lista hardcodeada.';
 COMMENT ON TABLE movimiento_stock_cab IS 'HU-STK-04 cabecera. Un movimiento puede afectar varios articulos.';
+COMMENT ON TABLE proveedor_forma_pago IS 'N:M — un proveedor acepta varias formas de pago (HU-PROV-01, decision D-A). ON DELETE CASCADE solo del lado proveedor: si se borrara un proveedor caen sus pares, pero una forma de pago del catalogo nunca se borra si esta en uso.';
+COMMENT ON TABLE solicitud_cotizacion IS 'HU-COMP-02. Pedido de cotizacion: define LOS MISMOS ARTICULOS sobre los que despues se comparan las ofertas de varios proveedores.';

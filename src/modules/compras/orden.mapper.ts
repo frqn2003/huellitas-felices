@@ -56,6 +56,24 @@ export type OrdenCompraApi = OrdenCompra & {
   deposito_id: number | null;
 };
 
+/**
+ * Nombre del estado en la base → valor que usa el front.
+ *
+ * Si aparece un estado que no está en el mapa, se devuelve tal cual en vez de
+ * romper: es preferible una etiqueta rara a una pantalla en blanco.
+ */
+const ESTADOS_API: Record<string, EstadoOrden> = {
+  pendiente: "pendiente",
+  enviada: "enviada",
+  recibida_parcial: "recibida_parcial",
+  recibida_total: "recibida_total",
+  cancelada: "cancelada",
+};
+
+function aEstadoApi(nombre: string): EstadoOrden {
+  return ESTADOS_API[nombre] ?? (nombre as EstadoOrden);
+}
+
 function aNumero(valor: string | null): number {
   return valor === null ? 0 : Number(valor);
 }
@@ -90,11 +108,13 @@ export function toApi(row: OrdenRow, detalles: OrdenDetalleRow[]): OrdenCompraAp
     gastos_envio: aNumero(row.gastos_envio),
     total: aNumero(row.total),
 
-    // El cast es seguro mientras `estado_orden_compra` tenga los 5 nombres
-    // sembrados en db/seeds/01_catalogos.sql. Si alguien agrega un sexto estado
+    // Traducción explícita, no un cast: la base guarda identificadores con
+    // guión bajo (`recibida_parcial`) y el front usa los valores que muestra
+    // (`recibida parcial`). Un `as EstadoOrden` decía que eran lo mismo y no lo
+    // son: el badge de "Recibida Parcial" nunca habría matcheado.
     // desde el SQL Editor, el tipo del front miente y hay que ampliar la unión
     // `EstadoOrden`.
-    estado: row.estado_nombre as EstadoOrden,
+    estado: aEstadoApi(row.estado_nombre),
 
     _proveedor: { id: row.proveedor_id, razon_social: row.proveedor_razon_social },
     _usuario: {

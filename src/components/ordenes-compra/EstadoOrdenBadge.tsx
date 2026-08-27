@@ -5,11 +5,11 @@ import { StatusBadge, type StatusVariant } from "@/components/ui/StatusBadge";
 // (ver design-system/huellitas-felices/pages/ordenes-compra.md).
 // Siempre punto + texto (nunca solo color).
 const variantes: Record<EstadoOrden, StatusVariant> = {
-  Pendiente: "warning",
-  Enviada: "info",
-  "Recibida Parcial": "warning",
-  "Recibida Total": "success",
-  Cancelada: "danger",
+  pendiente: "warning",
+  enviada: "info",
+  recibida_parcial: "warning",
+  recibida_total: "success",
+  cancelada: "danger",
 };
 
 export function EstadoOrdenBadge({ estado }: { estado: EstadoOrden }) {

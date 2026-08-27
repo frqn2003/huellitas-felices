@@ -21,7 +21,6 @@ export type SolicitudRow = {
   fecha: Date;
   estado: "Abierta" | "Adjudicada" | "Cancelada";
   notas: string | null;
-  cotizacion_id_adjudicada: number | null;
 };
 
 /** Fila de `solicitud_detalle`. */

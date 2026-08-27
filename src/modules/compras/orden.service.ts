@@ -67,9 +67,12 @@ export function calcularTotales(
  * preparada para no tener que rehacerla.
  */
 const TRANSICIONES: Record<string, string[]> = {
-  Pendiente: ["Enviada", "Cancelada"],
-  Enviada: ["Recibida Parcial", "Recibida Total", "Cancelada"],
-  "Recibida Parcial": ["Recibida Total", "Cancelada"],
+  // Los nombres son los de `estado_orden_compra` en la BASE (identificadores
+  // con guión bajo), no los que muestra el front. La traducción para mostrar la
+  // hace el mapper.
+  pendiente: ["enviada", "cancelada"],
+  enviada: ["recibida_parcial", "recibida_total", "cancelada"],
+  recibida_parcial: ["recibida_total", "cancelada"],
 };
 
 export function puedeTransicionar(
@@ -180,7 +183,7 @@ export async function crearEnTransaccion(
   const { subtotal, total } = calcularTotales(lineas, input.descuento, input.gastosEnvio);
 
   // Toda orden nace Pendiente: "estado inicial pendiente" del criterio.
-  const pendiente = await repo.findEstadoByNombre("Pendiente", client);
+  const pendiente = await repo.findEstadoByNombre("pendiente", client);
   if (!pendiente) {
     // No es culpa del usuario: falta correr db/seeds/01_catalogos.sql. Sale
     // como 500 genérico y el detalle queda en el log del server.
@@ -269,7 +272,7 @@ export async function editar(
 
 /** Pendiente → Enviada. La orden se manda al proveedor. */
 export async function enviar(id: number, usuarioId: number): Promise<OrdenCompraApi> {
-  return cambiarEstado(id, "Enviada", usuarioId);
+  return cambiarEstado(id, "enviada", usuarioId);
 }
 
 /**
@@ -280,7 +283,7 @@ export async function enviar(id: number, usuarioId: number): Promise<OrdenCompra
  * reutiliza). No se puede cancelar desde un estado final.
  */
 export async function cancelar(id: number, usuarioId: number): Promise<OrdenCompraApi> {
-  return cambiarEstado(id, "Cancelada", usuarioId);
+  return cambiarEstado(id, "cancelada", usuarioId);
 }
 
 async function cambiarEstado(

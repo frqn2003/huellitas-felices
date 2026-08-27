@@ -43,8 +43,6 @@ export interface SolicitudCotizacion {
   fecha: string;
   estado: EstadoSolicitud;
   notas: string | null;
-  /** FK a cotizacion.id elegida en la comparación (null hasta adjudicar). */
-  cotizacion_id_adjudicada: number | null;
   _usuario: { id: number; nombre: string };
   _articulos_solicitados: SolicitudDetalle[];
   _cotizaciones: Cotizacion[];

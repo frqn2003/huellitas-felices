@@ -120,9 +120,9 @@ export function OrdenesTable({
           </thead>
           <tbody>
             {ordenes.map((orden) => {
-              const editable = orden.estado === "Pendiente";
+              const editable = orden.estado === "pendiente";
               // Cancelar solo antes de recibir mercadería (criterio HU-COMP-02).
-              const cancelable = orden.estado === "Pendiente" || orden.estado === "Enviada";
+              const cancelable = orden.estado === "pendiente" || orden.estado === "enviada";
               return (
                 <tr
                   key={orden.id}

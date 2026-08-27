@@ -56,7 +56,6 @@ export function toApi(
     fecha: row.fecha.toISOString(),
     estado: row.estado as EstadoSolicitud,
     notas: row.notas,
-    cotizacion_id_adjudicada: row.cotizacion_id_adjudicada,
     _usuario: {
       id: row.usuario_id,
       nombre: `${row.usuario_nombre} ${row.usuario_apellido}`.trim(),

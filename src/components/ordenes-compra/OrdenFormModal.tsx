@@ -653,11 +653,11 @@ export function OrdenFormModal({
   const isEdicion = modo === "EDICION";
   const formKey = `${modo}-${orden?.id ?? "nueva"}`;
   // Cancelar solo antes de recibir mercadería (criterio HU-COMP-02).
-  const cancelable = orden?.estado === "Pendiente" || orden?.estado === "Enviada";
-  const enviable = orden?.estado === "Pendiente";
+  const cancelable = orden?.estado === "pendiente" || orden?.estado === "enviada";
+  const enviable = orden?.estado === "pendiente";
   // Con recepción parcial quedan pendientes ítems por recibir: se habilita el
   // acceso al remito y la nota de reclamo al proveedor.
-  const recibidaParcial = orden?.estado === "Recibida Parcial";
+  const recibidaParcial = orden?.estado === "recibida_parcial";
 
   const titulo = isLectura
     ? `Orden ${(orden?.cod_ord ?? "")}`

@@ -22,14 +22,17 @@ type Ejecutor = Pool | PoolClient;
 const SELECT_SOLICITUD = `
   SELECT
     sc.id,
-    sc.cod_sol,
+    -- El código se DERIVA del id, no se guarda: una solicitud de cotización es
+    -- un documento interno y de vida corta, así que no justifica una columna
+    -- con su secuencia y su trigger. (La orden de compra sí los tiene: ese
+    -- número sale impreso y va al proveedor.)
+    'SC-' || LPAD(sc.id::text, 6, '0') AS cod_sol,
     sc.usuario_id,
     u.nombre   AS usuario_nombre,
     u.apellido AS usuario_apellido,
     sc.fecha,
     sc.estado,
-    sc.notas,
-    sc.cotizacion_id_adjudicada
+    sc.notas
   FROM solicitud_cotizacion sc
   JOIN usuario u ON u.id = sc.usuario_id
 `;
@@ -216,13 +219,10 @@ export async function insertCotizacionDetalles(
 export async function setEstado(
   id: number,
   estado: "Abierta" | "Adjudicada" | "Cancelada",
-  cotizacionIdAdjudicada: number | null,
   client: PoolClient,
 ): Promise<void> {
   await client.query(
-    `UPDATE solicitud_cotizacion
-     SET estado = $2, cotizacion_id_adjudicada = $3
-     WHERE id = $1`,
-    [id, estado, cotizacionIdAdjudicada],
+    `UPDATE solicitud_cotizacion SET estado = $2 WHERE id = $1`,
+    [id, estado],
   );
 }

@@ -5,11 +5,11 @@
 // Tabla fija de estados (criterio HU-COMP-02): Recibida Parcial/Total solo se
 // alcanza desde la recepción de stock (back); el front nunca las emite.
 export type EstadoOrden =
-  | "Pendiente"
-  | "Enviada"
-  | "Recibida Parcial"
-  | "Recibida Total"
-  | "Cancelada";
+  | "pendiente"
+  | "enviada"
+  | "recibida_parcial"
+  | "recibida_total"
+  | "cancelada";
 
 // El catálogo de condiciones de pago vive en la base (tabla `forma_pago`) y se
 // consume con GET /api/condiciones-pago. La constante que estaba acá tenía

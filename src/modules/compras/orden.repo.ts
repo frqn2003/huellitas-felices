@@ -87,7 +87,10 @@ export async function findAll(f: FiltrosOrden = {}): Promise<OrdenRow[]> {
     condiciones.push(`oc.proveedor_id = $${params.length}`);
   }
   if (f.estado) {
-    params.push(f.estado);
+    // El front filtra por el valor que muestra ("recibida parcial") y la base
+    // guarda el identificador ("recibida_parcial"). Sin esta traducción, esos
+    // dos filtros no devolvían nada y parecía que no había órdenes.
+    params.push(f.estado.trim().toLowerCase().replace(/\s+/g, "_"));
     condiciones.push(`e.nombre = $${params.length}`);
   }
   if (f.desde) {

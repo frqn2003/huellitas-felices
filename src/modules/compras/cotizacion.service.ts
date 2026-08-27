@@ -313,7 +313,7 @@ export async function adjudicar(
     // la dan las órdenes (así lo documenta también el front en
     // CotizacionesContext.tsx:120).
     const ganadoraUnica = porCotizacion.size === 1 ? [...porCotizacion.keys()][0] : null;
-    await repo.setEstado(solicitudId, "Adjudicada", ganadoraUnica, client);
+    await repo.setEstado(solicitudId, "Adjudicada", client);
 
     return { solicitud: await armar(solicitudId, client), ordenes };
   });
@@ -347,7 +347,7 @@ export async function cancelar(
       );
     }
 
-    await repo.setEstado(solicitudId, "Cancelada", solicitud.cotizacion_id_adjudicada, client);
+    await repo.setEstado(solicitudId, "Cancelada", client);
 
     return armar(solicitudId, client);
   });
