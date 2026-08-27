@@ -21,6 +21,7 @@ Vas a diseñar, codear y verificar una pantalla de **Huellitas Felices** (sistem
 5. `AGENTS.md` — acuerdos del equipo y reglas técnicas.
 6. Si existe `design-system/huellitas-felices/pages/[pantalla].md`, tiene prioridad sobre el MASTER.
 7. Si NO existe el archivo de página en `design-system/huellitas-felices/pages/`, crearlo documentando los tokens/reglas específicos de esta pantalla.
+8. `docs/design-system-pet-bliss-style.md` (1951 líneas) **NO se lee de corrido**. El MASTER ya trae los tokens; si te falta el razonamiento de un token puntual, buscá la sección con `grep -n "<token>" docs/design-system-pet-bliss-style.md` y leé solo ese fragmento.
 
 ## Paso 2 — Audit UX (antes de codear)
 
@@ -31,9 +32,13 @@ Usá la skill `ux-heuristics` (Wondel.ai) sobre el wireframe del brief:
 - Dá un puntaje (0-10) y explicá qué corregir para llegar a 10.
 - Si el brief no trae wireframe, proponé vos la estructura y auditála.
 
+> **Presupuesto de contexto:** activá la skill `ux-heuristics`, pero leé **solo** `SKILL.md` + `references/nielsen-heuristics.md` + `references/krug-principles.md`. Las demás references (dark-patterns, wcag-checklist, audit-template, etc.) quedan bajo demanda: se leen solo si el caso las amerita.
+
 Presentá un resumen corto del audit antes de seguir. Corregí problemas de lógica y jerarquía en el plan de implementación.
 
 ## Paso 3 — Generar el visual
+
+> **Presupuesto de contexto:** **no actives la skill `ui-ux-pro-max`** salvo que tengas una duda puntual de composición/estados que el MASTER (paso 1) no resuelva. Si la activás, consultá su catálogo con `scripts/search.py` (consultas puntuales) y **no** leas el SKILL ni los data CSVs de corrido.
 
 ### 3a. Composición con ui-ux-pro-max
 
@@ -74,7 +79,7 @@ Este listado (reusar/extender/crear) forma parte del plan que se muestra al usua
 
 Verificá el código sin levantar navegador:
 
-1. `npm run lint` (errores solo en `src/`; los de `.opencode/skills/` y `.agents/skills/` son preexistentes y no son responsabilidad tuya).
+1. `npm run lint` (cubre solo `src/`; `.opencode/skills/` y `.agents/skills/` quedan fuera de alcance).
 2. `npx tsc --noEmit`.
 3. Checklist de accesibilidad sobre el código: contraste de tokens usados, focus visible, touch targets ≥44px, `aria-label` en iconos-acción, `alt`/`aria` en imágenes, `prefers-reduced-motion` respetado.
 4. Repasá las **"Reglas activas"** del log `docs/errores-comunes.md` y verificá que ninguna se esté repitiendo.
@@ -93,9 +98,6 @@ Corregí todo lo que falle antes de pasar al checkpoint. **No se usan test de na
 
 ## Recordatorio de reglas
 
-- Skills visuales: **ui-ux-pro-max** genera el visual, respetando los tokens Pet Bliss del MASTER.
-- NO inventar colores, fuentes ni estilos fuera del MASTER Pet Bliss.
-- UI en español, tono amigable pero profesional (Pet Bliss: "playful, never childish").
-- Componentes reutilizables, nada de pantallas sueltas.
-- **Reusar antes de crear:** consultar el inventario `design-system/huellitas-felices/componentes.md` y mantenerlo actualizado con lo nuevo.
+- **Reusar antes de crear** — consultar el inventario `design-system/huellitas-felices/componentes.md` y mantenerlo actualizado con lo nuevo.
 - El log `docs/errores-comunes.md` solo se alimenta con `/error` (a propósito, decisión del usuario).
+- UI en español, tono amigable pero profesional (Pet Bliss: "playful, never childish").

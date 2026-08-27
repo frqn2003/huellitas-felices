@@ -73,7 +73,6 @@ npm run dev
 
 ## Documentación
 
-- `docs/guia-diseno-huellitas-felices.md.pdf` — guía del proceso de diseño.
 - `docs/design-system-pet-bliss-style.md` — design system (versión humana, fuente de verdad).
 - `design-system/huellitas-felices/MASTER.md` — design system para la skill ui-ux-pro-max (reglas que reemplazan al catálogo de la skill).
 - `docs/briefs/_plantilla.md` — plantilla de brief por pantalla (HU + wireframe).

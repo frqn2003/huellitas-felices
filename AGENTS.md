@@ -14,7 +14,7 @@ Guía de trabajo para agentes de IA en este repositorio. Es el acuerdo del equip
 
 ## Proyecto
 
-- **Producto:** Huellitas Felices — sistema de gestión veterinaria (consultas, turnos, fichas clínicas, vacunación, stock, facturación).
+- **Producto:** Huellitas Felices — sistema ERP de gestión veterinaria (consultas, turnos, fichas clínicas, vacunación, stock, facturación).
 - **Rol del equipo:** diseñadores UI/UX. Las interfaces se construyen **hardcodeadas** en el front para pasarlas después al equipo de backend.
 - **Stack:** Next.js + React (frontend), SQL (backend/datos, lo maneja el equipo de back).
 - **Control de versiones:** Git + GitHub (repo `huellitas-felices`).
@@ -26,24 +26,28 @@ Guía de trabajo para agentes de IA en este repositorio. Es el acuerdo del equip
 
 ## Documentación de referencia
 
-- `docs/guia-diseno-huellitas-felices.md.pdf` — guía de proceso de diseño (investigación → moodboard → wireframes → sistema → pruebas).
+- `docs/COMO-USAR.md` — guía rápida viva del equipo: flujo de trabajo, cómo escribir briefs y qué hace cada comando.
+- `docs/briefs/` (base `_plantilla.md`) — briefs por pantalla (HU + wireframe + datos + criterios de aceptación); son el insumo de `/disenar`.
 - `docs/design-system-pet-bliss-style.md` — design system "Pet Bliss Style": tokens de color, tipografía, spacing, grid, radius, motion y reglas de composición. **Es la fuente de verdad del lenguaje visual (versión humana).**
 - `design-system/huellitas-felices/MASTER.md` — design system "Pet Bliss" en el formato de la skill ui-ux-pro-max (**versión para la skill**). Ver "Regla de tokens" abajo.
 - `design-system/huellitas-felices/componentes.md` — inventario de componentes de `src/components/`. Consultarlo **antes de crear componentes** y actualizarlo al crear/extender.
 - `docs/errores-comunes.md` — log de errores/lecciones del equipo. Leer sus "Reglas activas" al diseñar; se alimenta a propósito con el comando `/error`.
 
-## Workflow obligatorio (de la guía, paso 7)
+## Workflow obligatorio (comando `/disenar`)
+
+El flujo completo diseño → código → verificación corre con el comando **`/disenar <brief>`** (`.opencode/command/disenar.md`) sobre un brief de `docs/briefs/`. En resumen:
 
 1. **Wondel.ai (skill UX)** → auditar wireframe/flujo antes de visual: usabilidad, jerarquía, heurísticas de Nielsen/Norman/Krug.
 2. **UI/UX Pro Max (skill visual)** → generar y pulir visualmente los componentes.
-3. **Verificación técnica** → `npm run lint` + `tsc --noEmit` + checklist de accesibilidad sobre el código (sin navegador).
+3. **Verificación técnica** → `npm run lint` + `npx tsc --noEmit` + checklist de accesibilidad sobre el código (sin navegador).
 
 > Regla del equipo: **ui-ux-pro-max** es la skill visual que genera. No se usa ningún test de navegador ni screenshots automáticos para el front.
 > Antes de codear: **buscar y reusar componentes** existentes (ver inventario en `design-system/huellitas-felices/componentes.md`); extender antes que duplicar.
+> Las skills se activan cuando el pedido coincide con su descripción: para activación garantizada, nombrarlas explícitamente (ej: "usá la skill ux-heuristics").
 
 ## Control de versiones
 
-- Publicar cambios con el comando `/subir` (revisa el diff, propone el mensaje `feat/fix/chore` referenciando la HU y pushea a `origin` tras confirmación explícita).
+- El diseño de pantallas se lanza con `/disenar` (termina en checkpoint, **no commitea**). Publicar cambios con el comando `/subir` (revisa el diff, propone el mensaje `feat/fix/chore` referenciando la HU y pushea a `origin` tras confirmación explícita).
 - Nota técnica: `git` no está en el PATH de PowerShell → usar `C:\Program Files\Git\cmd\git.exe`.
 
 ## Log de errores
@@ -61,16 +65,7 @@ Cuando se use la skill `ui-ux-pro-max`, leer SIEMPRE `design-system/huellitas-fe
 
 ## Design system (resumen ejecutivo)
 
-- **Fondo:** crema `#FFF9EB` (canvas principal).
-- **Brand:** verde bosque `#114F3C` (títulos, nav, footer, botones secundarios).
-- **Acción:** amarillo `#F9A900` (solo CTAs y highlights, debe ser escaso).
-- **Tipografía:** headings pesados, bold/extra bold (800–900), generalmente **uppercase**, line-height compacto. Cuerpo neutro y legible. Familias: Baloo 2 (display) + Nunito (body).
-- **Radios moderados:** 8/12/16px, pill (999px) para botones y chips.
-- **Sombras discretas:** `0 4px 16px rgba(17, 79, 60, 0.08)`.
-- **Composición:** overlaps, formas orgánicas, recortes, alternancia de fondos (crema/blanco/verde/amarillo), mucho espacio negativo, una sola acción clara por viewport.
-- **Motion:** 150/250/500ms, ease-out, respetar `prefers-reduced-motion`.
-
-Detalles completos y checklist de fidelidad en `docs/design-system-pet-bliss-style.md` y `design-system/huellitas-felices/MASTER.md`.
+Tokens y reglas completos en `design-system/huellitas-felices/MASTER.md` (operativo, el que usa la skill) y `docs/design-system-pet-bliss-style.md` (razonamiento humano, 50 secciones). En resumen: fondo crema `#FFF9EB`, brand verde bosque `#114F3C`, acción amarillo `#F9A900` (**solo CTAs y highlights, debe ser escaso**), headings Baloo 2 pesados/uppercase + body Nunito, radios 8/12/16px + pill, sombras discretas, motion 150/250/500ms respetando `prefers-reduced-motion`.
 
 ## Reglas técnicas
 
@@ -79,6 +74,7 @@ Detalles completos y checklist de fidelidad en `docs/design-system-pet-bliss-sty
 - Iconografía: **Lucide** (outline, stroke medio, esquinas redondeadas).
 - Animaciones: **Framer Motion**.
 - Accesibilidad: contraste verificado, focus visible, touch targets ≥ 44×44px, `alt` en imágenes.
+- Verificación: `npm run lint` (cubre solo `src/`; `.opencode/skills/` y `.agents/skills/` quedan fuera de alcance) + `npx tsc --noEmit` (no hay scripts de `typecheck` ni test runner; `tsconfig.json` ya tiene `noEmit: true`).
 - Antes de subir: comprimir imágenes (TinyPNG).
 - Idioma de la UI: español.
 - **Preparación para backend**: los datos placeholder llevan `id` numérico (la PK que mandará la base). Cada punto de integración (fetch, POST/PUT/PATCH/DELETE, selects de catálogos) lleva un comentario `// BACKEND:` con el endpoint y qué reemplazar. El equipo de back los busca con `grep -rn "BACKEND" src/`.

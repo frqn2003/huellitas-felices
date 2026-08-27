@@ -61,20 +61,10 @@ El comando ejecuta solo:
 3. **Genera el visual** — skill `ui-ux-pro-max` solo como guía; los tokens finales siempre del Pet Bliss.
 4. **Busca y reusa componentes** — consulta el inventario (`design-system/huellitas-felices/componentes.md`), verifica contra `src/components/` y clasifica cada pieza: reusar tal cual / extender / crear nuevo (justificado).
 5. **Codea** — componentes reutilizables en `src/components/` + página en `src/app/<ruta>/` con datos hardcodeados. Al terminar actualiza el inventario con lo nuevo.
-6. **Verifica** — `npm run lint` + `tsc --noEmit` + checklist de accesibilidad + repaso de las "Reglas activas" del log de errores (sin navegador).
+6. **Verifica** — `npm run lint` (solo `src/`) + `tsc --noEmit` + checklist de accesibilidad + repaso de las "Reglas activas" del log de errores (sin navegador).
 7. **⏸️ CHECKPOINT** — te dejás probar y el comando **pregunta antes de subir a GitHub**. Nada se commitea sin tu confirmación explícita.
 
 La ruta por defecto deriva del nombre legible de la pantalla (ej: "Dashboard de turnos" → `/dashboard`).
-
-### Qué hace OpenCode al recibir el brief
-
-1. Lee el brief + `design-system/huellitas-felices/MASTER.md` + inventario de componentes + `docs/errores-comunes.md` + `AGENTS.md`.
-2. Audita usabilidad del wireframe (skill `ux-heuristics` — Nielsen/Krug) y corrige lógica antes del visual.
-3. Genera el visual (skill `ui-ux-pro-max`) con los tokens Pet Bliss obligatorios.
-4. Reusa o extiende componentes existentes antes de crear nuevos (inventario en `design-system/huellitas-felices/componentes.md`).
-5. Crea componentes reutilizables en `src/components/` y la página en `src/app/<ruta>/`, y mantiene actualizado el inventario.
-6. Verifica el código (lint + tipos + accesibilidad + reglas del log de errores) y hace checkpoint para que pruebes antes de subir.
-7. La subida a GitHub se hace aparte con `/subir` y tu confirmación explícita.
 
 ### Registrar un error aprendido: `/error`
 
@@ -106,4 +96,3 @@ npm run build      # build de producción
 ## Pendientes del equipo
 
 - [ ] Definir moodboard final (carpeta compartida).
-- [ ] Primera pantalla + HU.

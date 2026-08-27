@@ -1,7 +1,11 @@
 
 # HU-COMP-02: Como personal de depósito, quiero emitir órdenes de compra con comparación de cotizaciones, para formalizar la adquisición de productos al proveedor seleccionado tras evaluar opciones
 
-> Copiar este archivo como `HU-COMP-02.md` y completar. Referencia: `docs/COMO-USAR.md`.
+> **⚠️ [OBSOLETA] (v1).** Reemplazada por **`HU-COMP-02-02.md`** (v2): la comparación de
+> cotizaciones sale de este flujo a una pantalla dedicada (tab "Cotizaciones" del módulo
+> Compras) y los estados de orden pasan a: Pendiente → Enviada → Recibida Parcial/Total,
+> o Cancelada (5 estados). Este archivo queda como historial de la v1; no usar para
+> diseñar. Referencia: `docs/COMO-USAR.md`.
 
 ## Contexto
 
