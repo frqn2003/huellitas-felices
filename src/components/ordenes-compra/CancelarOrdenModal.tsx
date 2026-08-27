@@ -3,7 +3,7 @@
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
-import { numeroOrden, type OrdenCompra } from "@/data/ordenes-compra";
+import { type OrdenCompra } from "@/data/ordenes-compra";
 
 interface CancelarOrdenModalProps {
   orden: OrdenCompra | null;
@@ -39,7 +39,7 @@ export function CancelarOrdenModal({ orden, onClose, onConfirm }: CancelarOrdenM
       {orden && (
         <div className="flex flex-col gap-3">
           <p className="text-base font-bold text-text-primary">
-            ¿Está seguro que desea cancelar la orden {numeroOrden(orden.id)}?
+            ¿Está seguro que desea cancelar la orden {orden.cod_ord}?
           </p>
           <p className="text-sm text-text-secondary">
             Esta acción es irreversible. La orden quedará cancelada y no podrá editarse ni

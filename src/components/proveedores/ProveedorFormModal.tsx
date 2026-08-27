@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import type { Proveedor } from "@/data/proveedores";
-import type { NuevoProveedorInput } from "@/context/ProveedoresContext";
+import type { FormaPago, NuevoProveedorInput } from "@/context/ProveedoresContext";
 
 export type ProveedorModalMode = "crear" | "editar" | "ver";
 
@@ -14,22 +14,20 @@ interface ProveedorFormModalProps {
   open: boolean;
   modo: ProveedorModalMode;
   proveedor?: Proveedor | null;
+  /** Catálogo real de la base (GET /api/formas-pago), vía ProveedoresContext. */
+  formasPagoDisponibles: FormaPago[];
   onClose: () => void;
-  onSave: (input: NuevoProveedorInput) => { error?: string };
+  onSave: (input: NuevoProveedorInput) => Promise<{ error?: string }>;
 }
 
-const FORMAS_PAGO = [
-  "Contado",
-  "Cuenta Corriente",
-  "Cheque a 30 días",
-  "Cheque a 60 días",
-  "Transferencia",
-];
+// La lista hardcodeada se eliminó: tenía valores que no existen en la base
+// ("Cheque a 60 días") y le faltaban otros que sí. Ahora viene del catálogo.
 
 export function ProveedorFormModal({
   open,
   modo,
   proveedor,
+  formasPagoDisponibles,
   onClose,
   onSave,
 }: ProveedorFormModalProps) {
@@ -42,6 +40,7 @@ export function ProveedorFormModal({
   const [formasPago, setFormasPago] = useState<string[]>(["Contado"]);
   const [plazoEntregaDias, setPlazoEntregaDias] = useState("1");
   const [errorGlobal, setErrorGlobal] = useState("");
+  const [guardando, setGuardando] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -83,7 +82,7 @@ export function ProveedorFormModal({
         ? "Editar proveedor"
         : "Detalles del proveedor";
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (soloLectura) return;
 
@@ -114,8 +113,13 @@ export function ProveedorFormModal({
       plazoEntregaDias: plazo,
     };
 
-    const res = onSave(input);
+    setGuardando(true);
+    const res = await onSave(input);
+    setGuardando(false);
+
     if (res.error) {
+      // El modal queda ABIERTO con los datos cargados: si el CUIT está
+      // duplicado, el usuario corrige y reintenta sin volver a tipear todo.
       setErrorGlobal(res.error);
     } else {
       onClose();
@@ -136,11 +140,13 @@ export function ProveedorFormModal({
           </Button>
         ) : (
           <>
-            <Button variant="outline" onClick={onClose}>
+            <Button variant="outline" onClick={onClose} disabled={guardando}>
               Cancelar
             </Button>
-            <Button type="submit" form="proveedor-form">
-              Guardar
+            {/* Deshabilitado mientras el POST/PUT está en vuelo: si no, un doble
+                clic manda dos altas y crea dos proveedores. */}
+            <Button type="submit" form="proveedor-form" disabled={guardando}>
+              {guardando ? "Guardando..." : "Guardar"}
             </Button>
           </>
         )
@@ -222,11 +228,11 @@ export function ProveedorFormModal({
             Formas de pago
           </legend>
           <div className="flex flex-wrap gap-2 pt-1">
-            {FORMAS_PAGO.map((f) => {
+            {formasPagoDisponibles.map(({ id, nombre: f }) => {
               const activa = formasPago.includes(f);
               return (
                 <button
-                  key={f}
+                  key={id}
                   type="button"
                   onClick={() => toggleFormaPago(f)}
                   aria-pressed={activa}

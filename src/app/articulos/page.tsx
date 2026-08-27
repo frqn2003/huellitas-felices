@@ -182,7 +182,8 @@ function ArticulosScreen() {
       categoriaId: Number(draft.categoriaId),
       unidadMedidaId: Number(draft.unidadMedidaId),
       fabricanteId: Number(draft.fabricanteId),
-      proveedorPreferidoId: draft.proveedorId ? Number(draft.proveedorId) : null,
+      // `proveedorPreferidoId` NO se manda: lo deriva el back de la última orden
+      // de compra del artículo (decisión D2).
       imagen: draft.imagen || null,
       activo: draft.activo,
     };

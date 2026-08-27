@@ -1,3 +1,16 @@
+-- #########################################################
+-- ⛔ DESCARTADA — NO APLICAR
+-- #########################################################
+-- Este archivo elimina `deposito.sucursal_id` bajo la decisión D-B
+-- ("depósito = sucursal", una sucursal tiene un solo depósito).
+--
+-- EL EQUIPO DECIDIÓ LO CONTRARIO: son VARIOS depósitos por sucursal.
+-- D-B queda revertida. Lo que va en su lugar es `13_sucursal.sql`, que crea la
+-- tabla `sucursal` y convierte `deposito.sucursal_id` en una FK real.
+--
+-- Se conserva solo como registro de la decisión anterior.
+-- #########################################################
+
 -- =========================================================
 -- 0004 · CORRECCIÓN: depósito = sucursal (decisión D-B)
 -- =========================================================

@@ -4,29 +4,29 @@ import { GitCompareArrows } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
-import { articulosIniciales } from "@/data/articulos";
-import type { SolicitudCotizacion } from "@/data/cotizaciones";
-import { codigoSolicitud, totalCotizacion } from "@/data/cotizaciones";
+import type { CatalogosCotizacion, SolicitudCotizacion } from "@/data/cotizaciones";
+import { totalCotizacion } from "@/data/cotizaciones";
 import type { AsignacionArticulo } from "@/context/CotizacionesContext";
 import { formatFecha, formatMoney } from "@/data/ordenes-compra";
 import { EstadoSolicitudBadge } from "./EstadoSolicitudBadge";
 
 interface CompararCotizacionesModalProps {
   solicitud: SolicitudCotizacion | null;
+  catalogos: CatalogosCotizacion;
   onClose: () => void;
   /** Adjudicación por artículo: cada línea con su cotización elegida. */
   onAdjudicar: (asignaciones: AsignacionArticulo[]) => void;
 }
 
-// BACKEND: nombre del artículo resuelto por JOIN del detalle.
-function nombreArticulo(articuloId: number): string {
+function nombreArticulo(articuloId: number, catalogos: CatalogosCotizacion): string {
   return (
-    articulosIniciales.find((a) => a.id === articuloId)?.nombre ?? `Artículo #${articuloId}`
+    catalogos.articulos.find((a) => a.id === articuloId)?.nombre ?? `Artículo #${articuloId}`
   );
 }
 
 export function CompararCotizacionesModal({
   solicitud,
+  catalogos,
   onClose,
   onAdjudicar,
 }: CompararCotizacionesModalProps) {
@@ -37,6 +37,7 @@ export function CompararCotizacionesModal({
     <CompararContenido
       key={solicitud.id}
       solicitud={solicitud}
+      catalogos={catalogos}
       onClose={onClose}
       onAdjudicar={onAdjudicar}
     />
@@ -45,6 +46,7 @@ export function CompararCotizacionesModal({
 
 function CompararContenido({
   solicitud,
+  catalogos,
   onClose,
   onAdjudicar,
 }: CompararCotizacionesModalProps & { solicitud: SolicitudCotizacion }) {
@@ -53,7 +55,7 @@ function CompararContenido({
       solicitud._articulos_solicitados.map((a) => ({
         id: a.articulo_id,
         cantidad: a.cantidad_estimada,
-        nombre: nombreArticulo(a.articulo_id),
+        nombre: nombreArticulo(a.articulo_id, catalogos),
       })),
     [solicitud],
   );
@@ -146,7 +148,7 @@ function CompararContenido({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <p className="font-mono text-base font-bold text-brand-900">
-              {codigoSolicitud(solicitud.id)}
+              {solicitud.cod_sol}
             </p>
             <EstadoSolicitudBadge estado={solicitud.estado} />
           </div>
@@ -171,7 +173,7 @@ function CompararContenido({
         <div className="overflow-x-auto rounded-md border border-border bg-surface shadow-card">
           <table className="w-full min-w-[760px] border-collapse text-left text-sm">
             <caption className="sr-only">
-              Comparación de precios por artículo y proveedor para {codigoSolicitud(solicitud.id)}
+              Comparación de precios por artículo y proveedor para {solicitud.cod_sol}
             </caption>
             <thead>
               <tr className="border-b border-border bg-cream-50">

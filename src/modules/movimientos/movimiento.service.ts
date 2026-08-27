@@ -4,16 +4,55 @@ import { withAuditUser } from "@/lib/audit/audit";
 import { BusinessRuleError, NotFoundError } from "@/lib/http/errors";
 import * as repo from "./movimiento.repo";
 import * as mapper from "./movimiento.mapper";
-import type {
-    AlertaStock,
-    FiltrosMovimiento,
-} from "./movimiento.types";
+import type { AlertaStock, FichaStockRow, FiltrosMovimiento } from "./movimiento.types";
 import type { RegistrarMovimientoInput } from "./movimiento.schema";
 
+/**
+ * HU-STK-04 — reglas de negocio de Movimientos.
+ *
+ * LO QUE ESTE SERVICE **NO** HACE, A PROPÓSITO:
+ *
+ *  · No actualiza `ficha_stock.stock_actual`. Lo hace el trigger
+ *    `fn_actualizar_stock_det` al insertar cada detalle. Si el service lo
+ *    hiciera también, el stock se contaría DOS VECES.
+ *
+ *  · No valida que el egreso deje stock negativo. Ese mismo trigger hace el
+ *    `UPDATE ... RETURNING` atómico y lanza `HF001`. Validarlo acá significaría
+ *    leer un snapshot y decidir en JS: bajo concurrencia daría un veredicto
+ *    distinto al de la base, que es la que manda.
+ *
+ *  · No genera el `numero`. Lo pone `trg_generar_numero_movimiento`.
+ */
+
 export async function listar(filtros: FiltrosMovimiento = {}): Promise<MovimientoStock[]> {
-    const rows = await repo.findAll(filtros);
-    return mapper.toApiList(rows);
+    return mapper.toApiList(await repo.findAll(filtros));
 }
+
+/**
+ * Traduce el `tipo` del contrato de la API (4 valores) al modelo de la base
+ * (enum de 2 valores + origen).
+ *
+ * "Transferencia" y "Ajuste" no son tipos de movimiento: son el MOTIVO. Una
+ * transferencia es un egreso más un ingreso; un ajuste es un ingreso o un
+ * egreso según el signo.
+ */
+function tipoBase(
+    tipoApi: RegistrarMovimientoInput["tipo"],
+    cantidad: number,
+): "ingreso" | "egreso" {
+    if (tipoApi === "Ingreso") return "ingreso";
+    if (tipoApi === "Egreso") return "egreso";
+    if (tipoApi === "Transferencia") return "egreso"; // la punta de origen
+    return cantidad < 0 ? "egreso" : "ingreso"; // Ajuste: lo define el signo
+}
+
+/** Nombre del origen del catálogo que corresponde a cada tipo de la API. */
+const ORIGEN_POR_TIPO: Record<RegistrarMovimientoInput["tipo"], string> = {
+    Ingreso: "recepcion_compra",
+    Egreso: "venta",
+    Transferencia: "transferencia",
+    Ajuste: "ajuste",
+};
 
 export async function registrar(
     input: RegistrarMovimientoInput,
@@ -22,165 +61,192 @@ export async function registrar(
     return withTransaction(async (client) => {
         await withAuditUser(client, usuarioId);
 
-        // UN número para toda la operación: las N líneas de este registro (y las
-        // dos puntas de una transferencia) comparten `numero`, que es lo que la
-        // pantalla usa para mostrarlas juntas. Lo genera la secuencia de la base.
-        const numero = await repo.proximoNumero(client);
-
-        const alertas: AlertaStock[] = [];
         const esTransferencia = input.tipo === "Transferencia";
 
-        if (esTransferencia && !input.depositoDestinoId) {
-            throw new BusinessRuleError(
-                "DESTINO_REQUERIDO",
-                "Para una transferencia debes indicar el depósito de destino.",
-            );
+        // ---------------------------------------------------------
+        // 1. Resolver el origen
+        // ---------------------------------------------------------
+        // `origen_id` es NOT NULL en la cabecera y el front manda null para
+        // Transferencia y Ajuste. Se resuelve por NOMBRE contra el catálogo: el
+        // código viejo caía en `?? 1`, que es `recepcion_compra`, y dejaba toda
+        // transferencia registrada como una recepción de compra.
+        let origenId = input.origenId ?? null;
+        if (!origenId) {
+            const nombre = ORIGEN_POR_TIPO[input.tipo];
+            origenId = await repo.findOrigenByNombre(nombre, client);
+            if (!origenId) {
+                throw new BusinessRuleError(
+                    "ORIGEN_NO_CONFIGURADO",
+                    `Falta el origen "${nombre}" en el catálogo origen_movimiento.`,
+                );
+            }
         }
 
-        if (esTransferencia && input.depositoDestinoId === input.depositoId) {
-            throw new BusinessRuleError(
-                "DEPOSITOS_IGUALES",
-                "El depósito de origen y destino no pueden ser el mismo.",
-            );
-        }
-
-        // 1. Validar fichas de origen
+        // ---------------------------------------------------------
+        // 2. Resolver las fichas afectadas
+        // ---------------------------------------------------------
+        // Criterio: "valida que exista ficha de stock activa para cada artículo
+        // en el depósito afectado antes de confirmar; si no existe, rechaza".
         const fichasOrigen = await Promise.all(
             input.items.map(async (item) => {
                 const ficha = await repo.findFicha(item.articuloId, input.depositoId, client);
                 if (!ficha) {
                     throw new NotFoundError(
-                        `Ficha de stock para el artículo ID ${item.articuloId} en el depósito seleccionado`,
+                        `una ficha de stock para el artículo ${item.articuloId} en el depósito seleccionado`,
                     );
                 }
                 return { item, ficha };
             }),
         );
 
-        // 2. Si es transferencia, validar fichas de destino
-        let fichasDestino: { item: (typeof input.items)[0]; ficha: Awaited<ReturnType<typeof repo.findFicha>> }[] = [];
-        if (esTransferencia && input.depositoDestinoId) {
-            fichasDestino = await Promise.all(
-                input.items.map(async (item) => {
-                    const ficha = await repo.findFicha(item.articuloId, input.depositoDestinoId!, client);
-                    if (!ficha) {
-                        throw new NotFoundError(
-                            `Ficha de stock en depósito destino para el artículo ID ${item.articuloId}`,
-                        );
-                    }
-                    return { item, ficha };
-                }),
-            );
-        }
-
-        // 3. Bloquear filas (SELECT FOR UPDATE) ordenadas por ID para evitar deadlocks
-        const todasLasFichasIds = [
-            ...fichasOrigen.map((f) => f.ficha.id),
-            ...fichasDestino.map((f) => f.ficha!.id),
-        ].sort((a, b) => a - b);
-
-        for (const fId of todasLasFichasIds) {
-            await repo.lockFicha(fId, client);
-        }
-
-        // 4. Validar stock suficiente para egresos / transferencias
-        const esEgreso = input.tipo === "Egreso" || esTransferencia;
-        for (const { item, ficha } of fichasOrigen) {
-            const stockActual = Number(ficha.stock_actual);
-            if (esEgreso && stockActual - item.cantidad < 0) {
-                throw new BusinessRuleError(
-                    "STOCK_INSUFICIENTE",
-                    `Stock insuficiente para "${ficha.articulo_nombre}". Disponible: ${stockActual}, solicitado: ${item.cantidad}.`,
+        const fichasDestino: FichaStockRow[] = [];
+        if (esTransferencia) {
+            for (const { item } of fichasOrigen) {
+                const ficha = await repo.findFicha(
+                    item.articuloId,
+                    input.depositoDestinoId!,
+                    client,
                 );
+                if (!ficha) {
+                    throw new NotFoundError(
+                        `una ficha de stock para el artículo ${item.articuloId} en el depósito de destino`,
+                    );
+                }
+                fichasDestino.push(ficha);
             }
         }
 
-        // 5. Insertar registros
-        const idsInsertados: number[] = [];
+        // ---------------------------------------------------------
+        // 3. Bloquear las fichas, ORDENADAS POR ID
+        // ---------------------------------------------------------
+        // El orden importa: si dos transacciones bloquean las mismas fichas en
+        // orden distinto, cada una espera a la otra para siempre (deadlock).
+        // Ordenando siempre igual, la segunda espera a la primera y sigue.
+        const idsFichas = [
+            ...fichasOrigen.map((f) => f.ficha.id),
+            ...fichasDestino.map((f) => f.id),
+        ].sort((a, b) => a - b);
 
-        for (let i = 0; i < fichasOrigen.length; i++) {
-            const { item, ficha } = fichasOrigen[i];
-            const tipoReal = input.tipo === "Ingreso" ? "ingreso" : "egreso";
+        for (const id of idsFichas) {
+            await repo.lockFicha(id, client);
+        }
 
-            const idMovOrigen = await repo.insertMovimiento(
+        // ---------------------------------------------------------
+        // 4. Cabecera(s) + detalle
+        // ---------------------------------------------------------
+        // UNA cabecera para todos los artículos de la operación (relación
+        // cabecera-detalle del criterio). La transferencia lleva DOS, una por
+        // depósito, porque `deposito_id` vive en la cabecera.
+        const idsCabecera: number[] = [];
+
+        const cabOrigen = await repo.insertCabecera(
+            {
+                depositoId: input.depositoId,
+                tipo: tipoBase(input.tipo, input.items[0].cantidad),
+                origenId,
+                origenEntidadId: input.origenEntidadId ?? null,
+                usuarioId,
+                motivo: input.motivo,
+                fechaHora: input.fechaHora,
+            },
+            client,
+        );
+        idsCabecera.push(cabOrigen.id);
+
+        for (const { item, ficha } of fichasOrigen) {
+            // Siempre positiva: el signo lo define el `tipo` de la cabecera.
+            await repo.insertDetalle(
+                { movimientoId: cabOrigen.id, fichaStockId: ficha.id, cantidad: Math.abs(item.cantidad) },
+                client,
+            );
+        }
+
+        if (esTransferencia) {
+            const cabDestino = await repo.insertCabecera(
                 {
-                    codMov: numero,
-                    fichaStockId: ficha.id,
-                    origenId: input.origenId ?? null,
+                    depositoId: input.depositoDestinoId!,
+                    tipo: "ingreso",
+                    origenId,
                     origenEntidadId: input.origenEntidadId ?? null,
-                    tipo: tipoReal,
-                    cantidad: item.cantidad,
                     usuarioId,
-                    motivo: input.motivo,
+                    motivo: input.motivo ?? "Transferencia entre depósitos",
                     fechaHora: input.fechaHora,
+                    movimientoVinculadoId: cabOrigen.id,
                 },
                 client,
             );
-            idsInsertados.push(idMovOrigen);
+            idsCabecera.push(cabDestino.id);
 
-            // Si es transferencia, registrar la contraparte en destino
-            if (esTransferencia && fichasDestino[i]?.ficha) {
-                const fichaDest = fichasDestino[i].ficha!;
-                const idMovDestino = await repo.insertMovimiento(
+            for (let i = 0; i < fichasOrigen.length; i++) {
+                await repo.insertDetalle(
                     {
-                        codMov: numero,
-                        fichaStockId: fichaDest.id,
-                        origenId: input.origenId ?? null,
-                        origenEntidadId: input.origenEntidadId ?? null,
-                        tipo: "ingreso",
-                        cantidad: item.cantidad,
-                        usuarioId,
-                        motivo: input.motivo ?? `Transferencia desde depósito`,
-                        fechaHora: input.fechaHora,
-                        movimientoVinculadoId: idMovOrigen,
+                        movimientoId: cabDestino.id,
+                        fichaStockId: fichasDestino[i].id,
+                        cantidad: Math.abs(fichasOrigen[i].item.cantidad),
                     },
                     client,
                 );
-                await repo.setMovimientoVinculado(idMovOrigen, idMovDestino, client);
-                idsInsertados.push(idMovDestino);
             }
 
-            // 6. Evaluar alerta de stock resultante
-            const stockResultante = esEgreso
-                ? Number(ficha.stock_actual) - item.cantidad
-                : Number(ficha.stock_actual) + item.cantidad;
+            // El enlace de vuelta. Es el único UPDATE que el trigger de
+            // inmutabilidad permite sobre una cabecera.
+            await repo.setMovimientoVinculado(cabOrigen.id, cabDestino.id, client);
+        }
 
-            const stockMin = Number(ficha.stock_minimo);
-            const stockCrit = ficha.stock_critico !== null ? Number(ficha.stock_critico) : null;
+        // ---------------------------------------------------------
+        // 5. Alertas de reposición
+        // ---------------------------------------------------------
+        // Se releen las fichas DESPUÉS de insertar: para ese momento el trigger
+        // ya movió el stock, así que el saldo es el real. Calcularlo en JS desde
+        // el snapshot previo podía mentir.
+        const alertas: AlertaStock[] = [];
+        for (const id of idsFichas) {
+            const ficha = await repo.findFichaById(id, client);
+            if (!ficha) continue;
 
-            if (stockCrit !== null && stockResultante <= stockCrit) {
-                alertas.push({
-                    articuloId: ficha.articulo_id,
-                    articuloNombre: ficha.articulo_nombre,
-                    depositoId: ficha.deposito_id,
-                    depositoNombre: ficha.deposito_nombre,
-                    stockActual: stockResultante,
-                    stockMinimo: stockMin,
-                    stockCritico: stockCrit,
-                    nivel: "critico",
-                });
-            } else if (stockResultante <= stockMin) {
-                alertas.push({
-                    articuloId: ficha.articulo_id,
-                    articuloNombre: ficha.articulo_nombre,
-                    depositoId: ficha.deposito_id,
-                    depositoNombre: ficha.deposito_nombre,
-                    stockActual: stockResultante,
-                    stockMinimo: stockMin,
-                    stockCritico: stockCrit,
-                    nivel: "bajo",
-                });
-            }
+            const alerta = evaluarAlerta(ficha);
+            if (alerta) alertas.push(alerta);
         }
 
         // Con el client de la transacción: desde el pool, estas filas todavía no
         // existen (falta el COMMIT) y la respuesta saldría vacía.
+        //
+        // El filtro va por `movimiento_id` (la cabecera), no por `id`: `id` es
+        // el del DETALLE y no coincidiría con ninguno de los ids que guardamos.
         const rows = await repo.findAll({}, client);
-        const creados = rows.filter((r) => idsInsertados.includes(r.id));
+        const creados = rows.filter((r) => idsCabecera.includes(r.movimiento_id));
 
-        return {
-            movimientos: mapper.toApiList(creados),
-            alertas,
-        };
+        return { movimientos: mapper.toApiList(creados), alertas };
     });
+}
+
+/**
+ * Criterio: "genera alerta de reposición cuando el stock resultante cruza el
+ * umbral mínimo o crítico configurado".
+ *
+ * Crítico primero: si el stock está por debajo de los dos umbrales, la alerta
+ * que importa es la más grave.
+ */
+function evaluarAlerta(ficha: FichaStockRow): AlertaStock | null {
+    const stockActual = Number(ficha.stock_actual);
+    const stockMinimo = Number(ficha.stock_minimo);
+    const stockCritico = ficha.stock_critico !== null ? Number(ficha.stock_critico) : null;
+
+    const base = {
+        articuloId: ficha.articulo_id,
+        articuloNombre: ficha.articulo_nombre,
+        depositoId: ficha.deposito_id,
+        depositoNombre: ficha.deposito_nombre,
+        stockActual,
+        stockMinimo,
+        stockCritico,
+    };
+
+    if (stockCritico !== null && stockActual <= stockCritico) {
+        return { ...base, nivel: "critico" };
+    }
+    if (stockActual < stockMinimo) {
+        return { ...base, nivel: "bajo" };
+    }
+    return null;
 }

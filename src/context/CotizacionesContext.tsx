@@ -1,14 +1,10 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { PROVEEDORES } from "@/data/articulos";
-import { USUARIO_SESION } from "@/data/ordenes-compra";
-import {
-  solicitudesIniciales,
-  type Cotizacion,
-  type SolicitudCotizacion,
-} from "@/data/cotizaciones";
+import type { OrdenCompra } from "@/data/ordenes-compra";
+import type { SolicitudCotizacion } from "@/data/cotizaciones";
+import { apiGet, apiSend, mensajeDeError } from "@/lib/api-client";
 
 export interface NuevaSolicitudInput {
   lineas: { articuloId: string; cantidad: string; nota: string }[];
@@ -23,131 +19,201 @@ export interface AsignacionArticulo {
 
 export interface NuevaCotizacionInput {
   proveedorId: string;
-  condicionPago: string;
+  /** Id del catálogo `forma_pago`, no el nombre. */
+  formaPagoId: string;
   fechaRecepcion: string;
   /** Precio por artículo solicitado (clave = articulo_id). */
   precios: Record<string, number>;
 }
 
+type Resultado = { error?: string };
+
 interface CotizacionesContextValue {
   solicitudes: SolicitudCotizacion[];
-  crearSolicitud: (input: NuevaSolicitudInput) => void;
-  registrarCotizacion: (solicitudId: number, input: NuevaCotizacionInput) => void;
-  /** Marca Adjudicada; las órdenes por proveedor las genera el llamador. */
-  adjudicarPorArticulo: (solicitudId: number) => void;
-  cancelarSolicitud: (solicitudId: number) => void;
+  loading: boolean;
+  error: boolean;
+  recargar: () => void;
+  crearSolicitud: (input: NuevaSolicitudInput) => Promise<Resultado>;
+  registrarCotizacion: (
+    solicitudId: number,
+    input: NuevaCotizacionInput,
+  ) => Promise<Resultado>;
+  /**
+   * Adjudica y devuelve las órdenes que el BACK generó (una por proveedor
+   * ganador). El front ya no las arma: llegan creadas y solo se agregan a la
+   * lista.
+   */
+  adjudicarPorArticulo: (
+    solicitudId: number,
+    asignaciones: AsignacionArticulo[],
+    depositoEntregaId?: number,
+  ) => Promise<Resultado & { ordenes?: OrdenCompra[] }>;
+  cancelarSolicitud: (solicitudId: number) => Promise<Resultado>;
 }
 
 const CotizacionesContext = createContext<CotizacionesContextValue | null>(null);
 
-// BACKEND: cada operación reemplaza una llamada real:
-// - crearSolicitud      → POST /api/solicitudes-cotizacion
-// - registrarCotizacion → POST /api/solicitudes-cotizacion/:id/cotizaciones
-// - adjudicarPorArticulo→ PATCH /api/solicitudes-cotizacion/:id/adjudicar
-//                         (adjudicación por artículo: el back recibe las
-//                         asignaciones línea→cotización y crea N orden_compra,
-//                         una por proveedor, en transacción; el front solo
-//                         marca el estado porque las órdenes ya están creadas)
-// - cancelarSolicitud   → PATCH /api/solicitudes-cotizacion/:id/cancelar
-// El estado inicial viene de GET /api/solicitudes-cotizacion.
+/**
+ * HU-COMP-02 — estado de Solicitudes de Cotización contra la API.
+ *
+ * Todas las operaciones devuelven la solicitud ya actualizada, con sus
+ * cotizaciones y detalles resueltos por JOIN. El front no reconstruye nada:
+ * reemplaza la solicitud en la lista con lo que respondió el server.
+ *
+ * Eso importa especialmente en `adjudicar`: el back crea las órdenes de compra
+ * en la misma transacción, así que si algo falla no queda ni la adjudicación ni
+ * media orden. Antes el front marcaba el estado y armaba las órdenes por su
+ * cuenta, que son dos cosas que podían quedar desincronizadas.
+ */
 export function CotizacionesProvider({ children }: { children: ReactNode }) {
-  const [solicitudes, setSolicitudes] = useState<SolicitudCotizacion[]>(solicitudesIniciales);
+  const [solicitudes, setSolicitudes] = useState<SolicitudCotizacion[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [recarga, setRecarga] = useState(0);
 
-  const crearSolicitud = useCallback((input: NuevaSolicitudInput) => {
-    setSolicitudes((prev) => {
-      const nuevoId = Math.max(0, ...prev.map((s) => s.id)) + 1;
-      let detalleId = Math.max(
-        0,
-        ...prev.flatMap((s) => s._articulos_solicitados.map((a) => a.id)),
-      );
-      const nueva: SolicitudCotizacion = {
-        id: nuevoId,
-        usuario_id: USUARIO_SESION.id,
-        fecha: new Date().toISOString(),
-        estado: "Abierta",
-        notas: input.notas.trim() || null,
-        cotizacion_id_adjudicada: null,
-        _usuario: { id: USUARIO_SESION.id, nombre: USUARIO_SESION.nombre },
-        _articulos_solicitados: input.lineas.map((l) => ({
-          id: ++detalleId,
-          solicitud_id: nuevoId,
-          articulo_id: Number(l.articuloId),
-          cantidad_estimada: Number(l.cantidad),
-          nota: l.nota.trim() || null,
-        })),
-        _cotizaciones: [],
-      };
-      return [nueva, ...prev];
-    });
+  useEffect(() => {
+    let cancelado = false;
+
+    apiGet<SolicitudCotizacion[]>("/api/solicitudes-cotizacion")
+      .then((lista) => {
+        if (!cancelado) setSolicitudes(lista);
+      })
+      .catch(() => {
+        if (!cancelado) setError(true);
+      })
+      .finally(() => {
+        if (!cancelado) setLoading(false);
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [recarga]);
+
+  const recargar = useCallback(() => {
+    setError(false);
+    setLoading(true);
+    setRecarga((n) => n + 1);
   }, []);
 
-  const registrarCotizacion = useCallback(
-    (solicitudId: number, input: NuevaCotizacionInput) => {
-      setSolicitudes((prev) =>
-        prev.map((s) => {
-          if (s.id !== solicitudId) return s;
-          const proveedor = { id: Number(input.proveedorId) };
-          let detalleId = Math.max(
-            0,
-            ...prev.flatMap((x) => x._cotizaciones.flatMap((c) => c._detalles.map((d) => d.id))),
-          );
-          const cotizacionId =
-            Math.max(0, ...prev.flatMap((x) => x._cotizaciones.map((c) => c.id))) + 1;
-          const nueva: Cotizacion = {
-            id: cotizacionId,
-            solicitud_id: solicitudId,
-            proveedor_id: proveedor.id,
-            condicion_pago: input.condicionPago,
-            fecha_recepcion: `${input.fechaRecepcion}T12:00:00Z`,
-            // En producción el back resuelve la razón social con JOIN a proveedor;
-            // en la demo se resuelve desde el catálogo local.
-            _proveedor: {
-              id: proveedor.id,
-              razon_social:
-                PROVEEDORES.find((p) => p.id === proveedor.id)?.nombre ?? "",
-            },
-            _detalles: s._articulos_solicitados.map((a) => ({
-              id: ++detalleId,
-              cotizacion_id: cotizacionId,
-              articulo_id: a.articulo_id,
-              precio: input.precios[String(a.articulo_id)] ?? 0,
+  /** Reemplaza una solicitud en la lista por la versión que devolvió el server. */
+  const reemplazar = useCallback((actualizada: SolicitudCotizacion) => {
+    setSolicitudes((prev) =>
+      prev.map((s) => (s.id === actualizada.id ? actualizada : s)),
+    );
+  }, []);
+
+  const crearSolicitud = useCallback(
+    async (input: NuevaSolicitudInput): Promise<Resultado> => {
+      try {
+        const creada = await apiSend<SolicitudCotizacion>(
+          "POST",
+          "/api/solicitudes-cotizacion",
+          {
+            notas: input.notas.trim() || undefined,
+            lineas: input.lineas.map((l) => ({
+              articuloId: Number(l.articuloId),
+              cantidadEstimada: Number(l.cantidad),
+              nota: l.nota.trim() || undefined,
             })),
-          };
-          return { ...s, _cotizaciones: [...s._cotizaciones, nueva] };
-        }),
-      );
+          },
+        );
+        setSolicitudes((prev) => [creada, ...prev]);
+        return {};
+      } catch (e) {
+        return { error: mensajeDeError(e) };
+      }
     },
     [],
   );
 
-  // Adjudicación por artículo: cada línea puede ir a un proveedor distinto.
-  // cotizacion_id_adjudicada queda null porque puede haber varias ganadoras;
-  // el detalle por línea lo persiste el back con las asignaciones.
-  const adjudicarPorArticulo = useCallback((solicitudId: number) => {
-    setSolicitudes((prev) =>
-      prev.map((s) =>
-        s.id === solicitudId
-          ? { ...s, estado: "Adjudicada", cotizacion_id_adjudicada: null }
-          : s,
-      ),
-    );
-  }, []);
+  const registrarCotizacion = useCallback(
+    async (solicitudId: number, input: NuevaCotizacionInput): Promise<Resultado> => {
+      try {
+        const actualizada = await apiSend<SolicitudCotizacion>(
+          "POST",
+          `/api/solicitudes-cotizacion/${solicitudId}/cotizaciones`,
+          {
+            proveedorId: Number(input.proveedorId),
+            formaPagoId: Number(input.formaPagoId),
+            fechaRecepcion: input.fechaRecepcion || undefined,
+            // Array y no objeto: así el error de validación puede señalar QUÉ
+            // línea falló (`detalles.2.precio`) y marcar ese input en rojo.
+            detalles: Object.entries(input.precios).map(([articuloId, precio]) => ({
+              articuloId: Number(articuloId),
+              precio,
+            })),
+          },
+        );
+        reemplazar(actualizada);
+        return {};
+      } catch (e) {
+        return { error: mensajeDeError(e) };
+      }
+    },
+    [reemplazar],
+  );
 
-  const cancelarSolicitud = useCallback((solicitudId: number) => {
-    setSolicitudes((prev) =>
-      prev.map((s) => (s.id === solicitudId ? { ...s, estado: "Cancelada" } : s)),
-    );
-  }, []);
+  const adjudicarPorArticulo = useCallback(
+    async (
+      solicitudId: number,
+      asignaciones: AsignacionArticulo[],
+      depositoEntregaId?: number,
+    ) => {
+      try {
+        const { solicitud, ordenes } = await apiSend<{
+          solicitud: SolicitudCotizacion;
+          ordenes: OrdenCompra[];
+        }>("PATCH", `/api/solicitudes-cotizacion/${solicitudId}/adjudicar`, {
+          asignaciones,
+          depositoEntregaId,
+        });
+        reemplazar(solicitud);
+        return { ordenes };
+      } catch (e) {
+        return { error: mensajeDeError(e) };
+      }
+    },
+    [reemplazar],
+  );
+
+  const cancelarSolicitud = useCallback(
+    async (solicitudId: number): Promise<Resultado> => {
+      try {
+        const actualizada = await apiSend<SolicitudCotizacion>(
+          "PATCH",
+          `/api/solicitudes-cotizacion/${solicitudId}/cancelar`,
+        );
+        reemplazar(actualizada);
+        return {};
+      } catch (e) {
+        return { error: mensajeDeError(e) };
+      }
+    },
+    [reemplazar],
+  );
 
   const value = useMemo(
     () => ({
       solicitudes,
+      loading,
+      error,
+      recargar,
       crearSolicitud,
       registrarCotizacion,
       adjudicarPorArticulo,
       cancelarSolicitud,
     }),
-    [solicitudes, crearSolicitud, registrarCotizacion, adjudicarPorArticulo, cancelarSolicitud],
+    [
+      solicitudes,
+      loading,
+      error,
+      recargar,
+      crearSolicitud,
+      registrarCotizacion,
+      adjudicarPorArticulo,
+      cancelarSolicitud,
+    ],
   );
 
   return <CotizacionesContext.Provider value={value}>{children}</CotizacionesContext.Provider>;

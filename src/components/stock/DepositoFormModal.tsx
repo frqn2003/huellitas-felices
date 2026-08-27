@@ -2,7 +2,7 @@
 
 import { Building2, Pencil } from "lucide-react";
 import { useState } from "react";
-import { SUCURSALES, type Deposito } from "@/data/stock";
+import type { Deposito, SucursalOpcion } from "@/data/stock";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
@@ -18,6 +18,8 @@ interface DepositoFormModalProps {
   open: boolean;
   deposito: Deposito | null;
   depositos: Deposito[];
+  /** Catálogo real: GET /api/sucursales. */
+  sucursales: SucursalOpcion[];
   onClose: () => void;
   onSave: (draft: DepositoDraft) => void;
 }
@@ -63,10 +65,12 @@ function validateDraft(
 function DepositoFormFields({
   deposito,
   depositos,
+  sucursales,
   onSave,
 }: {
   deposito: Deposito | null;
   depositos: Deposito[];
+  sucursales: SucursalOpcion[];
   onSave: (draft: DepositoDraft) => void;
 }) {
   const [draft, setDraft] = useState<DepositoDraft>(() => initialDraft(deposito));
@@ -105,7 +109,7 @@ function DepositoFormFields({
         error={showError("sucursalId")}
       >
         <option value="">[ Seleccionar ]</option>
-        {SUCURSALES.map((s) => (
+        {sucursales.map((s) => (
           <option key={s.id} value={s.id}>
             {s.nombre}
           </option>
@@ -139,6 +143,7 @@ export function DepositoFormModal({
   open,
   deposito,
   depositos,
+  sucursales,
   onClose,
   onSave,
 }: DepositoFormModalProps) {
@@ -170,6 +175,7 @@ export function DepositoFormModal({
     >
       <DepositoFormFields
         key={formKey}
+        sucursales={sucursales}
         deposito={deposito}
         depositos={depositos}
         onSave={onSave}

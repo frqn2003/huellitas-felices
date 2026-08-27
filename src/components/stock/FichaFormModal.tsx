@@ -3,7 +3,7 @@
 import { ClipboardList, Pencil } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { Articulo } from "@/data/articulos";
-import { SUCURSALES, type Deposito, type FichaStock } from "@/data/stock";
+import type { Deposito, FichaStock, SucursalOpcion } from "@/data/stock";
 import { Button } from "@/components/ui/Button";
 import { Combobox } from "@/components/ui/Combobox";
 import { Input } from "@/components/ui/Input";
@@ -24,6 +24,8 @@ interface FichaFormModalProps {
   modo: FichaFormModo;
   ficha: FichaStock | null;
   depositos: Deposito[];
+  /** Catálogo real: GET /api/sucursales. Filtra los depósitos en cascada. */
+  sucursales: SucursalOpcion[];
   articulos: Articulo[];
   fichas: FichaStock[];
   onClose: () => void;
@@ -84,6 +86,7 @@ function validateDraft(
 function FichaFormFields({
   ficha,
   depositos,
+  sucursales,
   articulos,
   fichas,
   modo,
@@ -91,6 +94,7 @@ function FichaFormFields({
 }: {
   ficha: FichaStock | null;
   depositos: Deposito[];
+  sucursales: SucursalOpcion[];
   articulos: Articulo[];
   fichas: FichaStock[];
   modo: FichaFormModo;
@@ -172,7 +176,7 @@ function FichaFormFields({
         hint="Solo se usa para filtrar los depósitos; no se guarda en la ficha."
       >
         <option value="">[ Seleccionar ]</option>
-        {SUCURSALES.map((s) => (
+        {sucursales.map((s) => (
           <option key={s.id} value={s.id}>
             {s.nombre}
           </option>
@@ -274,6 +278,7 @@ export function FichaFormModal({
   modo,
   ficha,
   depositos,
+  sucursales,
   articulos,
   fichas,
   onClose,
@@ -307,6 +312,7 @@ export function FichaFormModal({
     >
       <FichaFormFields
         key={formKey}
+        sucursales={sucursales}
         ficha={ficha}
         depositos={depositos}
         articulos={articulos}

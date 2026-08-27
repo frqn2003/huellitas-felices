@@ -1,6 +1,9 @@
 // Datos placeholder del módulo Stock (HU-STK-02).
 // Cada `id` es la PK que mandará la base de datos (ver comentarios // BACKEND:).
 
+/** Opción de sucursal para los selects. Viene de GET /api/sucursales. */
+export type SucursalOpcion = { id: number; nombre: string };
+
 export interface Sucursal {
   id: number;
   nombre: string;
@@ -217,7 +220,7 @@ export function calcularEstadoStock(ficha: {
   return "normal";
 }
 
-// Ejemplo de par de movimientos generados por una transferencia, reflejando `movimiento_stock`
+// Ejemplo de par de movimientos generados por una transferencia, reflejando `movimiento_stock_cab`
 // (id, ficha_stock_id, origen_id -> catálogo origen_movimiento, origen_entidad_id, tipo,
 // cantidad, fecha_hora, empleado_id, motivo, movimiento_vinculado_id).
 // BACKEND: al confirmar una transferencia, el back genera este par vía POST /api/transferencias

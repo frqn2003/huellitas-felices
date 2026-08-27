@@ -6,10 +6,9 @@ import { Button } from "@/components/ui/Button";
 import { Combobox, type ComboboxOption } from "@/components/ui/Combobox";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { articulosIniciales } from "@/data/articulos";
 import type { NuevaSolicitudInput } from "@/context/CotizacionesContext";
+import type { CatalogosCotizacion } from "@/data/cotizaciones";
 import { parseImporte } from "@/data/ordenes-compra";
-import { fichasStockIniciales } from "@/data/stock";
 
 interface LineaDraft {
   key: string;
@@ -25,6 +24,8 @@ interface LineaErrors {
 
 interface SolicitudFormModalProps {
   open: boolean;
+  /** Artículos activos y fichas de stock, desde la API. */
+  catalogos: CatalogosCotizacion;
   onClose: () => void;
   onSave: (input: NuevaSolicitudInput) => void;
 }
@@ -49,6 +50,7 @@ function validarLinea(linea: LineaDraft, lineas: LineaDraft[]): LineaErrors {
 
 export function SolicitudFormModal({
   open,
+  catalogos,
   onClose,
   onSave,
 }: SolicitudFormModalProps) {
@@ -60,11 +62,11 @@ export function SolicitudFormModal({
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const contadorLineas = useRef(1);
 
-  // BACKEND: estado desde GET /api/fichas-stock. Se conserva el peor estado
-  // cuando un artículo tiene fichas en más de un depósito.
+  // Se conserva el PEOR estado cuando un artículo tiene fichas en más de un
+  // depósito: si en uno está crítico, el artículo se marca como crítico.
   const estadoStockPorArticulo = useMemo(() => {
     const estados = new Map<number, "normal" | "bajo" | "critico">();
-    fichasStockIniciales.forEach((f) => {
+    catalogos.fichas.forEach((f) => {
       const estado = f.estadoCalculado as "normal" | "bajo" | "critico";
       const previo = estados.get(f.articuloId);
       if (
@@ -76,7 +78,7 @@ export function SolicitudFormModal({
       }
     });
     return estados;
-  }, []);
+  }, [catalogos.fichas]);
 
   const showError = (key: string, field: keyof LineaErrors) =>
     touched[key] ? errors[key]?.[field] : undefined;
@@ -127,10 +129,7 @@ export function SolicitudFormModal({
     setErrors(validarTodo(next));
   };
 
-  // BACKEND: poblar desde GET /api/articulos?activo=true.
-  const articuloOptions: ComboboxOption[] = articulosIniciales
-    .filter((a) => a.activo)
-    .map((a) => {
+  const articuloOptions: ComboboxOption[] = catalogos.articulos.map((a) => {
       const estado = estadoStockPorArticulo.get(a.id) ?? "normal";
       const tone: ComboboxOption["tone"] =
         estado === "critico"
@@ -148,19 +147,17 @@ export function SolicitudFormModal({
       };
     });
 
+  // Chips de sugerencia: artículos activos cuyo stock está bajo o crítico.
+  // `catalogos.articulos` ya viene filtrado por activos desde la API.
   const bajoStock = useMemo(() => {
-    const sugeridos = fichasStockIniciales
-      .filter((f) => {
-        const activo = articulosIniciales.some(
-          (a) => a.id === f.articuloId && a.activo,
-        );
-        return (
-          activo &&
-          (f.estadoCalculado === "bajo" || f.estadoCalculado === "critico")
-        );
-      })
+    const sugeridos = catalogos.fichas
+      .filter(
+        (f) =>
+          catalogos.articulos.some((a) => a.id === f.articuloId) &&
+          (f.estadoCalculado === "bajo" || f.estadoCalculado === "critico"),
+      )
       .map((f) => {
-        const articulo = articulosIniciales.find((a) => a.id === f.articuloId);
+        const articulo = catalogos.articulos.find((a) => a.id === f.articuloId);
         return {
           articuloId: f.articuloId,
           nombre: articulo?.nombre ?? "Artículo",
@@ -170,16 +167,16 @@ export function SolicitudFormModal({
         };
       });
 
+    // Un artículo puede estar bajo en varios depósitos: se muestra una sola vez.
     return sugeridos.filter(
       (item, index, arr) =>
         arr.findIndex((otro) => otro.articuloId === item.articuloId) === index,
     );
-  }, []);
+  }, [catalogos]);
 
   const agregarDesdeChip = (articuloId: number) => {
-    const ficha = fichasStockIniciales.find((f) => f.articuloId === articuloId);
-    const articulo = articulosIniciales.find((a) => a.id === articuloId);
-    const cantidad = ficha ? String(ficha.stockMinimo) : "1";
+    const articulo = catalogos.articulos.find((a) => a.id === articuloId);
+    const cantidad = "1";
     const yaExiste = lineas.some((l) => l.articuloId === String(articuloId));
 
     if (yaExiste) return;
@@ -259,12 +256,8 @@ export function SolicitudFormModal({
                       const patch: Partial<Omit<LineaDraft, "key">> = {
                         articuloId: value,
                       };
-                      if (!linea.cantidad && value) {
-                        const ficha = fichasStockIniciales.find(
-                          (f) => f.articuloId === Number(value),
-                        );
-                        if (ficha) patch.cantidad = String(ficha.stockMinimo);
-                      }
+                      // La cantidad la escribe el usuario: es una cantidad
+                      // ESTIMADA a cotizar, no una reposición hasta el mínimo.
                       actualizarLinea(linea.key, patch);
                     }}
                     onBlur={() => touchLinea(linea.key)}

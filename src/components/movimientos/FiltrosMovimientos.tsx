@@ -2,7 +2,6 @@
 
 import { SlidersHorizontal, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { depositosIniciales } from "@/data/stock";
 import { tiposMovimiento } from "@/data/movimientos";
 import { Button } from "@/components/ui/Button";
 import { Combobox } from "@/components/ui/Combobox";
@@ -32,6 +31,7 @@ function formatFechaChip(fecha: string) {
 export function buildTagsMovimientos(
   filtros: FiltrosMovimientos,
   articulos: { id: number; nombre: string }[],
+  depositos: { id: number; nombre: string }[],
   onChange: (filtros: FiltrosMovimientos) => void,
 ) {
   const tags: { label: string; onRemove: () => void }[] = [];
@@ -43,7 +43,7 @@ export function buildTagsMovimientos(
     });
   }
   if (filtros.depositoId) {
-    const deposito = depositosIniciales.find((d) => d.id === Number(filtros.depositoId));
+    const deposito = depositos.find((d) => d.id === Number(filtros.depositoId));
     tags.push({
       label: `Depósito: ${deposito?.nombre ?? filtros.depositoId}`,
       onRemove: () => onChange({ ...filtros, depositoId: "" }),
@@ -74,13 +74,15 @@ export function buildTagsMovimientos(
 export function FiltrosMovimientosChips({
   filtros,
   articulos,
+  depositos,
   onChange,
 }: {
   filtros: FiltrosMovimientos;
   articulos: { id: number; nombre: string }[];
+  depositos: { id: number; nombre: string }[];
   onChange: (filtros: FiltrosMovimientos) => void;
 }) {
-  const tags = buildTagsMovimientos(filtros, articulos, onChange);
+  const tags = buildTagsMovimientos(filtros, articulos, depositos, onChange);
   if (tags.length === 0) return null;
   return (
     <div className="flex flex-wrap items-center gap-2" aria-label="Filtros aplicados">
@@ -107,6 +109,8 @@ export function FiltrosMovimientosChips({
 interface FiltrosMovimientosProps {
   filtros: FiltrosMovimientos;
   articulos: { id: number; nombre: string }[];
+  /** Catálogo real: GET /api/depositos. */
+  depositos: { id: number; nombre: string }[];
   onChange: (filtros: FiltrosMovimientos) => void;
   disabled?: boolean;
   hideChips?: boolean;
@@ -115,6 +119,7 @@ interface FiltrosMovimientosProps {
 export function FiltrosMovimientos({
   filtros,
   articulos,
+  depositos,
   onChange,
   disabled = false,
   hideChips = false,
@@ -133,7 +138,7 @@ export function FiltrosMovimientos({
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [open]);
 
-  const tags = buildTagsMovimientos(filtros, articulos, onChange);
+  const tags = buildTagsMovimientos(filtros, articulos, depositos, onChange);
 
   return (
     <div className="flex flex-col gap-2">
@@ -183,7 +188,7 @@ export function FiltrosMovimientos({
                   className="h-11 cursor-pointer rounded-sm border border-border bg-surface px-3 text-base font-normal text-text-primary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
                 >
                   <option value="">Todos</option>
-                  {depositosIniciales.map((d) => (
+                  {depositos.map((d) => (
                     <option key={d.id} value={d.id}>
                       {d.nombre}
                     </option>
@@ -230,7 +235,12 @@ export function FiltrosMovimientos({
         )}
       </div>
       {!hideChips && (
-        <FiltrosMovimientosChips filtros={filtros} articulos={articulos} onChange={onChange} />
+        <FiltrosMovimientosChips
+          filtros={filtros}
+          articulos={articulos}
+          depositos={depositos}
+          onChange={onChange}
+        />
       )}
     </div>
   );

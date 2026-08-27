@@ -58,6 +58,30 @@ export async function apiGet<T>(url: string): Promise<T> {
   return parsear<T>(res);
 }
 
+/**
+ * GET de un dato NO esencial: si falla, devuelve el valor por defecto en vez de
+ * lanzar.
+ *
+ * POR QUÉ EXISTE: las pantallas piden el listado principal y varios catálogos a
+ * la vez. Con `Promise.all`, un catálogo caído tira abajo toda la página —
+ * el usuario ve "no se pudieron cargar los datos" aunque el listado esté
+ * perfecto y lo único que falte sea poblar un `<select>`.
+ *
+ * Regla: el listado que da sentido a la pantalla va con `apiGet` (si falla, la
+ * pantalla no sirve). Los catálogos van con este.
+ */
+export async function apiGetOpcional<T>(url: string, porDefecto: T): Promise<T> {
+  try {
+    return await apiGet<T>(url);
+  } catch (e) {
+    console.warn(
+      `[api] no se pudo cargar ${url}. La pantalla sigue, pero ese catálogo queda vacío.`,
+      e,
+    );
+    return porDefecto;
+  }
+}
+
 export async function apiSend<T>(
   metodo: "POST" | "PUT" | "PATCH" | "DELETE",
   url: string,

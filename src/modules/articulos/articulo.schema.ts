@@ -17,6 +17,10 @@ import { z } from "zod";
  *  · `precio` — criterio explícito del Excel: "el artículo NO incluye campo de
  *    precio: el precio de venta se gestiona en la Lista de Precios (HU-STK-03)
  *    y el costo de compra se fija al confirmar la recepción de la orden".
+ *
+ *  · `proveedorPreferidoId` — se DERIVA de la última orden de compra (decisión
+ *    D2), no se guarda. Si el front lo manda igual, zod lo descarta en silencio
+ *    y la respuesta trae el valor derivado. Ver LATERAL_PROVEEDOR en el repo.
  */
 
 /** Id de catálogo: entero positivo. */
@@ -38,10 +42,6 @@ export const crearArticuloSchema = z.object({
   categoriaId: idCatalogo("una categoría"),
   unidadMedidaId: idCatalogo("una unidad de medida"),
   fabricanteId: idCatalogo("un fabricante"),
-
-  // Opcional por criterio: "proveedor preferido (opcional)".
-  // nullable() además de optional() porque el front manda null al limpiar el select.
-  proveedorPreferidoId: z.number().int().positive().nullable().optional(),
 
   /**
    * La imagen llega como data URL en base64 (así la produce el FileReader del

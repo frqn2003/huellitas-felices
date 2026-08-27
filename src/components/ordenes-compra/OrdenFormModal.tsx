@@ -2,24 +2,31 @@
 
 import { Eye, FileWarning, PackagePlus, Pencil, Plus, Receipt, Send, Trash2, XCircle } from "lucide-react";
 import { useRef, useState } from "react";
-import type { Proveedor } from "@/data/articulos";
-import { PROVEEDORES, articulosIniciales } from "@/data/articulos";
+
 import { Button } from "@/components/ui/Button";
 import { Combobox } from "@/components/ui/Combobox";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
 import {
-  CONDICIONES_PAGO,
-  DEPOSITO_ENTREGA_DEFAULT_ID,
   formatMoney,
   importeAInput,
-  numeroOrden,
   parseImporte,
-  ultimoPrecioCompra,
   type OrdenCompra,
 } from "@/data/ordenes-compra";
-import { depositosIniciales } from "@/data/stock";
+import { apiGet } from "@/lib/api-client";
+
+/**
+ * Catálogos que el formulario necesita para sus selects. Antes salían de
+ * constantes del front; ahora los trae la página desde la API y los baja por
+ * prop, así el modal no hace fetch por su cuenta.
+ */
+export interface CatalogosOrden {
+  proveedores: { id: number; nombre: string }[];
+  articulos: { id: number; codigo: string; nombre: string }[];
+  depositos: { id: number; nombre: string; sucursal: string }[];
+  condicionesPago: { id: number; nombre: string }[];
+}
 
 export type OrdenFormModo = "INSERCION" | "EDICION" | "LECTURA";
 
@@ -59,9 +66,10 @@ interface DraftErrors {
 interface OrdenFormFieldsProps {
   orden: OrdenCompra | null;
   ordenes: OrdenCompra[];
+  catalogos: CatalogosOrden;
   modo: OrdenFormModo;
   cotizacionCodigo?: string | null;
-  onSave: (draft: OrdenDraft) => void;
+  onSave: (draft: OrdenDraft) => Promise<{ error?: string }>;
 }
 
 function round2(n: number): number {
@@ -70,9 +78,8 @@ function round2(n: number): number {
 
 // El depósito de entrega solo puede ser uno del catálogo: la dirección se
 // resuelve desde su `ubicacion` (la BD guarda el varchar, sin FK).
-function depositoPorDireccion(direccion: string) {
-  return depositosIniciales.find((d) => d.ubicacion === direccion);
-}
+// `depositoPorDireccion()` se eliminó: adivinaba el depósito comparando el
+// texto de la dirección. Ahora la API devuelve `deposito_id` y se usa directo.
 
 function calcularSubtotal(lineas: LineaDraft[]): number {
   return round2(
@@ -131,18 +138,15 @@ function validarDraft(draft: OrdenDraft): DraftErrors {
   return next;
 }
 
-function initialDraft(orden: OrdenCompra | null): OrdenDraft {
+function initialDraft(orden: OrdenCompra | null, catalogos: CatalogosOrden): OrdenDraft {
   if (orden) {
-    // La orden guarda solo el varchar; el depósito se infiere por match exacto
-    // de dirección. Si no coincide con ningún depósito del catálogo, cae al
-    // default (solo debería pasar con datos viejos).
-    const deposito = depositoPorDireccion(orden.direccion_entrega);
     return {
       proveedorId: String(orden.proveedor_id),
       fecha: orden.fecha.slice(0, 10),
       fechaEntrega: orden.fecha_entrega ? orden.fecha_entrega.slice(0, 10) : "",
-      depositoEntregaId: String(deposito?.id ?? DEPOSITO_ENTREGA_DEFAULT_ID),
-      condicionPago: orden.condicion_pago,
+      // Directo del id que devuelve la API, sin adivinar por dirección.
+      depositoEntregaId: orden.deposito_id ? String(orden.deposito_id) : "",
+      condicionPago: String(orden.forma_pago_id),
       notas: orden.notas ?? "",
       descuento: orden.descuento ? importeAInput(orden.descuento) : "",
       gastosEnvio: orden.gastos_envio ? importeAInput(orden.gastos_envio) : "",
@@ -158,8 +162,8 @@ function initialDraft(orden: OrdenCompra | null): OrdenDraft {
     proveedorId: "",
     fecha: new Date().toISOString().slice(0, 10),
     fechaEntrega: "",
-    depositoEntregaId: String(DEPOSITO_ENTREGA_DEFAULT_ID),
-    condicionPago: CONDICIONES_PAGO[0],
+    depositoEntregaId: String(catalogos.depositos[0]?.id ?? ""),
+    condicionPago: String(catalogos.condicionesPago[0]?.id ?? ""),
     notas: "",
     descuento: "",
     gastosEnvio: "",
@@ -168,16 +172,16 @@ function initialDraft(orden: OrdenCompra | null): OrdenDraft {
   };
 }
 
-// BACKEND: el nombre del artículo llega resuelto por el JOIN del detalle de la orden.
-function nombreArticulo(articuloId: number): string {
+function nombreArticulo(articuloId: number, catalogos: CatalogosOrden): string {
   return (
-    articulosIniciales.find((a) => a.id === articuloId)?.nombre ?? `Artículo #${articuloId}`
+    catalogos.articulos.find((a) => a.id === articuloId)?.nombre ?? `Artículo #${articuloId}`
   );
 }
 
 function OrdenFormFields({
   orden,
   ordenes,
+  catalogos,
   modo,
   cotizacionCodigo = null,
   onSave,
@@ -185,7 +189,7 @@ function OrdenFormFields({
   const isLectura = modo === "LECTURA";
   const editable = !isLectura;
 
-  const [draft, setDraft] = useState<OrdenDraft>(() => initialDraft(orden));
+  const [draft, setDraft] = useState<OrdenDraft>(() => initialDraft(orden, catalogos));
   const [errors, setErrors] = useState<DraftErrors>({ lineas: {} });
   const [touched, setTouched] = useState<Partial<Record<Exclude<keyof OrdenDraft, "lineas">, boolean>>>({});
   const [lineasTouched, setLineasTouched] = useState<Record<string, boolean>>({});
@@ -244,16 +248,32 @@ function OrdenFormFields({
     setErrors(validarDraft(next));
   };
 
-  // Al elegir artículo se precarga el último precio de compra, si existe.
-  const seleccionarArticulo = (key: string, articuloId: string) => {
+  /**
+   * Al elegir artículo se precarga el último precio de compra.
+   *
+   * Lo resuelve el back (GET /api/articulos/:id/ultimo-precio-compra) y no un
+   * cálculo local: el front solo tiene en memoria las órdenes que están en la
+   * página actual, así que el "último precio" que calculaba podía ser de una
+   * orden vieja o directamente no encontrarse.
+   *
+   * Si la consulta falla, se sigue sin sugerencia: es una comodidad, no un
+   * requisito para poder guardar.
+   */
+  const seleccionarArticulo = async (key: string, articuloId: string) => {
     const linea = draft.lineas.find((l) => l.key === key);
     if (!linea) return;
-    const patch: Partial<Omit<LineaDraft, "key">> = { articuloId };
-    if (articuloId && linea.precio.trim() === "") {
-      const sugerido = ultimoPrecioCompra(Number(articuloId), ordenes);
-      if (sugerido !== null) patch.precio = importeAInput(sugerido);
+
+    actualizarLinea(key, { articuloId });
+    if (!articuloId || linea.precio.trim() !== "") return;
+
+    try {
+      const { precio } = await apiGet<{ precio: number | null }>(
+        `/api/articulos/${articuloId}/ultimo-precio-compra`,
+      );
+      if (precio !== null) actualizarLinea(key, { precio: importeAInput(precio) });
+    } catch {
+      // Sin sugerencia: el usuario escribe el precio a mano.
     }
-    actualizarLinea(key, patch);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -273,18 +293,17 @@ function OrdenFormFields({
   };
 
   // BACKEND: poblar desde GET /api/proveedores?activo=true (id + razón social).
-  const proveedorOptions: { value: string; label: string }[] = PROVEEDORES.map((p: Proveedor) => ({
+  const proveedorOptions = catalogos.proveedores.map((p) => ({
     value: String(p.id),
     label: p.nombre,
   }));
 
-  // BACKEND: poblar desde GET /api/articulos?activo=true.
-  const articuloOptions = articulosIniciales
-    .filter((a) => a.activo)
-    .map((a) => ({ value: String(a.id), label: `${a.codigo} · ${a.nombre}` }));
+  const articuloOptions = catalogos.articulos.map((a) => ({
+    value: String(a.id),
+    label: `${a.codigo} · ${a.nombre}`,
+  }));
 
-  // BACKEND: poblar desde GET /api/depositos.
-  const depositoOptions = depositosIniciales.map((d) => ({
+  const depositoOptions = catalogos.depositos.map((d) => ({
     value: String(d.id),
     label: `${d.nombre} · ${d.sucursal}`,
   }));
@@ -378,9 +397,9 @@ function OrdenFormFields({
           onChange={(e) => setField("condicionPago", e.target.value)}
           disabled={isLectura}
         >
-          {CONDICIONES_PAGO.map((c) => (
-            <option key={c} value={c}>
-              {c}
+          {catalogos.condicionesPago.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.nombre}
             </option>
           ))}
         </Select>
@@ -425,7 +444,7 @@ function OrdenFormFields({
                 {(orden?._detalles ?? []).map((d) => (
                   <tr key={d.id} className="border-b border-border/60 last:border-b-0">
                     <td className="px-3 py-2 text-sm font-semibold text-text-primary">
-                      {nombreArticulo(d.articulo_id)}
+                      {nombreArticulo(d.articulo_id, catalogos)}
                     </td>
                     <td className="px-3 py-2 text-sm text-text-primary">{importeAInput(d.cantidad)}</td>
                     <td className="px-3 py-2 text-sm text-text-primary">{formatMoney(d.precio_acordado)}</td>
@@ -592,8 +611,9 @@ function OrdenFormFields({
           Creada por {orden?._usuario.nombre} · Condición: {orden?.condicion_pago ?? "—"} ·
           Entregar en{" "}
           {(() => {
-            const dep = orden ? depositoPorDireccion(orden.direccion_entrega) : undefined;
-            return dep ? `${dep.nombre} (${dep.ubicacion})` : orden?.direccion_entrega || "—";
+            // Por id, no comparando direcciones: la API devuelve `deposito_id`.
+            const dep = catalogos.depositos.find((d) => d.id === orden?.deposito_id);
+            return dep ? `${dep.nombre} (${dep.sucursal})` : orden?.direccion_entrega || "—";
           })()}
           {cotizacionCodigo ? ` · Cotización: ${cotizacionCodigo}` : ""}
           {orden?.notas ? ` · Notas: ${orden.notas}` : ""}
@@ -608,10 +628,11 @@ interface OrdenFormModalProps {
   modo: OrdenFormModo;
   orden: OrdenCompra | null;
   ordenes: OrdenCompra[];
+  catalogos: CatalogosOrden;
   /** Código SC-XXXX resuelto cuando la orden nació de una adjudicación. */
   cotizacionCodigo?: string | null;
   onClose: () => void;
-  onSave: (draft: OrdenDraft) => void;
+  onSave: (draft: OrdenDraft) => Promise<{ error?: string }>;
   onCancelFromRead: (orden: OrdenCompra) => void;
   onEnviar: (orden: OrdenCompra) => void;
 }
@@ -621,6 +642,7 @@ export function OrdenFormModal({
   modo,
   orden,
   ordenes,
+  catalogos,
   cotizacionCodigo = null,
   onClose,
   onSave,
@@ -638,9 +660,9 @@ export function OrdenFormModal({
   const recibidaParcial = orden?.estado === "Recibida Parcial";
 
   const titulo = isLectura
-    ? `Orden ${numeroOrden(orden?.id ?? 0)}`
+    ? `Orden ${(orden?.cod_ord ?? "")}`
     : isEdicion
-      ? `Editar ${numeroOrden(orden?.id ?? 0)}`
+      ? `Editar ${(orden?.cod_ord ?? "")}`
       : "Nueva orden de compra";
 
   return (
@@ -717,6 +739,7 @@ export function OrdenFormModal({
         key={formKey}
         orden={orden}
         ordenes={ordenes}
+        catalogos={catalogos}
         modo={modo}
         cotizacionCodigo={cotizacionCodigo}
         onSave={onSave}

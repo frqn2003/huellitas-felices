@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, Building2, Download, Plus, RotateCcw } from "lucide-react";
-import { useContext, useEffect, useMemo, useState } from "react";
+import { useContext, useMemo, useState } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { BajaProveedorModal } from "@/components/proveedores/BajaProveedorModal";
 import type { FiltroEstado } from "@/components/proveedores/FiltrosProveedores";
@@ -15,7 +15,6 @@ import { ToastProvider, useToast } from "@/components/ui/Toast";
 import { ProveedoresContext, ProveedoresProvider } from "@/context/ProveedoresContext";
 import type { NuevoProveedorInput } from "@/context/ProveedoresContext";
 import type { Proveedor } from "@/data/proveedores";
-import { SIMULAR_ERROR, SIMULAR_VACIO } from "@/data/proveedores";
 
 function exportarCSV(proveedores: Proveedor[]) {
   const cabeceras = [
@@ -58,10 +57,16 @@ function ProveedoresPageContent() {
   const context = useContext(ProveedoresContext);
   if (!context) throw new Error("ProveedoresPageContent debe usarse dentro de ProveedoresProvider");
 
-  const { proveedores, agregarProveedor, actualizarProveedor, darDeBaja } = context;
-
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const {
+    proveedores,
+    formasPago,
+    loading,
+    error,
+    recargar,
+    agregarProveedor,
+    actualizarProveedor,
+    darDeBaja,
+  } = context;
 
   const [busqueda, setBusqueda] = useState("");
   const [estadoFiltro, setEstadoFiltro] = useState<FiltroEstado>("Todos");
@@ -74,18 +79,8 @@ function ProveedoresPageContent() {
   const [proveedorActivo, setProveedorActivo] = useState<Proveedor | null>(null);
   const [aDarDeBaja, setADarDeBaja] = useState<Proveedor | null>(null);
 
-  useEffect(() => {
-    // BACKEND: reemplazar la simulación por GET /api/proveedores.
-    // Las banderas SIMULAR_VACIO / SIMULAR_ERROR de src/data/proveedores.ts controlan esta demo.
-    const timer = window.setTimeout(() => {
-      if (SIMULAR_ERROR) setError(true);
-      setLoading(false);
-    }, 900);
-    return () => window.clearTimeout(timer);
-  }, []);
-
   const filtrados = useMemo(() => {
-    const base = SIMULAR_VACIO ? [] : proveedores;
+    const base = proveedores;
     return base.filter((prov) => {
       if (estadoFiltro !== "Todos" && prov.estado !== estadoFiltro) return false;
       if (busqueda) {
@@ -129,35 +124,35 @@ function ProveedoresPageContent() {
     setModalOpen(true);
   };
 
-  const handleSave = (input: NuevoProveedorInput) => {
-    // BACKEND: POST /api/proveedores (alta) o PUT /api/proveedores/:id (edición).
+  const handleSave = async (input: NuevoProveedorInput) => {
     if (modalMode === "crear") {
-      const res = agregarProveedor(input);
+      const res = await agregarProveedor(input);
       if (!res.error) showToast("success", "Proveedor creado correctamente");
       return res;
     }
     if (modalMode === "editar" && proveedorActivo) {
-      const res = actualizarProveedor(proveedorActivo.id, input);
+      const res = await actualizarProveedor(proveedorActivo.id, input);
       if (!res.error) showToast("success", "Proveedor guardado correctamente");
       return res;
     }
     return {};
   };
 
-  const confirmarBaja = (prov: Proveedor) => {
-    // BACKEND: PATCH /api/proveedores/:id/inactivar
-    darDeBaja(prov.id);
+  const confirmarBaja = async (prov: Proveedor) => {
+    // El back rechaza la baja si el proveedor tiene órdenes de compra abiertas.
+    const res = await darDeBaja(prov.id);
     setADarDeBaja(null);
+
+    // El toast de éxito va DESPUÉS del early return: antes se mostraba
+    // "dado de baja correctamente" aunque el back hubiera rechazado la baja.
+    if (res.error) {
+      showToast("error", res.error);
+      return;
+    }
     showToast("success", `${prov.razonSocial} fue dado de baja correctamente`);
   };
 
-  const handleReintentar = () => {
-    setError(false);
-    setLoading(true);
-    window.setTimeout(() => {
-      setLoading(false);
-    }, 900);
-  };
+  const handleReintentar = () => recargar();
 
   return (
     <div className="mx-auto flex w-full max-w-[min(1200px,calc(100%-48px))] flex-col gap-6 py-8">
@@ -254,6 +249,7 @@ function ProveedoresPageContent() {
         open={modalOpen}
         modo={modalMode}
         proveedor={proveedorActivo}
+        formasPagoDisponibles={formasPago}
         onClose={() => setModalOpen(false)}
         onSave={handleSave}
       />

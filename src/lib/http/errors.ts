@@ -139,6 +139,35 @@ export function traducirErrorPostgres(e: unknown): AppError | null {
     return new ValidationError("DATO_INVALIDO", "Algún valor no cumple las reglas de la base.");
   }
 
+  // ---------------------------------------------------------
+  // Códigos propios del proyecto (RAISE ... USING ERRCODE)
+  // ---------------------------------------------------------
+  // Los triggers de stock levantan SQLSTATE propios en vez del P0001 por
+  // defecto, para que este mapeo no dependa de matchear texto en castellano.
+  //
+  // ⚠️ SIN ESTO, un egreso sin stock devuelve 500. El service ya no valida el
+  //    stock —lo hace el trigger, que es quien puede hacerlo de forma atómica—,
+  //    así que este mapeo es lo único que convierte esa regla en un 409 con
+  //    mensaje útil. Ver fn_actualizar_stock_det() en db/schema.sql.
+  if (codigo === "HF001") {
+    return new BusinessRuleError(
+      "STOCK_INSUFICIENTE",
+      "No hay stock suficiente para registrar este egreso.",
+    );
+  }
+  if (codigo === "HF002") {
+    return new BusinessRuleError(
+      "FICHA_INEXISTENTE",
+      "No existe la ficha de stock afectada por el movimiento.",
+    );
+  }
+  if (codigo === "HF003") {
+    return new BusinessRuleError(
+      "MOVIMIENTO_INMUTABLE",
+      "Los movimientos de stock no se editan ni se borran: registrá un movimiento inverso.",
+    );
+  }
+
   // P0001 = raise_exception: viene de un RAISE EXCEPTION dentro de un trigger.
   // La base de este proyecto tiene reglas de negocio en triggers (fn_actualizar_stock
   // rechaza los egresos que dejarian stock negativo), asi que sin este mapeo esas

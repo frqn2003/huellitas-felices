@@ -1,9 +1,17 @@
 import type { TipoMovimiento } from "@/data/movimientos";
 
-/** Fila resultante del SELECT con JOINs a artículo, depósito, origen y usuario. */
+/**
+ * Fila de la vista `v_movimiento_stock`, que aplana cabecera + detalle.
+ *
+ * ⚠️ `id` es el id del DETALLE, no del movimiento. El movimiento (la cabecera)
+ *    es `movimiento_id`: es lo que agrupa las N líneas de una misma operación.
+ */
 export type MovimientoStockRow = {
+    /** id del DETALLE (una línea = un artículo). */
     id: number;
-    /** cod_mov de la base (MOV-000001). Se comparte entre las lineas de un mismo movimiento. */
+    /** id de la CABECERA. Las líneas de un mismo movimiento lo comparten. */
+    movimiento_id: number;
+    /** MOV-000001, generado por el trigger `trg_generar_numero_movimiento`. */
     numero: string;
     ficha_stock_id: number;
     articulo_id: number;
@@ -11,9 +19,10 @@ export type MovimientoStockRow = {
     articulo_unidad: string;
     deposito_id: number;
     deposito_nombre: string;
-    origen_id: number | null;
-    origen_nombre: string | null;
+    origen_id: number;
+    origen_nombre: string;
     origen_entidad_id: number | null;
+    /** El enum de la base solo tiene 'ingreso' | 'egreso'. */
     tipo: string;
     cantidad: number | string;
     fecha_hora: Date;
@@ -54,4 +63,16 @@ export type AlertaStock = {
     stockMinimo: number;
     stockCritico: number | null;
     nivel: "bajo" | "critico";
+};
+
+/** Datos de la cabecera de un movimiento. */
+export type CabeceraInput = {
+    depositoId: number;
+    tipo: "ingreso" | "egreso";
+    origenId: number;
+    origenEntidadId: number | null;
+    usuarioId: number;
+    motivo?: string | null;
+    fechaHora?: string;
+    movimientoVinculadoId?: number | null;
 };

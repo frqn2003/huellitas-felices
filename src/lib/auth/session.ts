@@ -31,6 +31,11 @@ export type Session = {
 
 const COOKIE = "huellitas_sesion";
 
+// El aviso del fallback se imprime UNA vez por proceso, no en cada request: es
+// información de configuración, no un evento que valga la pena repetir 40 veces
+// por carga de pantalla.
+let avisoFallbackImpreso = false;
+
 type UsuarioSesionRow = {
   id: number;
   nombre: string;
@@ -65,10 +70,14 @@ export async function getSession(): Promise<Session | null> {
     const [u] = await query<UsuarioSesionRow>(`${SQL_USUARIO} AND u.dni = $1`, [dni]);
     if (u) return aSession(u);
 
-    console.warn(
-      `[sesion] SESSION_USUARIO_DNI="${dni}" no coincide con ningún usuario activo. ` +
-        `Usando el primer usuario activo de la base.`,
-    );
+    if (!avisoFallbackImpreso) {
+      avisoFallbackImpreso = true;
+      console.warn(
+        `[sesion] SESSION_USUARIO_DNI="${dni}" no coincide con ningún usuario activo. ` +
+          `Usando el primer usuario activo de la base. ` +
+          `(Este aviso se muestra una sola vez.)`,
+      );
+    }
   }
 
   // 3. Fallback: el primer usuario activo que haya.

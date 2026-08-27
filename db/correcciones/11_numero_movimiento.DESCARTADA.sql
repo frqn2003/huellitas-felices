@@ -1,3 +1,21 @@
+-- #########################################################
+-- ⛔ DESCARTADA — INAPLICABLE
+-- #########################################################
+-- Este archivo hace `ALTER TABLE movimiento_stock ADD COLUMN cod_mov`.
+--
+-- ESA TABLA YA NO EXISTE. El 26/8 se aplicó a la base un script que hizo
+-- `DROP TABLE movimiento_stock CASCADE` y creó `movimiento_stock_cab` +
+-- `movimiento_stock_det`. Correr este archivo falla con
+-- `relation "movimiento_stock" does not exist`.
+--
+-- El problema que resolvía (que el número de movimiento lo genere la base y
+-- que las N líneas de un movimiento compartan número) YA ESTÁ RESUELTO en el
+-- modelo cabecera-detalle: `movimiento_stock_cab.numero` lo pone el trigger
+-- `trg_generar_numero_movimiento`, y el detalle cuelga de esa cabecera.
+--
+-- Se conserva solo como registro.
+-- #########################################################
+
 -- =========================================================
 -- 11 · FALTA: movimiento_stock.cod_mov (el número MOV-XXXX)
 -- =========================================================

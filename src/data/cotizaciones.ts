@@ -27,6 +27,8 @@ export interface Cotizacion {
   id: number;
   solicitud_id: number;
   proveedor_id: number;
+  /** PK de la condición de pago: preselecciona el select. */
+  forma_pago_id: number;
   condicion_pago: string;
   fecha_recepcion: string;
   _proveedor: { id: number; razon_social: string };
@@ -35,6 +37,8 @@ export interface Cotizacion {
 
 export interface SolicitudCotizacion {
   id: number;
+  /** "SC-000001". Lo genera la secuencia de la base. */
+  cod_sol: string;
   usuario_id: number;
   fecha: string;
   estado: EstadoSolicitud;
@@ -44,10 +48,6 @@ export interface SolicitudCotizacion {
   _usuario: { id: number; nombre: string };
   _articulos_solicitados: SolicitudDetalle[];
   _cotizaciones: Cotizacion[];
-}
-
-export function codigoSolicitud(id: number): string {
-  return `SC-${String(id).padStart(4, "0")}`;
 }
 
 // Total de una cotización: precio de cada artículo × cantidad estimada pedida.
@@ -73,142 +73,14 @@ export function mejorCotizacion(solicitud: SolicitudCotizacion): Cotizacion | nu
   );
 }
 
-export const SIMULAR_VACIO = false;
-export const SIMULAR_ERROR = false;
-
-// BACKEND: reemplazar por GET /api/solicitudes-cotizacion (con cotizaciones y
-// detalles resueltos por JOIN, como estos objetos).
-export const solicitudesIniciales: SolicitudCotizacion[] = [
-  {
-    id: 1,
-    usuario_id: 3,
-    fecha: "2025-06-16T09:30:00Z",
-    estado: "Abierta",
-    notas: "Reponer antibióticos e insumos críticos del depósito Central.",
-    cotizacion_id_adjudicada: null,
-    _usuario: { id: 3, nombre: "Ana Martínez" },
-    _articulos_solicitados: [
-      {
-        id: 1,
-        solicitud_id: 1,
-        articulo_id: 1,
-        cantidad_estimada: 50,
-        nota: "Presentación en cajas de 20 unidades.",
-      },
-      { id: 2, solicitud_id: 1, articulo_id: 2, cantidad_estimada: 100, nota: null },
-      { id: 3, solicitud_id: 1, articulo_id: 5, cantidad_estimada: 200, nota: null },
-    ],
-    _cotizaciones: [
-      {
-        id: 1,
-        solicitud_id: 1,
-        proveedor_id: 5,
-        condicion_pago: "Contado",
-        fecha_recepcion: "2025-06-17T11:00:00Z",
-        _proveedor: { id: 5, razon_social: "Laboratorios Pharma S.A." },
-        _detalles: [
-          { id: 1, cotizacion_id: 1, articulo_id: 1, precio: 850 },
-          { id: 2, cotizacion_id: 1, articulo_id: 2, precio: 45 },
-          { id: 3, cotizacion_id: 1, articulo_id: 5, precio: 60 },
-        ],
-      },
-      {
-        id: 2,
-        solicitud_id: 1,
-        proveedor_id: 8,
-        condicion_pago: "Cta. cte. 30 días",
-        fecha_recepcion: "2025-06-17T16:20:00Z",
-        _proveedor: { id: 8, razon_social: "Vetmed Labs" },
-        _detalles: [
-          { id: 4, cotizacion_id: 2, articulo_id: 1, precio: 890 },
-          { id: 5, cotizacion_id: 2, articulo_id: 2, precio: 44 },
-          { id: 6, cotizacion_id: 2, articulo_id: 5, precio: 58 },
-        ],
-      },
-      {
-        id: 4,
-        solicitud_id: 1,
-        proveedor_id: 12,
-        condicion_pago: "Cta. cte. 60 días",
-        fecha_recepcion: "2025-06-18T10:05:00Z",
-        _proveedor: { id: 12, razon_social: "Distribuidora Mascotas Felices" },
-        _detalles: [
-          { id: 10, cotizacion_id: 4, articulo_id: 1, precio: 875 },
-          { id: 11, cotizacion_id: 4, articulo_id: 2, precio: 47 },
-          { id: 12, cotizacion_id: 4, articulo_id: 5, precio: 55 },
-        ],
-      },
-    ],
-  },
-  {
-    id: 2,
-    usuario_id: 3,
-    fecha: "2025-06-18T14:00:00Z",
-    estado: "Abierta",
-    notas: null,
-    cotizacion_id_adjudicada: null,
-    _usuario: { id: 3, nombre: "Ana Martínez" },
-    _articulos_solicitados: [
-      { id: 4, solicitud_id: 2, articulo_id: 7, cantidad_estimada: 10, nota: null },
-    ],
-    _cotizaciones: [
-      {
-        id: 5,
-        solicitud_id: 2,
-        proveedor_id: 8,
-        condicion_pago: "Contado",
-        fecha_recepcion: "2025-06-19T09:40:00Z",
-        _proveedor: { id: 8, razon_social: "Vetmed Labs" },
-        _detalles: [{ id: 13, cotizacion_id: 5, articulo_id: 7, precio: 3200 }],
-      },
-    ],
-  },
-  {
-    id: 3,
-    // Adjudicada a Distribuidora Mascotas Felices: generó la OC-0002
-    // (orden_compra.cotizacion_id = 3).
-    usuario_id: 1,
-    fecha: "2025-06-12T08:15:00Z",
-    estado: "Adjudicada",
-    notas: "Alimento para caniles de tránsito.",
-    cotizacion_id_adjudicada: 3,
-    _usuario: { id: 1, nombre: "Carlos García" },
-    _articulos_solicitados: [
-      { id: 5, solicitud_id: 3, articulo_id: 3, cantidad_estimada: 25, nota: null },
-    ],
-    _cotizaciones: [
-      {
-        id: 3,
-        solicitud_id: 3,
-        proveedor_id: 12,
-        condicion_pago: "Cta. cte. 30 días",
-        fecha_recepcion: "2025-06-13T10:30:00Z",
-        _proveedor: { id: 12, razon_social: "Distribuidora Mascotas Felices" },
-        _detalles: [{ id: 7, cotizacion_id: 3, articulo_id: 3, precio: 5140 }],
-      },
-      {
-        id: 6,
-        solicitud_id: 3,
-        proveedor_id: 15,
-        condicion_pago: "Contado",
-        fecha_recepcion: "2025-06-13T15:45:00Z",
-        _proveedor: { id: 15, razon_social: "Agroalimentos del Sur" },
-        _detalles: [{ id: 8, cotizacion_id: 6, articulo_id: 3, precio: 5290 }],
-      },
-    ],
-  },
-  {
-    // Abierta sin cotizaciones registradas todavía.
-    id: 4,
-    usuario_id: 3,
-    fecha: "2025-06-19T08:00:00Z",
-    estado: "Abierta",
-    notas: "Sugerido por bajo stock de guantes; falta definir cantidades.",
-    cotizacion_id_adjudicada: null,
-    _usuario: { id: 3, nombre: "Ana Martínez" },
-    _articulos_solicitados: [
-      { id: 6, solicitud_id: 4, articulo_id: 5, cantidad_estimada: 150, nota: null },
-    ],
-    _cotizaciones: [],
-  },
-];
+/**
+ * Catálogos que necesitan los formularios de cotización.
+ *
+ * `fichas` alimenta el resaltado de bajo stock del selector de artículos:
+ * viene de GET /api/fichas-stock, no de un mock.
+ */
+export interface CatalogosCotizacion {
+  articulos: { id: number; codigo: string; nombre: string; unidadMedida: string }[];
+  proveedores: { id: number; nombre: string }[];
+  fichas: { articuloId: number; stockActual: number; estadoCalculado: string }[];
+}

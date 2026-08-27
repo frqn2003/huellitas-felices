@@ -2,7 +2,7 @@
 
 import { Eye, Pencil, SearchX, Trash2 } from "lucide-react";
 import type { OrdenCompra } from "@/data/ordenes-compra";
-import { formatFecha, formatMoney, numeroOrden } from "@/data/ordenes-compra";
+import { formatFecha, formatMoney } from "@/data/ordenes-compra";
 import { EstadoOrdenBadge } from "./EstadoOrdenBadge";
 
 interface OrdenesTableProps {
@@ -130,7 +130,7 @@ export function OrdenesTable({
                 >
                   <td className="px-4 py-3">
                     <span className="rounded bg-brand-900/10 px-2 py-0.5 font-mono text-xs font-bold text-brand-900">
-                      {numeroOrden(orden.id)}
+                      {orden.cod_ord}
                     </span>
                   </td>
                   <td className="px-4 py-3">
@@ -160,7 +160,7 @@ export function OrdenesTable({
                       <button
                         type="button"
                         onClick={() => onView(orden)}
-                        aria-label={`Ver ${numeroOrden(orden.id)}`}
+                        aria-label={`Ver ${orden.cod_ord}`}
                         title="Ver detalle"
                         className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-pill text-text-secondary transition-colors duration-fast ease-out hover:bg-brand-900/10 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900"
                       >
@@ -170,7 +170,7 @@ export function OrdenesTable({
                         <button
                           type="button"
                           onClick={() => onEdit(orden)}
-                          aria-label={`Editar ${numeroOrden(orden.id)}`}
+                          aria-label={`Editar ${orden.cod_ord}`}
                           title="Editar (solo órdenes pendientes)"
                           className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-pill text-text-secondary transition-colors duration-fast ease-out hover:bg-brand-900/10 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900"
                         >
@@ -181,7 +181,7 @@ export function OrdenesTable({
                         <button
                           type="button"
                           onClick={() => onCancel(orden)}
-                          aria-label={`Cancelar ${numeroOrden(orden.id)}`}
+                          aria-label={`Cancelar ${orden.cod_ord}`}
                           title="Cancelar orden"
                           className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-pill text-text-secondary transition-colors duration-fast ease-out hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
                         >

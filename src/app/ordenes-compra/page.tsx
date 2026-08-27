@@ -1,7 +1,8 @@
 "use client";
 
 import { AlertTriangle, Download, FilePlus2, PackagePlus, RotateCcw, Search } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Button } from "@/components/ui/Button";
 import { Pagination } from "@/components/ui/Pagination";
@@ -32,25 +33,18 @@ import {
 } from "@/components/ordenes-compra/OrdenFormModal";
 import { OrdenesTable } from "@/components/ordenes-compra/OrdenesTable";
 import { useCotizaciones, type AsignacionArticulo } from "@/context/CotizacionesContext";
-import { articulosIniciales, PROVEEDORES } from "@/data/articulos";
-import {
-  SIMULAR_ERROR as SIMULAR_ERROR_COT,
-  SIMULAR_VACIO as SIMULAR_VACIO_COT,
-  codigoSolicitud,
-  type SolicitudCotizacion,
-} from "@/data/cotizaciones";
+import type { CatalogosCotizacion, SolicitudCotizacion } from "@/data/cotizaciones";
 import type { OrdenCompra } from "@/data/ordenes-compra";
-import {
-  DEPOSITO_ENTREGA_DEFAULT_ID,
-  SIMULAR_ERROR,
-  SIMULAR_VACIO,
-  USUARIO_SESION,
-  formatFecha,
-  numeroOrden,
-  ordenesCompraIniciales,
-  parseImporte,
-} from "@/data/ordenes-compra";
-import { depositosIniciales } from "@/data/stock";
+import { formatFecha, parseImporte } from "@/data/ordenes-compra";
+import type { CatalogosOrden } from "@/components/ordenes-compra/OrdenFormModal";
+import { apiGet, apiGetOpcional, apiSend, mensajeDeError } from "@/lib/api-client";
+
+const CATALOGOS_VACIOS: CatalogosOrden = {
+  proveedores: [],
+  articulos: [],
+  depositos: [],
+  condicionesPago: [],
+};
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -83,7 +77,7 @@ function exportarCSV(ordenes: OrdenCompra[]) {
   ];
   const filas = ordenes.map((o) =>
     [
-      numeroOrden(o.id),
+      o.cod_ord,
       `"${o._proveedor.razon_social.replace(/"/g, '""')}"`,
       formatFecha(o.fecha),
       formatFecha(o.fecha_entrega),
@@ -116,16 +110,19 @@ function ComprasScreen() {
     adjudicarPorArticulo,
     cancelarSolicitud,
   } = useCotizaciones();
-  // La simulación de vacío filtra la fuente; el estado vivo lo maneja el contexto.
-  const solicitudesDemo = useMemo(
-    () => (SIMULAR_VACIO_COT ? [] : solicitudes),
-    [solicitudes],
-  );
+  // Alias para no tocar los ~10 usos de abajo. Ya no filtra nada: la lista es
+  // la que devuelve la API.
+  const solicitudesDemo = solicitudes;
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
-  const [tab, setTab] = useState<TabCompras>("ordenes");
+  // El tab inicial sale de la URL: ?tab=cotizaciones viene del redirect de la
+  // vieja ruta /cotizaciones.
+  const searchParams = useSearchParams();
+  const tabInicial: TabCompras =
+    searchParams.get("tab") === "cotizaciones" ? "cotizaciones" : "ordenes";
+  const [tab, setTab] = useState<TabCompras>(tabInicial);
 
   // ── Estado del tab "Órdenes de compra" ──────────────────────────────
   const [ordenes, setOrdenes] = useState<OrdenCompra[]>([]);
@@ -148,31 +145,65 @@ function ComprasScreen() {
   const [aComparar, setAComparar] = useState<SolicitudCotizacion | null>(null);
   const [aCancelarSolicitud, setACancelarSolicitud] = useState<SolicitudCotizacion | null>(null);
 
+  const [catalogos, setCatalogos] = useState<CatalogosOrden>(CATALOGOS_VACIOS);
+  const [fichas, setFichas] = useState<
+    { articuloId: number; stockActual: number; estadoCalculado: string }[]
+  >([]);
+  const [recarga, setRecarga] = useState(0);
+
   useEffect(() => {
-    // BACKEND: reemplazar la simulación por GET /api/ordenes-compra y
-    // GET /api/solicitudes-cotizacion (con cotizaciones y detalles resueltos
-    // por JOINs). Los estados SIMULAR_VACIO / SIMULAR_ERROR controlan la demo.
-    const timer = window.setTimeout(() => {
-      // Inicializar el tab desde la URL (?tab=cotizaciones viene del redirect
-      // de la antigua ruta /cotizaciones). Los tabs están disabled durante el
-      // loading, así que el cambio no se percibe como salto.
-      const params = new URLSearchParams(window.location.search);
-      const tabParam = params.get("tab");
-      if (tabParam === "ordenes" || tabParam === "cotizaciones") {
-        setTab(tabParam);
-      }
-      if (SIMULAR_ERROR) {
-        setError(true);
-      } else {
-        setOrdenes(SIMULAR_VACIO ? [] : ordenesCompraIniciales);
-      }
-      if (SIMULAR_ERROR_COT) {
-        setError(true);
-      }
-      setLoading(false);
-    }, 900);
-    return () => window.clearTimeout(timer);
-  }, []);
+    let cancelado = false;
+
+    // El LISTADO va con apiGet: si falla, la pantalla no tiene nada que mostrar
+    // y corresponde el estado de error.
+    //
+    // Los CATÁLOGOS van con apiGetOpcional: alimentan los selects de los
+    // formularios. Que falte uno no puede dejar la pantalla en blanco — antes,
+    // con Promise.all, un solo catálogo caído tiraba abajo todo el listado.
+    Promise.all([
+      apiGet<OrdenCompra[]>("/api/ordenes-compra"),
+      apiGetOpcional<{ id: number; razonSocial: string }[]>(
+        "/api/proveedores?estado=activo",
+        [],
+      ),
+      apiGetOpcional<{ id: number; codigo: string; nombre: string }[]>(
+        "/api/articulos?estado=activo",
+        [],
+      ),
+      apiGetOpcional<{ id: number; nombre: string; sucursal: string }[]>(
+        "/api/depositos",
+        [],
+      ),
+      apiGetOpcional<{ id: number; nombre: string }[]>("/api/condiciones-pago", []),
+      // Para resaltar los artículos con stock bajo en el selector de la solicitud.
+      apiGetOpcional<
+        { articuloId: number; stockActual: number; estadoCalculado: string }[]
+      >("/api/fichas-stock", []),
+    ])
+      .then(([lista, proveedores, articulos, depositos, condicionesPago, fichas]) => {
+        if (cancelado) return;
+        setOrdenes(lista);
+        setCatalogos({
+          // La API de proveedores usa `razonSocial`; el catálogo del modal
+          // habla de `nombre`. Se adapta acá, en el borde.
+          proveedores: proveedores.map((p) => ({ id: p.id, nombre: p.razonSocial })),
+          articulos,
+          depositos,
+          condicionesPago,
+        });
+        setFichas(fichas);
+      })
+      .catch(() => {
+        if (!cancelado) setError(true);
+      })
+      .finally(() => {
+        if (!cancelado) setLoading(false);
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [recarga]);
 
   // ── Filtrado órdenes ────────────────────────────────────────────────
   const filtradas = useMemo(() => {
@@ -182,7 +213,7 @@ function ComprasScreen() {
     const lista = ordenes.filter((o) => {
       const matchBusqueda =
         !q ||
-        numeroOrden(o.id).toLowerCase().includes(q) ||
+        o.cod_ord.toLowerCase().includes(q) ||
         String(o.id).includes(q) ||
         o._proveedor.razon_social.toLowerCase().includes(q);
       let matchEstado = true;
@@ -242,114 +273,93 @@ function ComprasScreen() {
     setFormOpen(true);
   };
 
-  const handleSave = (draft: OrdenDraft) => {
-    // BACKEND: enviar el draft por POST /api/ordenes-compra (alta) o
-    // PUT /api/ordenes-compra/:id (edición, solo si sigue Pendiente).
-    // El back calcula totales, asigna el número OC-XXXX y registra la bitácora
-    // de auditoría (usuario, fecha/hora, valores anterior y nuevo).
-    const proveedor = PROVEEDORES.find((p) => p.id === Number(draft.proveedorId));
-    // La BD guarda solo el varchar direccion_entrega (sin FK a deposito):
-    // se resuelve la ubicación del depósito elegido en el catálogo.
-    const depositoEntrega = depositosIniciales.find(
-      (d) => d.id === Number(draft.depositoEntregaId),
-    );
-    const detallesBase = draft.lineas.map((l) => ({
-      articulo_id: Number(l.articuloId),
-      cantidad: parseImporte(l.cantidad),
-      precio_acordado: parseImporte(l.precio),
-    }));
-    const subtotal = round2(
-      detallesBase.reduce((acc, d) => acc + d.cantidad * d.precio_acordado, 0),
-    );
-    // El descuento se ingresa como porcentaje (0-100); la columna `descuento`
-    // de `orden_compra` guarda ese porcentaje y el monto se calcula acá.
-    const descuentoPct = draft.descuento.trim() !== "" ? parseImporte(draft.descuento) : 0;
-    const descuentoMonto = round2((subtotal * descuentoPct) / 100);
-    const gastosEnvio = draft.gastosEnvio.trim() !== "" ? parseImporte(draft.gastosEnvio) : 0;
-    const total = round2(subtotal - descuentoMonto + gastosEnvio);
+  /**
+   * Alta y edición contra la API.
+   *
+   * El front ya NO arma la orden: manda el draft y guarda lo que devuelve el
+   * server. Eso trae el `cod_ord` real (lo genera una secuencia de la base) y
+   * los totales recalculados — el back descarta el subtotal y el total que
+   * venían del formulario, así que reconstruirlos acá sería adivinar.
+   *
+   * Tampoco se manda `fecha`: la fecha de emisión la sella el servidor.
+   */
+  const handleSave = async (draft: OrdenDraft) => {
+    const body = {
+      proveedorId: Number(draft.proveedorId),
+      formaPagoId: Number(draft.condicionPago),
+      depositoEntregaId: draft.depositoEntregaId
+        ? Number(draft.depositoEntregaId)
+        : undefined,
+      fechaEntrega: draft.fechaEntrega || undefined,
+      notas: draft.notas.trim() || undefined,
+      descuento: draft.descuento.trim() ? parseImporte(draft.descuento) : 0,
+      gastosEnvio: draft.gastosEnvio.trim() ? parseImporte(draft.gastosEnvio) : 0,
+      lineas: draft.lineas.map((l) => ({
+        articuloId: Number(l.articuloId),
+        cantidad: parseImporte(l.cantidad),
+        precioAcordado: parseImporte(l.precio),
+      })),
+    };
 
-    if (formModo === "INSERCION") {
-      const nuevoId = Math.max(0, ...ordenes.map((o) => o.id)) + 1;
-      let detalleId = Math.max(0, ...ordenes.flatMap((o) => o._detalles.map((d) => d.id)));
-      const nueva: OrdenCompra = {
-        id: nuevoId,
-        proveedor_id: Number(draft.proveedorId),
-        cotizacion_id: null,
-        usuario_id: USUARIO_SESION.id,
-        fecha: `${draft.fecha}T12:00:00Z`,
-        fecha_entrega: draft.fechaEntrega ? `${draft.fechaEntrega}T12:00:00Z` : null,
-        direccion_entrega: depositoEntrega?.ubicacion ?? "",
-        condicion_pago: draft.condicionPago,
-        notas: draft.notas.trim() || null,
-        subtotal,
-        descuento: descuentoPct,
-        gastos_envio: gastosEnvio,
-        total,
-        estado: "Pendiente",
-        _proveedor: { id: proveedor?.id ?? 0, razon_social: proveedor?.nombre ?? "" },
-        _usuario: { id: USUARIO_SESION.id, nombre: USUARIO_SESION.nombre },
-        _detalles: detallesBase.map((d) => ({
-          id: ++detalleId,
-          orden_compra_id: nuevoId,
-          ...d,
-        })),
-      };
-      setOrdenes((prev) => [nueva, ...prev]);
-      setFormOpen(false);
-      showToast("success", TITULO_ACCIONES.INSERCION);
-    } else if (formModo === "EDICION" && formOrden) {
-      let detalleId = Math.max(0, ...ordenes.flatMap((o) => o._detalles.map((d) => d.id)));
-      setOrdenes((prev) =>
-        prev.map((o) =>
-          o.id === formOrden.id
-            ? {
-                ...o,
-                proveedor_id: Number(draft.proveedorId),
-                fecha: `${draft.fecha}T12:00:00Z`,
-                fecha_entrega: draft.fechaEntrega ? `${draft.fechaEntrega}T12:00:00Z` : null,
-                direccion_entrega: depositoEntrega?.ubicacion ?? "",
-                condicion_pago: draft.condicionPago,
-                notas: draft.notas.trim() || null,
-                subtotal,
-                descuento: descuentoPct,
-                gastos_envio: gastosEnvio,
-                total,
-                _proveedor: { id: proveedor?.id ?? 0, razon_social: proveedor?.nombre ?? "" },
-                _detalles: detallesBase.map((d) => ({
-                  id: ++detalleId,
-                  orden_compra_id: o.id,
-                  ...d,
-                })),
-              }
-            : o,
-        ),
-      );
-      setFormOpen(false);
-      showToast("success", TITULO_ACCIONES.EDICION);
+    try {
+      if (formModo === "INSERCION") {
+        const creada = await apiSend<OrdenCompra>("POST", "/api/ordenes-compra", body);
+        setOrdenes((prev) => [creada, ...prev]);
+        setFormOpen(false);
+        showToast("success", `${TITULO_ACCIONES.INSERCION} (${creada.cod_ord})`);
+      } else if (formModo === "EDICION" && formOrden) {
+        const actualizada = await apiSend<OrdenCompra>(
+          "PUT",
+          `/api/ordenes-compra/${formOrden.id}`,
+          body,
+        );
+        setOrdenes((prev) => prev.map((o) => (o.id === actualizada.id ? actualizada : o)));
+        setFormOpen(false);
+        showToast("success", TITULO_ACCIONES.EDICION);
+      }
+      return {};
+    } catch (e) {
+      // El modal queda abierto con los datos: el back rechaza editar una orden
+      // que ya no está Pendiente (ORDEN_NO_EDITABLE), entre otras reglas.
+      const error = mensajeDeError(e);
+      showToast("error", error);
+      return { error };
     }
   };
 
-  const handleEnviar = (orden: OrdenCompra) => {
-    // BACKEND: PATCH /api/ordenes-compra/:id/enviar + registro de auditoría.
-    // (Antes "Aprobar": la orden se marca como enviada al proveedor.)
-    setOrdenes((prev) =>
-      prev.map((o) => (o.id === orden.id ? { ...o, estado: "Enviada" } : o)),
-    );
-    setFormOrden((actual) =>
-      actual && actual.id === orden.id ? { ...actual, estado: "Enviada" } : actual,
-    );
-    showToast("success", "Orden enviada al proveedor correctamente");
+  /**
+   * Transiciones de estado. El back valida contra `estado_orden_compra.es_final`
+   * y rechaza con TRANSICION_INVALIDA si el estado actual no lo permite, así que
+   * el front no replica esa máquina de estados.
+   */
+  const handleEnviar = async (orden: OrdenCompra) => {
+    try {
+      const actualizada = await apiSend<OrdenCompra>(
+        "PATCH",
+        `/api/ordenes-compra/${orden.id}/enviar`,
+      );
+      setOrdenes((prev) => prev.map((o) => (o.id === actualizada.id ? actualizada : o)));
+      setFormOrden((actual) => (actual?.id === actualizada.id ? actualizada : actual));
+      showToast("success", "Orden enviada al proveedor correctamente");
+    } catch (e) {
+      showToast("error", mensajeDeError(e));
+    }
   };
 
-  const handleCancelar = (orden: OrdenCompra) => {
-    // BACKEND: PATCH /api/ordenes-compra/:id/cancelar (baja lógica) + auditoría.
-    // Los artículos no recepcionados vuelven a estar disponibles para nuevas órdenes.
-    setOrdenes((prev) =>
-      prev.map((o) => (o.id === orden.id ? { ...o, estado: "Cancelada" } : o)),
-    );
-    setACancelarOrden(null);
-    setFormOpen(false);
-    showToast("success", "Orden cancelada correctamente");
+  const handleCancelar = async (orden: OrdenCompra) => {
+    try {
+      const actualizada = await apiSend<OrdenCompra>(
+        "PATCH",
+        `/api/ordenes-compra/${orden.id}/cancelar`,
+      );
+      setOrdenes((prev) => prev.map((o) => (o.id === actualizada.id ? actualizada : o)));
+      setACancelarOrden(null);
+      setFormOpen(false);
+      showToast("success", "Orden cancelada correctamente");
+    } catch (e) {
+      setACancelarOrden(null);
+      showToast("error", mensajeDeError(e));
+    }
   };
 
   const handleExportar = () => {
@@ -368,12 +378,11 @@ function ComprasScreen() {
     const lista = solicitudesDemo.filter((s) => {
       const matchBusqueda =
         !q ||
-        codigoSolicitud(s.id).toLowerCase().includes(q) ||
+        s.cod_sol.toLowerCase().includes(q) ||
         String(s.id).includes(q) ||
         s._articulos_solicitados.some((a) => {
-          // BACKEND: nombre del artículo resuelto por JOIN del detalle.
           const nombre =
-            articulosIniciales.find((x) => x.id === a.articulo_id)?.nombre ?? "";
+            catalogos.articulos.find((x) => x.id === a.articulo_id)?.nombre ?? "";
           return nombre.toLowerCase().includes(q);
         });
       const matchEstado = filtrosCot.estado === "Todas" || s.estado === filtrosCot.estado;
@@ -413,109 +422,82 @@ function ComprasScreen() {
     setFiltrosCot(FILTROS_SOLICITUD_VACIOS);
   };
 
-  const handleCrearSolicitud = (input: Parameters<typeof crearSolicitud>[0]) => {
-    // BACKEND: POST /api/solicitudes-cotizacion (lo hace el provider).
-    crearSolicitud(input);
+  const handleCrearSolicitud = async (input: Parameters<typeof crearSolicitud>[0]) => {
+    const res = await crearSolicitud(input);
+    if (res.error) {
+      showToast("error", res.error);
+      return;
+    }
     setFormSolicitudOpen(false);
     showToast("success", "Solicitud creada correctamente");
   };
 
-  const handleGuardarCotizacion = (input: Parameters<typeof registrarCotizacion>[1]) => {
-    if (!aCotizar) return;
-    // BACKEND: POST /api/solicitudes-cotizacion/:id/cotizaciones.
-    registrarCotizacion(aCotizar.id, input);
+  const handleGuardarCotizacion = async (
+    input: Parameters<typeof registrarCotizacion>[1],
+  ) => {
+    if (!aCotizar) return {};
+    // El back rechaza que el mismo proveedor cotice dos veces la misma
+    // solicitud (COTIZACION_DUPLICADA) y que la cotización no cubra todos los
+    // artículos pedidos (COTIZACION_INCOMPLETA).
+    const res = await registrarCotizacion(aCotizar.id, input);
+    if (res.error) return res;
+
     setACotizar(null);
     showToast("success", "Cotización registrada correctamente");
+    return {};
   };
 
-  const handleAdjudicar = (asignaciones: AsignacionArticulo[]) => {
+  /**
+   * Adjudicación por artículo: cada línea puede ir a un proveedor distinto.
+   *
+   * El BACK crea las órdenes (una por proveedor ganador) dentro de la misma
+   * transacción que marca la solicitud como adjudicada. Antes el front las
+   * armaba a mano acá: eran ~60 líneas que duplicaban el cálculo de totales y
+   * podían quedar desincronizadas del estado de la solicitud si algo fallaba
+   * entre medio. Ahora solo se agregan a la lista las que devolvió el server.
+   */
+  const handleAdjudicar = async (asignaciones: AsignacionArticulo[]) => {
     if (!aComparar) return;
-    const solicitud = aComparar;
 
-    // Agrupar por cotización: cada proveedor recibe su propia orden solo con
-    // los artículos que le asignaron en la comparación (adjudicación split).
-    const porCotizacion = new Map<number, AsignacionArticulo[]>();
-    asignaciones.forEach((a) => {
-      const grupo = porCotizacion.get(a.cotizacionId) ?? [];
-      grupo.push(a);
-      porCotizacion.set(a.cotizacionId, grupo);
-    });
-
-    // BACKEND: PATCH /api/solicitudes-cotizacion/:id/adjudicar. El back crea
-    // las orden_compra en transacción (una por proveedor, cada una vinculada
-    // por orden_compra.cotizacion_id) y registra la auditoría.
-    adjudicarPorArticulo(solicitud.id);
-
-    const depositoEntrega = depositosIniciales.find(
-      (d) => d.id === DEPOSITO_ENTREGA_DEFAULT_ID,
-    );
-
-    setOrdenes((prev) => {
-      let nuevoId = Math.max(0, ...prev.map((o) => o.id));
-      let detalleId = Math.max(0, ...prev.flatMap((o) => o._detalles.map((d) => d.id)));
-      const nuevas: OrdenCompra[] = [];
-      porCotizacion.forEach((lineas, cotizacionId) => {
-        const cotizacion = solicitud._cotizaciones.find((c) => c.id === cotizacionId);
-        if (!cotizacion) return;
-        const detallesBase = lineas.map((l) => {
-          const solicitado = solicitud._articulos_solicitados.find(
-            (x) => x.articulo_id === l.articuloId,
-          );
-          return {
-            articulo_id: l.articuloId,
-            cantidad: solicitado?.cantidad_estimada ?? 0,
-            precio_acordado:
-              cotizacion._detalles.find((d) => d.articulo_id === l.articuloId)?.precio ?? 0,
-          };
-        });
-        const subtotal = round2(
-          detallesBase.reduce((acc, d) => acc + d.cantidad * d.precio_acordado, 0),
-        );
-        nuevas.push({
-          id: ++nuevoId,
-          proveedor_id: cotizacion.proveedor_id,
-          cotizacion_id: cotizacion.id,
-          usuario_id: USUARIO_SESION.id,
-          fecha: new Date().toISOString(),
-          fecha_entrega: null,
-          direccion_entrega: depositoEntrega?.ubicacion ?? "",
-          condicion_pago: cotizacion.condicion_pago,
-          notas:
-            solicitud.notas ??
-            `Generada desde la solicitud ${codigoSolicitud(solicitud.id)}.`,
-          subtotal,
-          descuento: 0,
-          gastos_envio: 0,
-          total: subtotal,
-          estado: "Pendiente",
-          _proveedor: { ...cotizacion._proveedor },
-          _usuario: { id: USUARIO_SESION.id, nombre: USUARIO_SESION.nombre },
-          _detalles: detallesBase.map((d) => ({
-            id: ++detalleId,
-            orden_compra_id: nuevoId,
-            ...d,
-          })),
-        });
-      });
-      return [...nuevas, ...prev];
-    });
-
+    const res = await adjudicarPorArticulo(aComparar.id, asignaciones);
     setAComparar(null);
+
+    if (res.error) {
+      showToast("error", res.error);
+      return;
+    }
+
+    const nuevas = res.ordenes ?? [];
+    setOrdenes((prev) => [...nuevas, ...prev]);
     showToast(
       "success",
-      `Se generaron ${porCotizacion.size} ${
-        porCotizacion.size === 1 ? "orden de compra" : "órdenes de compra"
+      `Se ${nuevas.length === 1 ? "generó" : "generaron"} ${nuevas.length} ${
+        nuevas.length === 1 ? "orden de compra" : "órdenes de compra"
       } pendientes`,
     );
     setTab("ordenes");
   };
 
-  const handleCancelarSolicitud = (solicitud: SolicitudCotizacion) => {
-    // BACKEND: PATCH /api/solicitudes-cotizacion/:id/cancelar (baja lógica).
-    cancelarSolicitud(solicitud.id);
+  const handleCancelarSolicitud = async (solicitud: SolicitudCotizacion) => {
+    const res = await cancelarSolicitud(solicitud.id);
     setACancelarSolicitud(null);
+    if (res.error) {
+      showToast("error", res.error);
+      return;
+    }
     showToast("success", "Solicitud cancelada correctamente");
   };
+
+  // Los modales de cotización necesitan artículos con su unidad y las fichas de
+  // stock; se arma una sola vez y se baja por prop a los tres.
+  const catalogosCotizacion: CatalogosCotizacion = useMemo(
+    () => ({
+      articulos: catalogos.articulos.map((a) => ({ ...a, unidadMedida: "" })),
+      proveedores: catalogos.proveedores,
+      fichas,
+    }),
+    [catalogos, fichas],
+  );
 
   const esOrdenes = tab === "ordenes";
   const esCotizaciones = tab === "cotizaciones";
@@ -650,10 +632,7 @@ function ComprasScreen() {
                 onClick={() => {
                   setError(false);
                   setLoading(true);
-                  window.setTimeout(() => {
-                    setOrdenes(SIMULAR_VACIO ? [] : ordenesCompraIniciales);
-                    setLoading(false);
-                  }, 900);
+                  setRecarga((n) => n + 1);
                 }}
               >
                 <RotateCcw className="h-4 w-4" aria-hidden="true" />
@@ -736,6 +715,7 @@ function ComprasScreen() {
 
       {/* ── Modales del tab Órdenes de compra ── */}
       <OrdenFormModal
+        catalogos={catalogos}
         open={formOpen}
         modo={formModo}
         orden={formOrden}
@@ -745,7 +725,7 @@ function ComprasScreen() {
           const solicitud = solicitudes.find((s) =>
             s._cotizaciones.some((c) => c.id === formOrden.cotizacion_id),
           );
-          return solicitud ? codigoSolicitud(solicitud.id) : null;
+          return solicitud ? solicitud.cod_sol : null;
         })()}
         onClose={() => setFormOpen(false)}
         onSave={handleSave}
@@ -763,16 +743,20 @@ function ComprasScreen() {
 
       {/* ── Modales del tab Cotizaciones ── */}
       <SolicitudFormModal
+        catalogos={catalogosCotizacion}
         open={formSolicitudOpen}
         onClose={() => setFormSolicitudOpen(false)}
         onSave={handleCrearSolicitud}
       />
       <CotizacionFormModal
+        condicionesPago={catalogos.condicionesPago}
+        catalogos={catalogosCotizacion}
         solicitud={aCotizar}
         onClose={() => setACotizar(null)}
         onSave={handleGuardarCotizacion}
       />
       <CompararCotizacionesModal
+        catalogos={catalogosCotizacion}
         solicitud={aComparar}
         onClose={() => setAComparar(null)}
         onAdjudicar={handleAdjudicar}
@@ -789,7 +773,11 @@ function ComprasScreen() {
 export default function ComprasPage() {
   return (
     <ToastProvider>
-      <ComprasScreen />
+      {/* useSearchParams necesita un límite de Suspense: durante el prerender
+          la query todavía no se conoce. */}
+      <Suspense fallback={null}>
+        <ComprasScreen />
+      </Suspense>
     </ToastProvider>
   );
 }

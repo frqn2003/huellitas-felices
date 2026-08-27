@@ -194,6 +194,27 @@ try {
   }
 
   // ---------------------------------------------------------
+  // VISTAS
+  // ---------------------------------------------------------
+  // Van despues de las tablas y antes de las funciones: una vista depende de
+  // las tablas que consulta, y puede ser usada por una funcion.
+  const { rows: vistas } = await client.query(`
+    SELECT viewname, definition
+    FROM pg_views
+    WHERE schemaname = 'public'
+    ORDER BY viewname
+  `);
+
+  if (vistas.length) {
+    seccion("VISTAS");
+    for (const v of vistas) {
+      partes.push(`CREATE OR REPLACE VIEW ${v.viewname} AS
+${v.definition.trim()}
+`);
+    }
+  }
+
+  // ---------------------------------------------------------
   // FUNCIONES
   // ---------------------------------------------------------
   // Se excluyen las que devuelven `event_trigger`: son de Supabase
@@ -263,7 +284,7 @@ try {
 
   console.log(`✓ db/schema.sql actualizado`);
   console.log(
-    `  ${tablas.length} tablas · ${enums.length} enums · ${funciones.length} funciones · ${triggers.length} triggers`,
+    `  ${tablas.length} tablas · ${vistas.length} vistas · ${enums.length} enums · ${funciones.length} funciones · ${triggers.length} triggers`,
   );
   console.log("\n  Revisá el diff con:  git diff db/schema.sql");
 } finally {

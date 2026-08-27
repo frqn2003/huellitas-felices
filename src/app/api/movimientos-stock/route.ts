@@ -2,6 +2,14 @@ import { withRoute, parseBody } from "@/lib/http/handler";
 import { ok, created } from "@/lib/http/responses";
 import { leerTexto, leerEntero, leerFecha } from "@/lib/http/query";
 import type { TipoMovimiento } from "@/data/movimientos";
+
+const TIPOS: TipoMovimiento[] = ["Ingreso", "Egreso", "Transferencia", "Ajuste"];
+
+/** Un `?tipo=` que no sea de la lista se ignora, en vez de llegar al SQL. */
+function leerTipo(sp: URLSearchParams): TipoMovimiento | undefined {
+  const v = leerTexto(sp, "tipo");
+  return TIPOS.find((t) => t === v);
+}
 import { registrarMovimientoSchema } from "@/modules/movimientos/movimiento.schema";
 import * as service from "@/modules/movimientos/movimiento.service";
 
@@ -14,7 +22,7 @@ export const GET = withRoute(async ({ req }) => {
 
     const movimientos = await service.listar({
         busqueda: leerTexto(sp, "busqueda"),
-        tipo: leerTexto(sp, "tipo") as TipoMovimiento | undefined,
+        tipo: leerTipo(sp),
         depositoId: leerEntero(sp, "depositoId"),
         articuloId: leerEntero(sp, "articuloId"),
         desde: leerFecha(sp, "desde"),

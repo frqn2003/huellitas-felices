@@ -22,6 +22,9 @@ export type FormModo = "INSERCION" | "EDICION" | "LECTURA";
  *  2. Categoría, unidad y fabricante viajan como **id**, no como texto. En la
  *     base son tablas con foreign key, no strings sueltos. Los ids salen de
  *     GET /api/articulos/catalogos.
+ *
+ *  3. NO lleva `proveedorId`. El proveedor preferido lo deriva el back de la
+ *     última orden de compra del artículo: se muestra, no se elige.
  */
 export interface ArticuloDraft {
   nombre: string;
@@ -29,7 +32,6 @@ export interface ArticuloDraft {
   fabricanteId: string;
   unidadMedidaId: string;
   categoriaId: string;
-  proveedorId: string;
   activo: boolean;
   imagen: string;
 }
@@ -58,7 +60,6 @@ function initialDraft(
       fabricanteId: String(articulo.fabricanteId),
       unidadMedidaId: String(articulo.unidadMedidaId),
       categoriaId: String(articulo.categoriaId),
-      proveedorId: articulo.proveedorPreferido ? String(articulo.proveedorPreferido.id) : "",
       activo: articulo.activo,
       imagen: articulo.imagen,
     };
@@ -72,7 +73,6 @@ function initialDraft(
     fabricanteId: String(catalogos.fabricantes[0]?.id ?? ""),
     unidadMedidaId: String(catalogos.unidadesMedida[0]?.id ?? ""),
     categoriaId: String(catalogos.categorias[0]?.id ?? ""),
-    proveedorId: "",
     activo: true,
     imagen: "",
   };
@@ -119,7 +119,6 @@ function ArticuloFormFields({
   onSave: (draft: ArticuloDraft) => void;
 }) {
   const isLectura = modo === "LECTURA";
-  const isEdicion = modo === "EDICION";
 
   const [draft, setDraft] = useState<ArticuloDraft>(() => initialDraft(articulo, catalogos));
   const [errors, setErrors] = useState<Partial<Record<keyof ArticuloDraft, string>>>({});
@@ -366,22 +365,23 @@ function ArticuloFormFields({
           </Select>
         </div>
       </div>
-      {/* Opcional por criterio de HU-STK-01. Solo proveedores ACTIVOS: uno dado
-          de baja no puede elegirse (regla de HU-PROV-01, la aplica el repo). */}
-      <Select
-        id="proveedor"
-        label="Proveedor preferido"
-        value={draft.proveedorId}
-        onChange={(e) => setField("proveedorId", e.target.value)}
-        disabled={isLectura}
-      >
-        <option value="">[ Sin proveedor preferido ]</option>
-        {catalogos.proveedores.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.nombre}
-          </option>
-        ))}
-      </Select>
+      {/* Criterio de HU-STK-01: "proveedor preferido (opcional)".
+          NO se elige a mano: es el último proveedor al que se le compró este
+          artículo, derivado de las órdenes de compra no canceladas. Guardarlo
+          como un campo editable crearía un dato que se desincroniza del
+          historial real de compras. */}
+      <div className="flex flex-col gap-1">
+        <p className="text-sm font-bold text-text-primary">Proveedor preferido</p>
+        <div className="flex min-h-11 items-center rounded-sm border border-border bg-cream-50 px-4">
+          <p className="text-sm text-text-secondary">
+            {proveedorActual || "Todavía no se le compró a ningún proveedor"}
+          </p>
+        </div>
+        <p className="text-xs text-text-secondary">
+          Se calcula solo: es el proveedor de la última orden de compra de este
+          artículo.
+        </p>
+      </div>
       {isLectura && (
         <p className="rounded-sm bg-cream-50 px-4 py-3 text-sm text-text-secondary">
           {articulo

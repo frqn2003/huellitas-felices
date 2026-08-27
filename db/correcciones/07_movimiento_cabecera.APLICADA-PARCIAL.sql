@@ -1,3 +1,22 @@
+-- #########################################################
+-- ⚠️ APLICADA PARCIALMENTE el 26/8 — NO volver a correr entera
+-- #########################################################
+-- QUÉ SÍ QUEDÓ APLICADO (verificado con `npm run db:dump`):
+--   · movimiento_stock_cab + movimiento_stock_det
+--   · movimiento_numero_seq + fn_generar_numero_movimiento + su trigger
+--   · fn_actualizar_stock_det + trg_actualizar_stock_det
+--   · la vista v_movimiento_stock
+--   · DROP TABLE movimiento_stock (la tabla plana ya no existe)
+--
+-- QUÉ NO QUEDÓ APLICADO:
+--   · trg_mov_cab_inmutable / trg_mov_det_inmutable → dependen de
+--     fn_movimiento_inmutable, que viene de la corrección 02 (no aplicada)
+--   · tg_auditar_movimiento → depende de fn_auditar, de la corrección 01
+--     (no aplicada)
+--
+-- Esas dos piezas se reponen en `12_faltantes.sql`, después de la 01 y la 02.
+-- #########################################################
+
 -- =========================================================
 -- 0008 · Movimiento de stock en cabecera-detalle
 -- =========================================================

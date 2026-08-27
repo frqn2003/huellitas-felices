@@ -1,3 +1,19 @@
+-- #########################################################
+-- ⛔ DESCARTADA — NO APLICAR
+-- #########################################################
+-- Este archivo agrega `articulo.proveedor_preferido_id`.
+--
+-- EL EQUIPO DECIDIÓ QUE EL PROVEEDOR PREFERIDO SE CALCULA, NO SE GUARDA:
+-- se deriva de la última orden de compra no cancelada del artículo, con un
+-- LEFT JOIN LATERAL en `articulo.repo.ts`. Así no hay un dato duplicado que
+-- se pueda desincronizar del historial real de compras.
+--
+-- El criterio de HU-STK-01 ("proveedor preferido (opcional)") se sigue
+-- cumpliendo: el campo se muestra en el formulario, de solo lectura.
+--
+-- Se conserva solo como registro de la decisión anterior.
+-- #########################################################
+
 -- =========================================================
 -- 08 · FALTA: articulo.proveedor_preferido_id
 -- =========================================================

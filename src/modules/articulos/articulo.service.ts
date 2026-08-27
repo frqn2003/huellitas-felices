@@ -85,7 +85,6 @@ export async function crear(
         categoriaId: input.categoriaId,
         unidadMedidaId: input.unidadMedidaId,
         fabricanteId: input.fabricanteId,
-        proveedorPreferidoId: input.proveedorPreferidoId ?? null,
         imagenUrl,
         activo: input.activo,
       },
@@ -95,7 +94,7 @@ export async function crear(
     // Se relee en vez de usar un RETURNING: el INSERT no puede devolver el
     // `codigo` que generó el trigger junto con los nombres de categoría,
     // unidad, fabricante y proveedor, que salen de los JOIN.
-    const row = await leerDentroDeTx(id, client);
+    const row = await leerFrescoOFallar(id, client);
     return mapper.toApi(row);
   });
 }
@@ -133,14 +132,13 @@ export async function editar(
         categoriaId: input.categoriaId,
         unidadMedidaId: input.unidadMedidaId,
         fabricanteId: input.fabricanteId,
-        proveedorPreferidoId: input.proveedorPreferidoId ?? null,
         imagenUrl,
         activo: input.activo,
       },
       client,
     );
 
-    return mapper.toApi(await leerDentroDeTx(id, client));
+    return mapper.toApi(await leerFrescoOFallar(id, client));
   });
 }
 
@@ -164,7 +162,7 @@ export async function desactivar(id: number, usuarioId: number): Promise<Articul
 
     // El trigger de auditoría detecta activo→inactivo y lo registra como
     // 'baja', no como 'modificacion'. Ver fn_auditar() en la corrección 01.
-    return mapper.toApi(await leerDentroDeTx(id, client));
+    return mapper.toApi(await leerFrescoOFallar(id, client));
   });
 }
 
@@ -173,32 +171,21 @@ export async function desactivar(id: number, usuarioId: number): Promise<Articul
 // ---------------------------------------------------------
 
 /**
- * Relee el artículo DENTRO de la transacción.
+ * Relee el artículo DENTRO de la transacción y falla si no está.
  *
- * Va contra `client` y no contra el pool: desde otra conexión, las filas que la
+ * El `client` no es opcional acá: desde otra conexión, las filas que la
  * transacción todavía no confirmó no se ven, y la respuesta saldría con datos
  * viejos o directamente vacía.
+ *
+ * Antes esta función tenía el SELECT copiado a mano del repo. Esa copia fue
+ * justamente la que quedó desincronizada cuando cambió el esquema: el SQL vive
+ * en UN solo lugar.
  */
-async function leerDentroDeTx(
+async function leerFrescoOFallar(
   id: number,
   client: Parameters<Parameters<typeof withTransaction>[0]>[0],
 ): Promise<ArticuloRow> {
-  const { rows } = await client.query<ArticuloRow>(
-    `SELECT a.id, a.codigo, a.nombre, a.descripcion,
-            a.categoria_id, c.nombre AS categoria_nombre,
-            a.unidad_medida_id, um.nombre AS unidad_medida_nombre,
-            a.fabricante_id, f.nombre AS fabricante_nombre,
-            a.proveedor_preferido_id, p.razon_social AS proveedor_preferido_nombre,
-            a.estado, a.imagen_url, a.created_at, a.updated_at
-     FROM articulo a
-     JOIN categoria      c  ON c.id  = a.categoria_id
-     JOIN unidad_medida  um ON um.id = a.unidad_medida_id
-     JOIN fabricante     f  ON f.id  = a.fabricante_id
-     LEFT JOIN proveedor p  ON p.id  = a.proveedor_preferido_id
-     WHERE a.id = $1`,
-    [id],
-  );
-
-  if (!rows[0]) throw new NotFoundError("el artículo", id);
-  return rows[0];
+  const row = await repo.findById(id, client);
+  if (!row) throw new NotFoundError("el artículo", id);
+  return row;
 }

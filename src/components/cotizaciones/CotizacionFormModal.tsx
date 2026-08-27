@@ -7,16 +7,20 @@ import { Combobox } from "@/components/ui/Combobox";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
-import { articulosIniciales, PROVEEDORES } from "@/data/articulos";
 import type { SolicitudCotizacion } from "@/data/cotizaciones";
-import { codigoSolicitud } from "@/data/cotizaciones";
-import { CONDICIONES_PAGO, formatFecha, parseImporte } from "@/data/ordenes-compra";
+import { formatFecha, parseImporte } from "@/data/ordenes-compra";
+import type { CondicionPago } from "@/data/ordenes-compra";
+import type { CatalogosCotizacion } from "@/data/cotizaciones";
 import type { NuevaCotizacionInput } from "@/context/CotizacionesContext";
 
 interface CotizacionFormModalProps {
   solicitud: SolicitudCotizacion | null;
+  /** Catálogo real: GET /api/condiciones-pago. El value de cada opción es el ID. */
+  condicionesPago: CondicionPago[];
+  /** Artículos y proveedores, desde la API. */
+  catalogos: CatalogosCotizacion;
   onClose: () => void;
-  onSave: (input: NuevaCotizacionInput) => void;
+  onSave: (input: NuevaCotizacionInput) => Promise<{ error?: string }>;
 }
 
 interface CotizacionErrors {
@@ -32,22 +36,28 @@ function hoyISO(): string {
 
 export function CotizacionFormModal({
   solicitud,
+  condicionesPago,
+  catalogos,
   onClose,
   onSave,
 }: CotizacionFormModalProps) {
   const [proveedorId, setProveedorId] = useState("");
+  // Guarda el ID del catálogo, no el nombre. La API valida contra `forma_pago`.
   const [condicionPago, setCondicionPago] = useState("");
   const [fechaRecepcion, setFechaRecepcion] = useState(hoyISO());
   const [precios, setPrecios] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<CotizacionErrors>({});
   const [touched, setTouched] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  const [errorGlobal, setErrorGlobal] = useState("");
 
   if (!solicitud) return null;
 
-  // BACKEND: poblar desde GET /api/proveedores.
-  const proveedorOptions = PROVEEDORES.filter(
-    (p) => !solicitud._cotizaciones.some((c) => c.proveedor_id === p.id),
-  ).map((p) => ({ value: String(p.id), label: p.nombre }));
+  // Se excluyen los proveedores que YA cotizaron esta solicitud: el back
+  // rechaza el duplicado (COTIZACION_DUPLICADA), así que mejor no ofrecerlos.
+  const proveedorOptions = catalogos.proveedores
+    .filter((p) => !solicitud._cotizaciones.some((c) => c.proveedor_id === p.id))
+    .map((p) => ({ value: String(p.id), label: p.nombre }));
 
   const validar = (
     over?: Partial<{
@@ -91,7 +101,7 @@ export function CotizacionFormModal({
   const showErrorPrecio = (articuloId: number) =>
     touched ? errors.precios?.[String(articuloId)] : undefined;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const next = validar();
     setErrors(next);
@@ -106,12 +116,16 @@ export function CotizacionFormModal({
     Object.entries(precios).forEach(([k, v]) => {
       preciosNumericos[k] = parseImporte(v);
     });
-    onSave({
+    setGuardando(true);
+    const res = await onSave({
       proveedorId,
-      condicionPago,
+      formaPagoId: condicionPago,
       fechaRecepcion,
       precios: preciosNumericos,
     });
+    setGuardando(false);
+
+    if (res.error) setErrorGlobal(res.error);
   };
 
   return (
@@ -141,7 +155,7 @@ export function CotizacionFormModal({
             Solicitud
           </p>
           <p className="font-mono text-base font-bold text-brand-900">
-            {codigoSolicitud(solicitud.id)}
+            {solicitud.cod_sol}
           </p>
           <p className="text-xs font-medium text-text-secondary">
             Creada el {formatFecha(solicitud.fecha)} ·{" "}
@@ -182,10 +196,9 @@ export function CotizacionFormModal({
             error={touched ? errors.condicionPago : undefined}
           >
             <option value="">Seleccionar...</option>
-            {/* BACKEND: catálogo desde GET /api/condiciones-pago. */}
-            {CONDICIONES_PAGO.map((c) => (
-              <option key={c} value={c}>
-                {c}
+            {condicionesPago.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nombre}
               </option>
             ))}
           </Select>
@@ -213,7 +226,7 @@ export function CotizacionFormModal({
           <div className="flex flex-col gap-3">
             {solicitud._articulos_solicitados.map((a) => {
               // BACKEND: nombre del artículo resuelto por JOIN del detalle.
-              const articulo = articulosIniciales.find((x) => x.id === a.articulo_id);
+              const articulo = catalogos.articulos.find((x) => x.id === a.articulo_id);
               return (
                 <div key={a.id} className="grid grid-cols-[minmax(0,1fr)_160px] items-start gap-3">
                   <div className="flex flex-col pt-6">

@@ -1,16 +1,18 @@
 "use client";
 
 import { Building2, MapPin, Pencil, Warehouse } from "lucide-react";
-import { SUCURSALES, type Deposito } from "@/data/stock";
+import type { Deposito, SucursalOpcion } from "@/data/stock";
 
 interface DepositosListProps {
   depositos: Deposito[];
+  /** Catálogo real: GET /api/sucursales. Agrupa la lista. */
+  sucursales: SucursalOpcion[];
   loading: boolean;
   onEdit: (deposito: Deposito) => void;
   onNew: () => void;
 }
 
-export function DepositosList({ depositos, loading, onEdit, onNew }: DepositosListProps) {
+export function DepositosList({ depositos, sucursales, loading, onEdit, onNew }: DepositosListProps) {
   if (loading) {
     return (
       <div className="flex flex-col gap-6" aria-hidden="true">
@@ -64,7 +66,7 @@ export function DepositosList({ depositos, loading, onEdit, onNew }: DepositosLi
 
   return (
     <div className="flex flex-col gap-6">
-      {SUCURSALES.map((sucursal) => {
+      {sucursales.map((sucursal) => {
         const deSucursal = depositos.filter((d) => d.sucursalId === sucursal.id);
         if (deSucursal.length === 0) return null;
         return (

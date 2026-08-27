@@ -1,22 +1,19 @@
 "use client";
 
 import { AlertTriangle, ArrowLeftRight, Building2, ClipboardList, Download, RotateCcw, Search } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Button } from "@/components/ui/Button";
 import { Pagination } from "@/components/ui/Pagination";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
 import {
-  calcularEstadoStock,
-  depositosIniciales,
-  fichasStockIniciales,
-  SIMULAR_ERROR,
-  SIMULAR_VACIO,
-  SUCURSALES,
+
   type Deposito,
   type FichaStock,
 } from "@/data/stock";
-import { articulosIniciales } from "@/data/articulos";
+import type { Articulo } from "@/data/articulos";
+import { apiGet, apiGetOpcional, apiSend, mensajeDeError } from "@/lib/api-client";
 import {
   DepositoFormModal,
   type DepositoDraft,
@@ -36,16 +33,9 @@ import {
 } from "@/components/stock/FiltrosStock";
 import { StockTabs, type TabStock } from "@/components/stock/StockTabs";
 import {
-  EMPLEADO_ACTUAL,
-  SIMULAR_ERROR as SIMULAR_ERROR_MOVIMIENTOS,
-  SIMULAR_VACIO as SIMULAR_VACIO_MOVIMIENTOS,
-  fichasMovimientos,
-  movimientosIniciales,
-  origenesMovimiento,
   parseCantidad,
   tiposMovimiento,
   type MovimientoStock,
-  type TipoMovimiento,
 } from "@/data/movimientos";
 import {
   FiltrosMovimientos,
@@ -131,46 +121,14 @@ function exportarCSVMovimientos(movimientos: MovimientoStock[]) {
   URL.revokeObjectURL(url);
 }
 
-const articulosFiltro = fichasMovimientos
-  .map((f) => ({ id: f.articulo.id, nombre: f.articulo.nombre }))
-  .filter((a, i, arr) => arr.findIndex((x) => x.id === a.id) === i)
-  .sort((a, b) => a.nombre.localeCompare(b.nombre));
-
 // Aplica el efecto local de un movimiento sobre una lista de fichas (demo):
 // Ingreso suma, Egreso resta, Transferencia resta origen / suma destino,
 // Ajuste suma o resta según signo. Devuelve la lista actualizada y el mapa
 // de fichas afectadas (para evaluar alertas de reposición).
-function aplicarEfectoMovimiento(
-  fichasPrev: FichaStock[],
-  items: MovimientoDraft["items"],
-  esTransferencia: boolean,
-  depositoOrigenId: number,
-  depositoDestinoId: number,
-  tipoNombre: string,
-): { fichas: FichaStock[]; afectadas: Map<number, FichaStock> } {
-  const afectadas = new Map<number, FichaStock>();
-  const fichas = fichasPrev.map((f) => {
-    let stockActual = f.stockActual;
-    for (const item of items) {
-      const cantidad = parseCantidad(item.cantidad);
-      const articuloId = Number(item.articuloId);
-      if (f.articuloId !== articuloId) continue;
-      if (esTransferencia && depositoDestinoId) {
-        if (f.depositoId === depositoOrigenId) stockActual -= cantidad;
-        if (f.depositoId === depositoDestinoId) stockActual += cantidad;
-      } else if (f.depositoId === depositoOrigenId) {
-        stockActual += tipoNombre === "Egreso" ? -cantidad : cantidad;
-      }
-    }
-    if (stockActual !== f.stockActual) {
-      const actualizada: FichaStock = { ...f, stockActual };
-      afectadas.set(f.id, actualizada);
-      return actualizada;
-    }
-    return f;
-  });
-  return { fichas, afectadas };
-}
+// `aplicarEfectoMovimiento()` se eliminó: recalculaba el stock de cada ficha en
+// el front para simular el movimiento. Ahora lo hace un trigger de la base, de
+// forma atómica, y la página relee las fichas después de confirmar.
+
 
 function StockScreen() {
   const { showToast } = useToast();
@@ -180,7 +138,14 @@ function StockScreen() {
   const [fichas, setFichas] = useState<FichaStock[]>([]);
   const [depositos, setDepositos] = useState<Deposito[]>([]);
 
-  const [tab, setTab] = useState<TabStock>("fichas");
+  // El tab inicial sale de la URL: /stock?tab=movimientos viene del redirect de
+  // la vieja ruta /movimientos-stock. Se lee con useSearchParams y no con un
+  // setState dentro de un efecto, que dispararía un render en cascada.
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const [tab, setTab] = useState<TabStock>(
+    tabParam === "depositos" || tabParam === "movimientos" ? tabParam : "fichas",
+  );
 
   const [busqueda, setBusqueda] = useState("");
   const [filtros, setFiltros] = useState<FiltrosStockType>(FILTROS_STOCK_VACIOS);
@@ -206,41 +171,54 @@ function StockScreen() {
   const [movimientoInicial, setMovimientoInicial] = useState<MovimientoInicial | null>(null);
   const [alertaFicha, setAlertaFicha] = useState<FichaStock | null>(null);
 
-  useEffect(() => {
-    // BACKEND: reemplazar la simulación por GET /api/fichas-stock, GET /api/depositos,
-    // GET /api/movimientos-stock y GET /api/fichas-stock (para el formulario de
-    // movimientos). Los estados SIMULAR_VACIO / SIMULAR_ERROR de src/data/stock.ts
-    // y src/data/movimientos.ts controlan esta demo.
-    const timer = window.setTimeout(() => {
-      // Inicializar el tab desde la URL (/stock?tab=movimientos viene del redirect
-      // de la antigua ruta /movimientos-stock). Los tabs están disabled durante
-      // el loading, así que el cambio no se percibe como salto.
-      const params = new URLSearchParams(window.location.search);
-      const tabParam = params.get("tab");
-      if (tabParam === "depositos" || tabParam === "fichas" || tabParam === "movimientos") {
-        setTab(tabParam);
-      }
-      if (SIMULAR_ERROR) {
-        setError(true);
-      } else {
-        setFichas(SIMULAR_VACIO ? [] : fichasStockIniciales);
-        setDepositos(depositosIniciales);
-      }
-      if (SIMULAR_ERROR_MOVIMIENTOS) {
-        setError(true);
-      } else {
-        setMovimientos(SIMULAR_VACIO_MOVIMIENTOS ? [] : movimientosIniciales);
-        setFichasMov(SIMULAR_VACIO_MOVIMIENTOS ? [] : fichasMovimientos);
-      }
-      setLoading(false);
-    }, 900);
-    return () => window.clearTimeout(timer);
-  }, []);
+  const [articulosActivos, setArticulosActivos] = useState<Articulo[]>([]);
+  const [sucursales, setSucursales] = useState<{ id: number; nombre: string }[]>([]);
 
-  const articulosActivos = useMemo(
-    () => articulosIniciales.filter((a) => a.activo),
-    [],
+  // Opciones del filtro por artículo del tab de movimientos, derivadas de las
+  // fichas cargadas (antes salían de un mock a nivel de módulo).
+  const articulosFiltro = useMemo(
+    () =>
+      fichasMov
+        .map((f) => ({ id: f.articulo.id, nombre: f.articulo.nombre }))
+        .filter((a, i, arr) => arr.findIndex((x) => x.id === a.id) === i)
+        .sort((a, b) => a.nombre.localeCompare(b.nombre)),
+    [fichasMov],
   );
+  const [recarga, setRecarga] = useState(0);
+
+  useEffect(() => {
+    let cancelado = false;
+
+    Promise.all([
+      apiGet<FichaStock[]>("/api/fichas-stock"),
+      apiGet<Deposito[]>("/api/depositos"),
+      apiGet<MovimientoStock[]>("/api/movimientos-stock"),
+      // Catálogos: si uno falla, la pantalla sigue y solo queda vacío su select.
+      apiGetOpcional<Articulo[]>("/api/articulos?estado=activo", []),
+      apiGetOpcional<{ id: number; nombre: string }[]>("/api/sucursales", []),
+    ])
+      .then(([listaFichas, listaDepositos, listaMovimientos, listaArticulos, listaSucursales]) => {
+        if (cancelado) return;
+        setFichas(listaFichas);
+        setDepositos(listaDepositos);
+        setMovimientos(listaMovimientos);
+        setArticulosActivos(listaArticulos);
+        setSucursales(listaSucursales);
+        // El formulario de movimientos solo ofrece fichas de artículos activos:
+        // uno inactivo no puede usarse en movimientos nuevos (HU-STK-01).
+        setFichasMov(listaFichas.filter((f) => f.articulo.estado === "activo"));
+      })
+      .catch(() => {
+        if (!cancelado) setError(true);
+      })
+      .finally(() => {
+        if (!cancelado) setLoading(false);
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [recarga]);
 
   const fichasVisibles = useMemo(
     () => fichas.filter((f) => f.articulo.estado === "activo"),
@@ -257,11 +235,12 @@ function StockScreen() {
         f.deposito.sucursal.toLowerCase().includes(q);
       const matchSucursal =
         !filtros.sucursalId ||
-        f.deposito.sucursal === SUCURSALES.find((s) => s.id === Number(filtros.sucursalId))?.nombre;
+        f.deposito.sucursal ===
+        sucursales.find((s) => s.id === Number(filtros.sucursalId))?.nombre;
       const matchEstado = filtros.estadoStock === "todos" || f.estadoCalculado === filtros.estadoStock;
       return matchBusqueda && matchSucursal && matchEstado;
     });
-  }, [fichasVisibles, busqueda, filtros]);
+  }, [fichasVisibles, busqueda, filtros, sucursales]);
 
   const totalPages = Math.max(1, Math.ceil(filtradas.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -300,57 +279,39 @@ function StockScreen() {
     setFichaFormOpen(true);
   };
 
-  const handleSaveFicha = (draft: FichaDraft) => {
-    // BACKEND: enviar el draft por POST /api/fichas-stock (INSERCION) o
-    // PUT /api/fichas-stock/:id (EDICION). La bitácora de auditoría la registra
-    // el back con usuario, fecha y valores anterior/nuevo.
-    const deposito = depositos.find((d) => d.id === Number(draft.depositoId));
-    const articulo = articulosIniciales.find((a) => a.id === Number(draft.articuloId));
-    if (!deposito || !articulo) return;
-
-    const stockCritico = draft.stockCritico.trim() !== "" ? Number.parseFloat(draft.stockCritico) : null;
-    const stockMinimo = Number.parseFloat(draft.stockMinimo);
-    const base = {
-      articulo: {
-        id: articulo.id,
-        codigo: articulo.codigo,
-        nombre: articulo.nombre,
-        unidadMedida: articulo.unidadMedida,
-        estado: articulo.activo ? ("activo" as const) : ("inactivo" as const),
-      },
-      deposito: { id: deposito.id, nombre: deposito.nombre, sucursal: deposito.sucursal },
-      stockMinimo,
-      stockCritico,
+  /**
+   * Alta y edición de la ficha de stock.
+   *
+   * El `stockActual` NO se manda nunca: arranca en 0 y solo lo cambian los
+   * movimientos (criterio de HU-STK-02, y lo hace un trigger de la base). El
+   * formulario edita únicamente los umbrales.
+   */
+  const handleSaveFicha = async (draft: FichaDraft) => {
+    const body = {
+      articuloId: Number(draft.articuloId),
+      depositoId: Number(draft.depositoId),
+      stockMinimo: Number.parseFloat(draft.stockMinimo),
+      stockCritico:
+        draft.stockCritico.trim() !== "" ? Number.parseFloat(draft.stockCritico) : null,
     };
 
-    if (fichaFormModo === "INSERCION") {
-      const nueva: FichaStock = {
-        id: Math.max(0, ...fichas.map((f) => f.id)) + 1,
-        articuloId: articulo.id,
-        depositoId: deposito.id,
-        stockActual: 0,
-        ...base,
-        estadoCalculado: calcularEstadoStock({ stockActual: 0, stockMinimo, stockCritico }),
-      };
-      setFichas((prev) => [nueva, ...prev]);
+    try {
+      if (fichaFormModo === "INSERCION") {
+        const creada = await apiSend<FichaStock>("POST", "/api/fichas-stock", body);
+        setFichas((prev) => [creada, ...prev]);
+        showToast("success", "Ficha de stock creada correctamente");
+      } else if (fichaFormModo === "EDICION" && fichaEnEdicion) {
+        const actualizada = await apiSend<FichaStock>(
+          "PUT",
+          `/api/fichas-stock/${fichaEnEdicion.id}`,
+          body,
+        );
+        setFichas((prev) => prev.map((f) => (f.id === actualizada.id ? actualizada : f)));
+        showToast("success", "Ficha de stock guardada correctamente");
+      }
       setFichaFormOpen(false);
-      showToast("success", "Ficha de stock creada correctamente");
-    } else if (fichaFormModo === "EDICION" && fichaEnEdicion) {
-      setFichas((prev) =>
-        prev.map((f) =>
-          f.id === fichaEnEdicion.id
-            ? {
-                ...f,
-                ...base,
-                depositoId: deposito.id,
-                articuloId: articulo.id,
-                estadoCalculado: calcularEstadoStock({ stockActual: f.stockActual, stockMinimo, stockCritico }),
-              }
-            : f,
-        ),
-      );
-      setFichaFormOpen(false);
-      showToast("success", "Ficha de stock guardada correctamente");
+    } catch (e) {
+      showToast("error", mensajeDeError(e));
     }
   };
 
@@ -364,31 +325,35 @@ function StockScreen() {
     setDepositoFormOpen(true);
   };
 
-  const handleSaveDeposito = (draft: DepositoDraft) => {
-    // BACKEND: enviar el draft por POST /api/depositos (nuevo) o PUT /api/depositos/:id.
-    const sucursal = SUCURSALES.find((s) => s.id === Number(draft.sucursalId));
-    if (!sucursal) return;
-    if (depositoEnEdicion) {
-      setDepositos((prev) =>
-        prev.map((d) =>
-          d.id === depositoEnEdicion.id
-            ? { ...d, sucursalId: sucursal.id, sucursal: sucursal.nombre, nombre: draft.nombre.trim(), ubicacion: draft.ubicacion.trim() }
-            : d,
-        ),
-      );
-      showToast("success", "Depósito guardado correctamente");
-    } else {
-      const nuevo: Deposito = {
-        id: Math.max(0, ...depositos.map((d) => d.id)) + 1,
-        sucursalId: sucursal.id,
-        sucursal: sucursal.nombre,
-        nombre: draft.nombre.trim(),
-        ubicacion: draft.ubicacion.trim(),
-      };
-      setDepositos((prev) => [...prev, nuevo]);
-      showToast("success", "Depósito creado correctamente");
+  const handleSaveDeposito = async (draft: DepositoDraft) => {
+    const body = {
+      sucursalId: Number(draft.sucursalId),
+      nombre: draft.nombre.trim(),
+      ubicacion: draft.ubicacion.trim() || undefined,
+    };
+
+    try {
+      if (depositoEnEdicion) {
+        const actualizado = await apiSend<Deposito>(
+          "PUT",
+          `/api/depositos/${depositoEnEdicion.id}`,
+          body,
+        );
+        setDepositos((prev) =>
+          prev.map((d) => (d.id === actualizado.id ? actualizado : d)),
+        );
+        showToast("success", "Depósito guardado correctamente");
+      } else {
+        // El back rechaza un nombre repetido DENTRO de la misma sucursal
+        // (DEPOSITO_DUPLICADO); el mismo nombre en otra sucursal sí se permite.
+        const creado = await apiSend<Deposito>("POST", "/api/depositos", body);
+        setDepositos((prev) => [...prev, creado]);
+        showToast("success", "Depósito creado correctamente");
+      }
+      setDepositoFormOpen(false);
+    } catch (e) {
+      showToast("error", mensajeDeError(e));
     }
-    setDepositoFormOpen(false);
   };
 
   const handleExportar = () => {
@@ -399,13 +364,7 @@ function StockScreen() {
   const retry = () => {
     setError(false);
     setLoading(true);
-    window.setTimeout(() => {
-      setFichas(SIMULAR_VACIO ? [] : fichasStockIniciales);
-      setDepositos(depositosIniciales);
-      setMovimientos(SIMULAR_VACIO_MOVIMIENTOS ? [] : movimientosIniciales);
-      setFichasMov(SIMULAR_VACIO_MOVIMIENTOS ? [] : fichasMovimientos);
-      setLoading(false);
-    }, 900);
+    setRecarga((n) => n + 1);
   };
 
   // ── Tab "Movimientos" ─────────────────────────────────────────────────────
@@ -423,7 +382,7 @@ function StockScreen() {
       const matchDeposito =
         !filtrosMov.depositoId ||
         m.fichaStock.depositoNombre ===
-          depositosIniciales.find((d) => d.id === Number(filtrosMov.depositoId))?.nombre;
+          depositos.find((d) => d.id === Number(filtrosMov.depositoId))?.nombre;
       const matchArticulo =
         !filtrosMov.articulo || m.fichaStock.articuloNombre ===
           articulosFiltro.find((a) => a.id === Number(filtrosMov.articulo))?.nombre;
@@ -432,7 +391,7 @@ function StockScreen() {
       const matchHasta = !filtrosMov.hasta || fecha <= filtrosMov.hasta;
       return matchBusqueda && matchTipo && matchDeposito && matchArticulo && matchDesde && matchHasta;
     });
-  }, [movimientos, busquedaMov, filtrosMov]);
+  }, [movimientos, busquedaMov, filtrosMov, depositos, articulosFiltro]);
 
   const totalPagesMov = Math.max(1, Math.ceil(filtradasMov.length / pageSizeMov));
   const safePageMov = Math.min(pageMov, totalPagesMov);
@@ -493,139 +452,74 @@ function StockScreen() {
     setFormOpen(true);
   };
 
-  // BACKEND: al confirmar el modal, enviar el draft por POST /api/movimientos-stock.
-  // El back crea UN registro por artículo (mismo `numero`), actualiza stock_actual
-  // de forma atómica, vincula el par de transferencias y registra la bitácora.
-  // Acá se replica el efecto local para la demo (actualización de fichas y alertas).
-  const handleConfirmMov = (draft: MovimientoDraft) => {
+  /**
+   * Confirma el movimiento contra la API.
+   *
+   * Antes acá había ~130 líneas que simulaban el efecto: recalculaban el stock
+   * de cada ficha, armaban el par de la transferencia y derivaban las alertas.
+   * Todo eso lo hace ahora el back:
+   *
+   *  · el stock lo actualiza un trigger de la base, de forma atómica;
+   *  · el número (MOV-XXXXXX) lo genera una secuencia;
+   *  · las alertas de reposición vienen en la respuesta del POST.
+   *
+   * Como el movimiento puede cambiar varias fichas a la vez, se recarga el
+   * listado de fichas después de confirmar en vez de parchearlo a mano.
+   */
+  const handleConfirmMov = async (draft: MovimientoDraft) => {
     const tipo = tiposMovimiento.find((t) => t.id === Number(draft.tipoId));
-    const origen = origenesMovimiento.find((o) => o.id === Number(draft.origenId));
     if (!tipo) return;
 
-    const fechaHora = new Date(draft.fechaHora).toISOString();
-    const motivo = draft.motivo.trim();
     const origenEntidadIdRaw = draft.origenEntidadId.trim();
-    const origenEntidadId = origenEntidadIdRaw !== "" ? Number(origenEntidadIdRaw) : null;
-    const depositoOrigen = depositos.find((d) => d.id === Number(draft.depositoId));
-    if (!depositoOrigen) return;
-    const depositoDestino = depositos.find((d) => d.id === Number(draft.depositoDestinoId));
 
-    const nuevos: MovimientoStock[] = [];
-    const proximoId = Math.max(0, ...movimientos.map((m) => m.id)) + 1;
-    const esTransferencia = tipo.nombre === "Transferencia";
+    const body = {
+      depositoId: Number(draft.depositoId),
+      tipo: tipo.nombre,
+      origenId: draft.origenId ? Number(draft.origenId) : undefined,
+      origenEntidadId: origenEntidadIdRaw !== "" ? Number(origenEntidadIdRaw) : undefined,
+      motivo: draft.motivo.trim() || undefined,
+      fechaHora: draft.fechaHora ? new Date(draft.fechaHora).toISOString() : undefined,
+      depositoDestinoId: draft.depositoDestinoId
+        ? Number(draft.depositoDestinoId)
+        : undefined,
+      items: draft.items.map((i) => ({
+        articuloId: Number(i.articuloId),
+        cantidad: parseCantidad(i.cantidad),
+      })),
+    };
 
-    draft.items.forEach((item, index) => {
-      const fichaOrigen = fichasMov.find(
-        (f) => f.articuloId === Number(item.articuloId) && f.depositoId === depositoOrigen.id,
-      );
-      if (!fichaOrigen) return;
-      const cantidad = parseCantidad(item.cantidad);
-      const base = {
-        numero: draft.numero,
-        fechaHora,
-        origenId: origen?.id ?? null,
-        origen: origen ? { nombre: origen.nombre } : null,
-        origenEntidadId,
-        empleadoId: EMPLEADO_ACTUAL.id,
-        empleado: { nombre: EMPLEADO_ACTUAL.nombre },
-        motivo,
-        createdAt: fechaHora,
-      };
+    try {
+      const { movimientos: creados, alertas } = await apiSend<{
+        movimientos: MovimientoStock[];
+        alertas: {
+          articuloId: number;
+          depositoId: number;
+          nivel: "bajo" | "critico";
+        }[];
+      }>("POST", "/api/movimientos-stock", body);
 
-      if (esTransferencia && depositoDestino) {
-        const fichaDestino = fichasMov.find(
-          (f) => f.articuloId === fichaOrigen.articuloId && f.depositoId === depositoDestino.id,
+      setMovimientos((prev) => [...creados, ...prev]);
+      setFormOpen(false);
+      setMovimientoInicial(null);
+      showToast("success", "Movimiento registrado correctamente");
+
+      // Las fichas cambiaron de saldo: se releen en vez de recalcularlas acá.
+      const fichasFrescas = await apiGet<FichaStock[]>("/api/fichas-stock");
+      setFichas(fichasFrescas);
+      setFichasMov(fichasFrescas.filter((f) => f.articulo.estado === "activo"));
+
+      // El back ya ordena las alertas con el crítico primero.
+      const primera = alertas[0];
+      if (primera) {
+        const ficha = fichasFrescas.find(
+          (f) => f.articuloId === primera.articuloId && f.depositoId === primera.depositoId,
         );
-        if (!fichaDestino) return;
-        const egresoId = proximoId + index * 2;
-        const ingresoId = egresoId + 1;
-        nuevos.push({
-          id: egresoId,
-          ...base,
-          fichaStockId: fichaOrigen.id,
-          fichaStock: {
-            articuloNombre: fichaOrigen.articulo.nombre,
-            articuloUnidad: fichaOrigen.articulo.unidadMedida,
-            depositoNombre: depositoOrigen.nombre,
-          },
-          tipo: "Egreso" as TipoMovimiento,
-          cantidad,
-          movimientoVinculadoId: ingresoId,
-        });
-        nuevos.push({
-          id: ingresoId,
-          ...base,
-          fichaStockId: fichaDestino.id,
-          fichaStock: {
-            articuloNombre: fichaDestino.articulo.nombre,
-            articuloUnidad: fichaDestino.articulo.unidadMedida,
-            depositoNombre: depositoDestino.nombre,
-          },
-          tipo: "Ingreso" as TipoMovimiento,
-          cantidad,
-          movimientoVinculadoId: egresoId,
-        });
-      } else {
-        nuevos.push({
-          id: proximoId + index,
-          ...base,
-          fichaStockId: fichaOrigen.id,
-          fichaStock: {
-            articuloNombre: fichaOrigen.articulo.nombre,
-            articuloUnidad: fichaOrigen.articulo.unidadMedida,
-            depositoNombre: depositoOrigen.nombre,
-          },
-          tipo: tipo.nombre,
-          cantidad,
-          movimientoVinculadoId: null,
-        });
+        if (ficha) setAlertaFicha(ficha);
       }
-    });
-
-    if (nuevos.length === 0) {
-      showToast("error", "Error al registrar: no se pudo resolver alguna ficha de stock");
-      return;
-    }
-
-    // Efecto local sobre las fichas (demo): se aplica a la lista de fichas del
-    // tab Movimientos y también a la del tab Fichas de Stock para mantener la
-    // coherencia del inventario.
-    const resMov = aplicarEfectoMovimiento(
-      fichasMov,
-      draft.items,
-      esTransferencia,
-      depositoOrigen.id,
-      depositoDestino?.id ?? 0,
-      tipo.nombre,
-    );
-    setFichasMov(resMov.fichas);
-    const resStock = aplicarEfectoMovimiento(
-      fichas,
-      draft.items,
-      esTransferencia,
-      depositoOrigen.id,
-      depositoDestino?.id ?? 0,
-      tipo.nombre,
-    );
-    setFichas(resStock.fichas);
-
-    setMovimientos((prev) => [...nuevos, ...prev]);
-    setFormOpen(false);
-    setMovimientoInicial(null);
-    showToast("success", "Movimiento registrado correctamente");
-
-    // BACKEND: el back responde en el POST /api/movimientos-stock si alguna ficha
-    // quedó bajo umbral (stock_actual <= stock_minimo o <= stock_critico). En la
-    // demo se calcula con las fichas afectadas (crítico tiene prioridad).
-    const alertas = [...resMov.afectadas.values()]
-      .filter((f) => f.stockActual <= f.stockMinimo || (f.stockCritico !== null && f.stockActual <= f.stockCritico))
-      .sort((a, b) => {
-        const nivelA = b.stockCritico !== null && b.stockActual <= b.stockCritico ? 1 : 0;
-        const nivelB = a.stockCritico !== null && a.stockActual <= a.stockCritico ? 1 : 0;
-        return nivelA - nivelB;
-      });
-    if (alertas.length > 0) {
-      setAlertaFicha(alertas[0]);
+    } catch (e) {
+      // El trigger rechaza el egreso que dejaría stock negativo (HF001) y el
+      // service rechaza el movimiento si falta la ficha en el depósito.
+      showToast("error", mensajeDeError(e));
     }
   };
 
@@ -740,6 +634,7 @@ function StockScreen() {
                   </div>
                   <FiltrosMovimientos
                     filtros={filtrosMov}
+                    depositos={depositos}
                     articulos={articulosFiltro}
                     onChange={handleFiltrosMov}
                     disabled={loading || error}
@@ -749,6 +644,7 @@ function StockScreen() {
                 <div className="flex flex-wrap items-center">
                   <FiltrosMovimientosChips
                     filtros={filtrosMov}
+                    depositos={depositos}
                     articulos={articulosFiltro}
                     onChange={handleFiltrosMov}
                   />
@@ -787,6 +683,7 @@ function StockScreen() {
                   className="flex flex-col gap-6"
                 >
                   <DepositosList
+                    sucursales={sucursales}
                     depositos={depositos}
                     loading={loading}
                     onEdit={openEdicionDeposito}
@@ -861,6 +758,7 @@ function StockScreen() {
       </main>
 
       <FichaFormModal
+        sucursales={sucursales}
         open={fichaFormOpen}
         modo={fichaFormModo}
         ficha={fichaEnEdicion}
@@ -871,6 +769,7 @@ function StockScreen() {
         onSave={handleSaveFicha}
       />
       <DepositoFormModal
+        sucursales={sucursales}
         open={depositoFormOpen}
         deposito={depositoEnEdicion}
         depositos={depositos}
@@ -897,7 +796,11 @@ function StockScreen() {
 export default function StockPage() {
   return (
     <ToastProvider>
-      <StockScreen />
+      {/* useSearchParams necesita un límite de Suspense: durante el prerender
+          la query todavía no se conoce. */}
+      <Suspense fallback={null}>
+        <StockScreen />
+      </Suspense>
     </ToastProvider>
   );
 }

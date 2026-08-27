@@ -3,13 +3,19 @@
 
 import { fichasStockIniciales, type FichaStock } from "./stock";
 
-// Refleja la tabla `movimiento_stock`: id, numero, ficha_stock_id, origen_id,
-// origen_entidad_id, tipo, cantidad (decimal 12,2), fecha_hora, empleado_id,
-// motivo, movimiento_vinculado_id.
+// Refleja la vista `v_movimiento_stock`, que aplana la cabecera
+// (`movimiento_stock_cab`: numero, deposito, tipo, origen, fecha, usuario,
+// motivo) con su detalle (`movimiento_stock_det`: ficha_stock_id, cantidad).
 // REGLA DE NEGOCIO: cada registro = UN artículo. Un movimiento grupal con varios
 // artículos genera N registros que comparten `numero` (agrupador visual).
-// Las transferencias generan el par egreso (dep. origen) + ingreso (dep. destino)
-// vinculados con `movimiento_vinculado_id`.
+//
+// ⚠️ LA TRANSFERENCIA ES LA EXCEPCIÓN, y cambió respecto de este comentario
+// original: son DOS movimientos con números DISTINTOS (MOV-000007 y MOV-000008),
+// no dos líneas del mismo. El motivo es que el depósito vive en la cabecera y
+// una transferencia toca dos depósitos, así que necesita dos cabeceras — y
+// `numero` es UNIQUE.
+// El agrupador de la transferencia es `movimiento_vinculado_id`, que enlaza el
+// egreso del depósito de origen con el ingreso del de destino.
 // REGLA DE ORIGEN: `origen_id` solo referencia documentos reales (Orden de
 // Compra, Venta). En Transferencia y Ajuste el origen es implícito
 // (el par vinculado / el ajuste mismo) y `origen_id` queda NULL.

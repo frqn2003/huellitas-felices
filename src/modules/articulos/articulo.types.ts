@@ -21,6 +21,8 @@ export type ArticuloRow = {
   unidad_medida_nombre: string;
   fabricante_id: number;
   fabricante_nombre: string;
+  // DERIVADOS, no columnas: salen del LEFT JOIN LATERAL contra la última orden
+  // de compra no cancelada (decisión D2). Ver LATERAL_PROVEEDOR en el repo.
   proveedor_preferido_id: number | null;
   proveedor_preferido_nombre: string | null;
   estado: "activo" | "inactivo";
@@ -52,7 +54,6 @@ export type ArticuloInput = {
   categoriaId: number;
   unidadMedidaId: number;
   fabricanteId: number;
-  proveedorPreferidoId?: number | null;
   imagenUrl?: string | null;
   activo?: boolean;
 };
