@@ -15,7 +15,7 @@ interface ArticulosTableProps {
   onDeactivate: (articulo: Articulo) => void;
 }
 
-const HEADERS = ["#", "Imagen", "Código", "Nombre", "Categoría", "U. Medida", "Estado", "Acciones"];
+const HEADERS = ["Imagen", "Código", "Nombre", "Categoría", "U. Medida", "Estado", "Acciones"];
 
 export function ArticulosTable({
   articulos,
@@ -29,7 +29,7 @@ export function ArticulosTable({
   if (loading) {
     return (
       <div className="overflow-hidden rounded-md border border-border bg-surface shadow-card">
-        <div className="hidden grid-cols-8 gap-4 border-b border-border bg-cream-50 px-4 py-3 lg:grid">
+        <div className="hidden grid-cols-7 gap-4 border-b border-border bg-cream-50 px-4 py-3 lg:grid">
           {HEADERS.map((h) => (
             <span key={h} className="text-xs font-extrabold uppercase tracking-wide text-text-secondary">
               {h}
@@ -42,8 +42,7 @@ export function ArticulosTable({
             className="flex items-center gap-4 border-b border-border/60 px-4 py-3 last:border-b-0"
             aria-hidden="true"
           >
-            <div className="h-4 w-6 animate-pulse rounded bg-cream-100" />
-            <div className="h-10 w-10 animate-pulse rounded-sm bg-cream-100" />
+            <div className="h-16 w-16 animate-pulse rounded-sm bg-cream-100" />
             <div className="h-4 w-16 animate-pulse rounded bg-cream-100" />
             <div className="h-4 w-40 animate-pulse rounded bg-cream-100" />
             <div className="hidden h-4 w-28 animate-pulse rounded bg-cream-100 lg:block" />
@@ -92,7 +91,7 @@ export function ArticulosTable({
   return (
     <div className="overflow-hidden rounded-md border border-border bg-surface shadow-card">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[820px] border-collapse text-left">
+        <table className="w-full min-w-[860px] border-collapse text-left">
           <caption className="sr-only">
             Listado de artículos del catálogo con acciones de ver, editar y desactivar
           </caption>
@@ -110,16 +109,13 @@ export function ArticulosTable({
             </tr>
           </thead>
           <tbody>
-            {articulos.map((articulo, index) => (
+            {articulos.map((articulo) => (
               <tr
                 key={articulo.id}
                 className="border-b border-border/60 transition-colors duration-fast ease-out last:border-b-0 hover:bg-cream-50/60"
               >
-                <td className="px-4 py-3 text-sm font-semibold text-text-secondary">
-                  {index + 1}
-                </td>
                 <td className="px-4 py-3">
-                  <ArticuloThumb categoria={articulo.categoria} nombre={articulo.nombre} />
+                  <ArticuloThumb imagen={articulo.imagen} nombre={articulo.nombre} />
                 </td>
                 <td className="px-4 py-3">
                   <span className="rounded bg-brand-900/10 px-2 py-0.5 font-mono text-xs font-bold text-brand-900">

@@ -33,6 +33,25 @@
 | Border | `#DDD8C8` | `--color-border` |
 | Destructive | `#DC2626` | `--color-destructive` |
 
+### Status Colors (SOLO etiquetas/badges de estado — doc §5.3)
+
+Paleta semántica exclusiva para pills de estado. NUNCA para botones, fondos de
+sección ni CTAs (esos usan brand/accent/destructive). Chip: `bg-status-X/10` +
+texto `-strong` + punto sólido `status-X`. Componente único:
+`src/components/ui/StatusBadge.tsx` (variantes success/warning/danger/info/
+neutral; acepta `icon` de Lucide o punto). Siempre indicador + texto.
+
+| Variant | Dot | Chip text | Semántica | Estados típicos |
+|---------|-----|-----------|-----------|-----------------|
+| `success` | `#16A34A` | `#15803D` | Positivo / completado | Activo, Normal, Ingreso, Recibida Total, Adjudicada |
+| `warning` | `#F59E0B` | `#B45309` | Pendiente / atención | Pendiente, Bajo, Ajuste, Abierta, Recibida Parcial |
+| `info` | `#2563EB` | `#1D4ED8` | En proceso / tránsito | Enviada, Transferencia |
+| `danger` | `#DC2626` | `#B91C1C` | Negativo / crítico | Crítico, Egreso, Cancelada |
+| `neutral` | text-secondary | text-secondary | Neutro | Inactivo |
+
+**Nota:** el amarillo de estado (`status-warning #F59E0B`) es distinto del
+amarillo de acción (`accent-500 #F9A900`). No intercambiarlos.
+
 **Color Notes (doc §5.2–§5.3, regla "Yellow is scarce"):**
 - **60%** crema / neutros cálidos — canvas y secciones de descanso.
 - **30%** verde bosque — títulos, nav, footer, botones secundarios, superficies verdes.

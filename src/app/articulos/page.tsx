@@ -10,11 +10,15 @@ import { ArticulosTable } from "@/components/articulos/ArticulosTable";
 import { ArticuloFormModal, type ArticuloDraft, type FormModo } from "@/components/articulos/ArticuloFormModal";
 import { DesactivarModal } from "@/components/articulos/DesactivarModal";
 import { FiltrosArticulos, FiltrosChips, type Filtros } from "@/components/articulos/FiltrosArticulos";
-import type { Articulo } from "@/data/articulos";
-import { PROVEEDORES, SIMULAR_ERROR, SIMULAR_VACIO, articulosIniciales } from "@/data/articulos";
+import type { Articulo, CatalogosArticulo } from "@/data/articulos";
+import { apiGet, apiSend, mensajeDeError } from "@/lib/api-client";
 
-const PROVEEDORES_FIND = (id: number) =>
-  PROVEEDORES.find((p) => p.id === id) ?? null;
+const CATALOGOS_VACIOS: CatalogosArticulo = {
+  categorias: [],
+  unidadesMedida: [],
+  fabricantes: [],
+  proveedores: [],
+};
 
 const TITULO_ACCIONES: Record<FormModo, string> = {
   INSERCION: "Artículo creado correctamente",
@@ -53,7 +57,12 @@ function ArticulosScreen() {
   const [articulos, setArticulos] = useState<Articulo[]>([]);
 
   const [busqueda, setBusqueda] = useState("");
-  const [filtros, setFiltros] = useState<Filtros>({ categoria: "", estado: "Activo" });
+  const [filtros, setFiltros] = useState<Filtros>({
+    categoria: "",
+    estado: "Activo",
+    unidadMedida: "",
+    proveedorId: "",
+  });
   const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
 
@@ -62,17 +71,41 @@ function ArticulosScreen() {
   const [formArticulo, setFormArticulo] = useState<Articulo | null>(null);
   const [aDesactivar, setADesactivar] = useState<Articulo | null>(null);
 
+  const [catalogos, setCatalogos] = useState<CatalogosArticulo>(CATALOGOS_VACIOS);
+
+  // Carga inicial: el listado y los catálogos del formulario, en paralelo.
+  // `recargar` es un contador: subirlo vuelve a disparar el efecto (lo usa el
+  // botón "Reintentar" del estado de error).
+  const [recargar, setRecargar] = useState(0);
+
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      if (SIMULAR_ERROR) {
-        setError(true);
-      } else {
-        setArticulos(SIMULAR_VACIO ? [] : articulosIniciales);
-      }
-      setLoading(false);
-    }, 900);
-    return () => window.clearTimeout(timer);
-  }, []);
+    let cancelado = false;
+
+    // Sin setState síncrono acá: `loading` ya arranca en true, y el botón
+    // "Reintentar" resetea el estado antes de subir el contador. Llamar a
+    // setState directo en el cuerpo de un efecto dispara renders en cascada.
+    Promise.all([
+      apiGet<Articulo[]>("/api/articulos"),
+      apiGet<CatalogosArticulo>("/api/articulos/catalogos"),
+    ])
+      .then(([lista, cat]) => {
+        // Si el componente se desmontó mientras esperábamos, no tocamos estado:
+        // React avisaría por actualizar algo que ya no existe.
+        if (cancelado) return;
+        setArticulos(lista);
+        setCatalogos(cat);
+      })
+      .catch(() => {
+        if (!cancelado) setError(true);
+      })
+      .finally(() => {
+        if (!cancelado) setLoading(false);
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [recargar]);
 
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -80,11 +113,13 @@ function ArticulosScreen() {
       const matchBusqueda =
         !q || a.codigo.toLowerCase().includes(q) || a.nombre.toLowerCase().includes(q);
       const matchCategoria = !filtros.categoria || a.categoria === filtros.categoria;
+      const matchUnidad = !filtros.unidadMedida || a.unidadMedida === filtros.unidadMedida;
+      const matchProveedor =
+        !filtros.proveedorId || a.proveedorPreferido?.id === Number(filtros.proveedorId);
       let matchEstado = true;
       if (filtros.estado === "Activo") matchEstado = a.activo;
       else if (filtros.estado === "Inactivo") matchEstado = !a.activo;
-      else if (filtros.estado === "Próximo a vencer") matchEstado = a.proximoaVencer === true;
-      return matchBusqueda && matchCategoria && matchEstado;
+      return matchBusqueda && matchCategoria && matchUnidad && matchProveedor && matchEstado;
     });
   }, [articulos, busqueda, filtros]);
 
@@ -94,7 +129,11 @@ function ArticulosScreen() {
   const pageStart = filtrados.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
   const pageEnd = Math.min(safePage * pageSize, filtrados.length);
   const hasActiveFilters =
-    busqueda.trim() !== "" || filtros.categoria !== "" || filtros.estado !== "Todos";
+    busqueda.trim() !== "" ||
+    filtros.categoria !== "" ||
+    filtros.estado !== "Todos" ||
+    filtros.unidadMedida !== "" ||
+    filtros.proveedorId !== "";
 
   const handleBusqueda = (value: string) => {
     setBusqueda(value);
@@ -124,64 +163,68 @@ function ArticulosScreen() {
     setFormOpen(true);
   };
 
-  const handleSave = (draft: ArticuloDraft) => {
-    const proveedorId = Number(draft.proveedorId) || 0;
-    const proveedor = PROVEEDORES_FIND(proveedorId);
-    const ahora = new Date().toISOString();
+  /**
+   * Alta y edición contra la API.
+   *
+   * El draft del formulario se traduce al cuerpo que espera el backend:
+   * los ids de catálogo viajan como number, y `proveedorId` vacío se manda
+   * como null (el campo es opcional).
+   *
+   * Ojo con lo que NO se manda: `codigo` (lo genera un trigger de la base) ni
+   * `createdAt`/`updatedAt` (los pone la base). El artículo que se agrega a la
+   * lista es EL QUE DEVUELVE LA API, no uno armado acá — así el código
+   * generado y las fechas reales aparecen en pantalla sin recargar.
+   */
+  const handleSave = async (draft: ArticuloDraft) => {
+    const body = {
+      nombre: draft.nombre.trim(),
+      descripcion: draft.descripcion.trim(),
+      categoriaId: Number(draft.categoriaId),
+      unidadMedidaId: Number(draft.unidadMedidaId),
+      fabricanteId: Number(draft.fabricanteId),
+      // `proveedorPreferidoId` NO se manda: lo deriva el back de la última orden
+      // de compra del artículo (decisión D2).
+      imagen: draft.imagen || null,
+      activo: draft.activo,
+    };
 
-    if (formModo === "INSERCION") {
-      const nuevo: Articulo = {
-        id: Math.max(0, ...articulos.map((a) => a.id)) + 1,
-        codigo: draft.codigo.trim().toUpperCase(),
-        nombre: draft.nombre.trim(),
-        descripcion: draft.descripcion.trim(),
-        unidadMedida: draft.unidadMedida,
-        categoria: draft.categoria,
-        proveedorPreferido: proveedor,
-        estado: "Activo",
-        imagen: "",
-        createdAt: ahora,
-        updatedAt: ahora,
-        activo: true,
-      };
-      setArticulos((prev) => [nuevo, ...prev]);
-      setFormOpen(false);
-      showToast("success", TITULO_ACCIONES.INSERCION);
-    } else if (formModo === "EDICION" && formArticulo) {
-      setArticulos((prev) =>
-        prev.map((a) =>
-          a.id === formArticulo.id
-            ? {
-                ...a,
-                nombre: draft.nombre.trim(),
-                descripcion: draft.descripcion.trim(),
-                unidadMedida: draft.unidadMedida,
-                categoria: draft.categoria,
-                proveedorPreferido: proveedor,
-                activo: draft.activo,
-                estado: draft.activo
-                  ? a.proximoaVencer
-                    ? "Próximo a vencer"
-                    : "Activo"
-                  : "Inactivo",
-                updatedAt: ahora,
-              }
-            : a,
-        ),
-      );
-      setFormOpen(false);
-      showToast("success", TITULO_ACCIONES.EDICION);
+    try {
+      if (formModo === "INSERCION") {
+        const creado = await apiSend<Articulo>("POST", "/api/articulos", body);
+        setArticulos((prev) => [creado, ...prev]);
+        setFormOpen(false);
+        showToast("success", `${TITULO_ACCIONES.INSERCION} (${creado.codigo})`);
+      } else if (formModo === "EDICION" && formArticulo) {
+        const actualizado = await apiSend<Articulo>(
+          "PUT",
+          `/api/articulos/${formArticulo.id}`,
+          body,
+        );
+        setArticulos((prev) =>
+          prev.map((a) => (a.id === actualizado.id ? actualizado : a)),
+        );
+        setFormOpen(false);
+        showToast("success", TITULO_ACCIONES.EDICION);
+      }
+    } catch (e) {
+      // El modal queda ABIERTO con los datos cargados: si el nombre está
+      // duplicado, el usuario corrige y reintenta sin volver a tipear todo.
+      showToast("error", mensajeDeError(e));
     }
   };
 
-  const handleDesactivar = (articulo: Articulo) => {
-    setArticulos((prev) =>
-      prev.map((a) =>
-        a.id === articulo.id
-          ? { ...a, activo: false, estado: "Inactivo", updatedAt: new Date().toISOString() }
-          : a,
-      ),
-    );
+  const handleDesactivar = async (articulo: Articulo) => {
+    try {
+      const actualizado = await apiSend<Articulo>(
+        "PATCH",
+        `/api/articulos/${articulo.id}`,
+      );
+      setArticulos((prev) => prev.map((a) => (a.id === actualizado.id ? actualizado : a)));
+    } catch (e) {
+      showToast("error", mensajeDeError(e));
+      setADesactivar(null);
+      return;
+    }
     setADesactivar(null);
     showToast("success", "Artículo desactivado correctamente");
   };
@@ -193,7 +236,7 @@ function ArticulosScreen() {
 
   const limpiarTodo = () => {
     setBusqueda("");
-    setFiltros({ categoria: "", estado: "Activo" });
+    setFiltros({ categoria: "", estado: "Activo", unidadMedida: "", proveedorId: "" });
   };
 
   return (
@@ -205,7 +248,7 @@ function ArticulosScreen() {
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex flex-col gap-1">
                 <p className="text-xs font-bold uppercase tracking-widest text-text-secondary">
-                  Stock · Catálogo
+                  Gestión de catálogo
                 </p>
                 <h1 className="font-display text-2xl font-extrabold uppercase tracking-tight text-brand-900 sm:text-3xl">
                   Artículos
@@ -273,10 +316,7 @@ function ArticulosScreen() {
                 onClick={() => {
                   setError(false);
                   setLoading(true);
-                  window.setTimeout(() => {
-                    setArticulos(SIMULAR_VACIO ? [] : articulosIniciales);
-                    setLoading(false);
-                  }, 900);
+                  setRecargar((n) => n + 1);
                 }}
               >
                 <RotateCcw className="h-4 w-4" aria-hidden="true" />
@@ -313,6 +353,7 @@ function ArticulosScreen() {
       </main>
 
       <ArticuloFormModal
+        catalogos={catalogos}
         open={formOpen}
         modo={formModo}
         articulo={formArticulo}

@@ -12,6 +12,7 @@ interface PaginationProps {
   onPageChange: (page: number) => void;
   onPageSizeChange: (size: number) => void;
   disabled?: boolean;
+  itemLabel?: string;
 }
 
 const PAGE_SIZES = [10, 25, 50];
@@ -26,6 +27,7 @@ export function Pagination({
   onPageChange,
   onPageSizeChange,
   disabled = false,
+  itemLabel = "artículos",
 }: PaginationProps) {
   const pages = Array.from({ length: totalPages }, (_, i) => i + 1);
   const visiblePages = pages.filter((p) => {
@@ -43,7 +45,7 @@ export function Pagination({
   return (
     <div className="flex flex-col items-center justify-between gap-4 px-2 py-3 sm:flex-row">
       <p className="text-sm font-medium text-text-secondary">
-        Mostrando {pageStart}-{pageEnd} de {totalItems} artículos
+        Mostrando {pageStart}-{pageEnd} de {totalItems} {itemLabel}
       </p>
       <div className="flex flex-wrap items-center gap-4">
         <label className="flex items-center gap-2 text-sm font-medium text-text-secondary">

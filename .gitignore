@@ -32,6 +32,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# .env.example SÍ se commitea: es la plantilla que documenta las variables.
+!.env.example
 
 # vercel
 .vercel
@@ -39,3 +41,13 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# herramientas del agente
+.atl/
+
+# artefactos locales del agente
+__pycache__/
+dev-server.log
+
+# imagenes subidas por los usuarios (no son codigo)
+/public/uploads/

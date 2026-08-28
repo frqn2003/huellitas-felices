@@ -19,11 +19,18 @@ Guía de trabajo para agentes de IA en este repositorio. Es el acuerdo del equip
 - **Stack:** Next.js + React (frontend), SQL (backend/datos, lo maneja el equipo de back).
 - **Control de versiones:** Git + GitHub (repo `huellitas-felices`).
 
+## Estilo de respuesta
+
+- Respuestas objetivas y cortas.
+- Solo lo que el usuario pide; sin explicaciones extra ni acciones adicionales.
+
 ## Documentación de referencia
 
 - `docs/guia-diseno-huellitas-felices.md.pdf` — guía de proceso de diseño (investigación → moodboard → wireframes → sistema → pruebas).
 - `docs/design-system-pet-bliss-style.md` — design system "Pet Bliss Style": tokens de color, tipografía, spacing, grid, radius, motion y reglas de composición. **Es la fuente de verdad del lenguaje visual (versión humana).**
 - `design-system/huellitas-felices/MASTER.md` — design system "Pet Bliss" en el formato de la skill ui-ux-pro-max (**versión para la skill**). Ver "Regla de tokens" abajo.
+- `design-system/huellitas-felices/componentes.md` — inventario de componentes de `src/components/`. Consultarlo **antes de crear componentes** y actualizarlo al crear/extender.
+- `docs/errores-comunes.md` — log de errores/lecciones del equipo. Leer sus "Reglas activas" al diseñar; se alimenta a propósito con el comando `/error`.
 
 ## Workflow obligatorio (de la guía, paso 7)
 
@@ -32,11 +39,17 @@ Guía de trabajo para agentes de IA en este repositorio. Es el acuerdo del equip
 3. **Verificación técnica** → `npm run lint` + `tsc --noEmit` + checklist de accesibilidad sobre el código (sin navegador).
 
 > Regla del equipo: **ui-ux-pro-max** es la skill visual que genera. No se usa ningún test de navegador ni screenshots automáticos para el front.
+> Antes de codear: **buscar y reusar componentes** existentes (ver inventario en `design-system/huellitas-felices/componentes.md`); extender antes que duplicar.
 
 ## Control de versiones
 
 - Publicar cambios con el comando `/subir` (revisa el diff, propone el mensaje `feat/fix/chore` referenciando la HU y pushea a `origin` tras confirmación explícita).
 - Nota técnica: `git` no está en el PATH de PowerShell → usar `C:\Program Files\Git\cmd\git.exe`.
+
+## Log de errores
+
+- Los errores/lecciones del equipo viven en `docs/errores-comunes.md`. El agente los consulta al diseñar y verifica las "Reglas activas" en la verificación técnica.
+- El log **solo se alimenta a propósito** con el comando `/error` (nunca el agente lo actualiza por su cuenta).
 
 ## Regla de tokens (IMPORTANTE)
 
@@ -68,3 +81,4 @@ Detalles completos y checklist de fidelidad en `docs/design-system-pet-bliss-sty
 - Accesibilidad: contraste verificado, focus visible, touch targets ≥ 44×44px, `alt` en imágenes.
 - Antes de subir: comprimir imágenes (TinyPNG).
 - Idioma de la UI: español.
+- **Preparación para backend**: los datos placeholder llevan `id` numérico (la PK que mandará la base). Cada punto de integración (fetch, POST/PUT/PATCH/DELETE, selects de catálogos) lleva un comentario `// BACKEND:` con el endpoint y qué reemplazar. El equipo de back los busca con `grep -rn "BACKEND" src/`.
