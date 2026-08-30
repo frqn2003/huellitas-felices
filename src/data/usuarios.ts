@@ -15,6 +15,7 @@ export interface Usuario {
   apellido: string;
   dni: string;
   email: string;
+  telefono: string; // BACKEND: agregar campo a la tabla `usuario` (varchar, nullable)
   auth_id: string | null; // Vínculo con Supabase Auth (auth.users)
   estado: "Activo" | "Inactivo";
   fecha_creacion: string;
@@ -39,6 +40,7 @@ export const usuarios: Usuario[] = [
     apellido: "García",
     dni: "30123456",
     email: "carlos.garcia@huellitasfelices.com",
+    telefono: "381 555-1234",
     auth_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     estado: "Activo",
     fecha_creacion: "2024-01-15T10:00:00Z",
@@ -51,6 +53,7 @@ export const usuarios: Usuario[] = [
     apellido: "López",
     dni: "28765432",
     email: "maria.lopez@huellitasfelices.com",
+    telefono: "381 555-7890",
     auth_id: "b2c3d4e5-f6a7-8901-bcde-f12345678901",
     estado: "Activo",
     fecha_creacion: "2024-02-20T09:30:00Z",
@@ -63,6 +66,7 @@ export const usuarios: Usuario[] = [
     apellido: "Pérez",
     dni: "32456789",
     email: "juan.perez@huellitasfelices.com",
+    telefono: "381 555-4321",
     auth_id: "c3d4e5f6-a7b8-9012-cdef-123456789012",
     estado: "Activo",
     fecha_creacion: "2024-03-10T08:15:00Z",
@@ -75,6 +79,7 @@ export const usuarios: Usuario[] = [
     apellido: "Martínez",
     dni: "35678912",
     email: "ana.martinez@huellitasfelices.com",
+    telefono: "381 555-6789",
     auth_id: "d4e5f6a7-b8c9-0123-defa-234567890123",
     estado: "Activo",
     fecha_creacion: "2024-04-05T11:00:00Z",

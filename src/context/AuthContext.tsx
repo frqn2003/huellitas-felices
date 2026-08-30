@@ -23,12 +23,21 @@ export type AuthState =
   | { status: "2fa_required"; usuario: Usuario }
   | { status: "authenticated"; usuario: Usuario; rol: Rol };
 
+export interface ActualizarUsuarioInput {
+  nombre: string;
+  apellido: string;
+  email: string;
+  telefono: string;
+  password?: string; // Solo si se cambia la contraseña
+}
+
 interface AuthContextValue {
   state: AuthState;
   login: (email: string, password: string) => void;
   verificar2FA: (codigo: string) => boolean;
   reenviarCodigo: () => void;
   logout: () => void;
+  actualizarUsuario: (input: ActualizarUsuarioInput) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -115,9 +124,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState({ status: "idle" });
   }, []);
 
+  const actualizarUsuario = useCallback(
+    (input: ActualizarUsuarioInput) => {
+      // BACKEND: enviar PUT /api/usuarios/:id con { nombre, apellido, email, telefono }
+      // y, si se cambió la contraseña, POST /api/usuarios/:id/cambiar-password.
+      setState((prev) => {
+        if (prev.status !== "authenticated") return prev;
+        const usuarioActualizado: Usuario = {
+          ...prev.usuario,
+          nombre: input.nombre,
+          apellido: input.apellido,
+          email: input.email,
+          telefono: input.telefono,
+          ...(input.password ? { password: input.password } : {}),
+        };
+        return { ...prev, usuario: usuarioActualizado };
+      });
+    },
+    [],
+  );
+
   const value = useMemo(
-    () => ({ state, login, verificar2FA, reenviarCodigo, logout }),
-    [state, login, verificar2FA, reenviarCodigo, logout],
+    () => ({ state, login, verificar2FA, reenviarCodigo, logout, actualizarUsuario }),
+    [state, login, verificar2FA, reenviarCodigo, logout, actualizarUsuario],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

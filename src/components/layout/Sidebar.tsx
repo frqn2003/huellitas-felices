@@ -43,10 +43,7 @@ const SECCIONES: SidebarSection[] = [
   },
   {
     titulo: "Administración",
-    items: [
-      { label: "Configuración", href: "#configuracion", icon: Settings },
-      { label: "Auditoría", href: "#auditoria", icon: ShieldCheck },
-    ],
+    items: [{ label: "Auditoría", href: "#auditoria", icon: ShieldCheck }],
   },
 ];
 
@@ -166,6 +163,11 @@ function NavBody({
             </>
           )}
         </div>
+        <NavItem
+          item={{ label: "Configuración", href: "/configuracion", icon: Settings }}
+          collapsed={collapsed}
+          onNavigate={onNavigate}
+        />
       </div>
     </>
   );

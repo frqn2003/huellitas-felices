@@ -37,6 +37,9 @@ Patrones recurrentes por pantalla: `<Entidad>Table`, `<Entidad>Filtros*`, `<Enti
 ### cotizaciones
 `CancelarSolicitudModal` · `CompararCotizacionesModal` · `CotizacionFormModal` · `EstadoSolicitudBadge` · `FiltrosCotizaciones` · `SolicitudFormModal` · `SolicitudesTable`
 
+### configuracion
+`ConfiguracionForm` — perfil del usuario logueado: información de cuenta (solo lectura) + tu cuenta (editable). Guarda con modal de confirmación de contraseña y modal "Cambiar contraseña". Usa `Input`/`Button`/`Modal`/`StatusBadge`/`Toast` y `useAuth().actualizarUsuario`.
+
 ### layout
 `Sidebar` (nav principal)
 
