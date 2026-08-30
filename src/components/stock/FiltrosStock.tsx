@@ -2,13 +2,14 @@
 
 import { SlidersHorizontal, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { SUCURSALES, type EstadoStock } from "@/data/stock";
+import { SUCURSALES, type Deposito, type EstadoStock } from "@/data/stock";
 import { Button } from "@/components/ui/Button";
 
 export type EstadoStockFiltro = EstadoStock | "todos";
 
 export interface FiltrosStock {
   sucursalId: string;
+  depositoId: string;
   estadoStock: EstadoStockFiltro;
 }
 
@@ -19,15 +20,22 @@ const ESTADOS: { value: EstadoStockFiltro; label: string }[] = [
   { value: "critico", label: "Crítico" },
 ];
 
-export const FILTROS_STOCK_VACIOS: FiltrosStock = { sucursalId: "", estadoStock: "todos" };
+export const FILTROS_STOCK_VACIOS: FiltrosStock = { sucursalId: "", depositoId: "", estadoStock: "todos" };
 
-function buildTags(filtros: FiltrosStock, onChange: (filtros: FiltrosStock) => void) {
+function buildTags(filtros: FiltrosStock, depositos: Deposito[], onChange: (filtros: FiltrosStock) => void) {
   const tags: { label: string; onRemove: () => void }[] = [];
   if (filtros.sucursalId) {
     const sucursal = SUCURSALES.find((s) => s.id === Number(filtros.sucursalId));
     tags.push({
       label: `Sucursal: ${sucursal?.nombre ?? filtros.sucursalId}`,
       onRemove: () => onChange({ ...filtros, sucursalId: "" }),
+    });
+  }
+  if (filtros.depositoId) {
+    const deposito = depositos.find((d) => d.id === Number(filtros.depositoId));
+    tags.push({
+      label: `Depósito: ${deposito?.nombre ?? filtros.depositoId}`,
+      onRemove: () => onChange({ ...filtros, depositoId: "" }),
     });
   }
   if (filtros.estadoStock !== "todos") {
@@ -40,8 +48,16 @@ function buildTags(filtros: FiltrosStock, onChange: (filtros: FiltrosStock) => v
   return tags;
 }
 
-export function FiltrosStockChips({ filtros, onChange }: { filtros: FiltrosStock; onChange: (filtros: FiltrosStock) => void }) {
-  const tags = buildTags(filtros, onChange);
+export function FiltrosStockChips({
+  filtros,
+  depositos,
+  onChange,
+}: {
+  filtros: FiltrosStock;
+  depositos: Deposito[];
+  onChange: (filtros: FiltrosStock) => void;
+}) {
+  const tags = buildTags(filtros, depositos, onChange);
   if (tags.length === 0) return null;
   return (
     <div className="flex flex-wrap items-center gap-2" aria-label="Filtros aplicados">
@@ -67,12 +83,19 @@ export function FiltrosStockChips({ filtros, onChange }: { filtros: FiltrosStock
 
 interface FiltrosStockProps {
   filtros: FiltrosStock;
+  depositos: Deposito[];
   onChange: (filtros: FiltrosStock) => void;
   disabled?: boolean;
   hideChips?: boolean;
 }
 
-export function FiltrosStock({ filtros, onChange, disabled = false, hideChips = false }: FiltrosStockProps) {
+export function FiltrosStock({
+  filtros,
+  depositos,
+  onChange,
+  disabled = false,
+  hideChips = false,
+}: FiltrosStockProps) {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -87,7 +110,7 @@ export function FiltrosStock({ filtros, onChange, disabled = false, hideChips = 
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [open]);
 
-  const tags = buildTags(filtros, onChange);
+  const tags = buildTags(filtros, depositos, onChange);
 
   return (
     <div className="flex flex-col gap-2">
@@ -129,6 +152,22 @@ export function FiltrosStock({ filtros, onChange, disabled = false, hideChips = 
                 </select>
               </label>
               <label className="flex flex-col gap-1.5 text-sm font-bold text-text-primary">
+                Depósito
+                <select
+                  value={filtros.depositoId}
+                  onChange={(e) => onChange({ ...filtros, depositoId: e.target.value })}
+                  aria-label="Filtrar por depósito"
+                  className="h-11 cursor-pointer rounded-sm border border-border bg-surface px-3 text-base font-normal text-text-primary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
+                >
+                  <option value="">Todos</option>
+                  {depositos.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.nombre}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1.5 text-sm font-bold text-text-primary">
                 Estado de stock
                 <select
                   value={filtros.estadoStock}
@@ -149,7 +188,7 @@ export function FiltrosStock({ filtros, onChange, disabled = false, hideChips = 
           </div>
         )}
       </div>
-      {!hideChips && <FiltrosStockChips filtros={filtros} onChange={onChange} />}
+      {!hideChips && <FiltrosStockChips filtros={filtros} depositos={depositos} onChange={onChange} />}
     </div>
   );
 }

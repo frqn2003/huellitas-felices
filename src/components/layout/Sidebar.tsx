@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  LayoutDashboard,
   LogOut,
   Menu,
   Package,
@@ -34,7 +33,6 @@ const SECCIONES: SidebarSection[] = [
   {
     titulo: "Operaciones",
     items: [
-      { label: "Inicio", href: "/", icon: LayoutDashboard },
       { label: "Artículos", href: "/articulos", icon: Package },
       { label: "Inventario", href: "/stock", icon: Warehouse },
       { label: "Compras", href: "/ordenes-compra", icon: ShoppingCart },
@@ -66,7 +64,6 @@ function iniciales(nombre: string) {
 
 function useItemActivo(href: string) {
   const pathname = usePathname();
-  if (href === "/") return pathname === "/";
   return pathname.startsWith(href);
 }
 
@@ -231,19 +228,27 @@ export function Sidebar() {
         className={`sticky top-0 z-30 hidden h-screen shrink-0 flex-col bg-brand-900 transition-all duration-normal ease-out lg:flex ${expanded ? "w-[264px]" : "w-[72px]"}`}
       >
         <div
-          className={`flex items-center gap-2 border-b border-cream-50/15 px-4 py-4 ${expanded ? "" : "justify-center"}`}
+          className={`flex items-center justify-between gap-2 border-b border-cream-50/15 px-4 py-4 ${expanded ? "" : "justify-center"}`}
         >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-accent-500">
-            <PawPrint className="h-5 w-5 text-brand-900" aria-hidden="true" />
-          </span>
-          {expanded && (
-            <>
-              <span className="min-w-0 flex-1 font-display text-sm font-extrabold uppercase leading-tight tracking-tight text-cream-50">
+          <button
+            type="button"
+            aria-label="Huellitas Felices"
+            title="Huellitas Felices"
+            className="flex items-center gap-2 rounded-md text-cream-50 transition-colors duration-fast ease-out hover:text-cream-50/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cream-50"
+          >
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-accent-500">
+              <PawPrint className="h-5 w-5 text-brand-900" aria-hidden="true" />
+            </span>
+            {expanded && (
+              <span className="min-w-0 flex-1 text-left font-display text-sm font-extrabold uppercase leading-tight tracking-tight">
                 Huellitas
                 <br />
                 Felices
               </span>
-              <button
+            )}
+          </button>
+          {expanded && (
+            <button
                 type="button"
                 onClick={() => setPinned((p) => !p)}
                 aria-pressed={pinned}
@@ -256,21 +261,25 @@ export function Sidebar() {
                   aria-hidden="true"
                 />
               </button>
-            </>
           )}
         </div>
         <NavBody collapsed={!expanded} />
       </aside>
 
       <div className="sticky top-0 z-30 flex w-full items-center justify-between border-b border-border bg-cream-50 px-4 py-3 lg:hidden">
-        <div className="flex items-center gap-2">
+        <button
+          type="button"
+          aria-label="Huellitas Felices"
+          title="Huellitas Felices"
+          className="flex items-center gap-2 rounded-md text-brand-900 transition-colors duration-fast ease-out hover:text-brand-900/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900"
+        >
           <span className="flex h-10 w-10 items-center justify-center rounded-md bg-brand-900">
             <PawPrint className="h-5 w-5 text-cream-50" aria-hidden="true" />
           </span>
-          <span className="font-display text-sm font-extrabold uppercase tracking-tight text-brand-900">
+          <span className="font-display text-sm font-extrabold uppercase tracking-tight">
             Huellitas Felices
           </span>
-        </div>
+        </button>
         <button
           ref={hamburgerRef}
           type="button"
@@ -298,16 +307,21 @@ export function Sidebar() {
             className="absolute left-0 top-0 flex h-full w-[264px] flex-col bg-brand-900 shadow-card"
           >
             <div className="flex items-center justify-between border-b border-cream-50/15 px-4 py-4">
-              <div className="flex items-center gap-2">
+              <button
+                type="button"
+                aria-label="Huellitas Felices"
+                title="Huellitas Felices"
+                className="flex items-center gap-2 rounded-md text-cream-50 transition-colors duration-fast ease-out hover:text-cream-50/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cream-50"
+              >
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-accent-500">
                   <PawPrint className="h-5 w-5 text-brand-900" aria-hidden="true" />
                 </span>
-                <span className="font-display text-sm font-extrabold uppercase leading-tight tracking-tight text-cream-50">
+                <span className="text-left font-display text-sm font-extrabold uppercase leading-tight tracking-tight">
                   Huellitas
                   <br />
                   Felices
                 </span>
-              </div>
+              </button>
               <button
                 ref={closeBtnRef}
                 type="button"

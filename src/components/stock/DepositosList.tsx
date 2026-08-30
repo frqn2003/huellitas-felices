@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, MapPin, Pencil, Warehouse } from "lucide-react";
+import { Building2, Eye, MapPin, Pencil, Warehouse } from "lucide-react";
 import { SUCURSALES, type Deposito } from "@/data/stock";
 
 interface DepositosListProps {
@@ -8,9 +8,10 @@ interface DepositosListProps {
   loading: boolean;
   onEdit: (deposito: Deposito) => void;
   onNew: () => void;
+  onView: (deposito: Deposito) => void;
 }
 
-export function DepositosList({ depositos, loading, onEdit, onNew }: DepositosListProps) {
+export function DepositosList({ depositos, loading, onEdit, onNew, onView }: DepositosListProps) {
   if (loading) {
     return (
       <div className="flex flex-col gap-6" aria-hidden="true">
@@ -88,6 +89,15 @@ export function DepositosList({ depositos, loading, onEdit, onNew }: DepositosLi
                     <h4 className="truncate text-sm font-bold text-text-primary">{deposito.nombre}</h4>
                     <p className="truncate text-xs text-text-secondary">{deposito.ubicacion}</p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => onView(deposito)}
+                    aria-label={`Ver fichas de stock de ${deposito.nombre}`}
+                    title="Ver fichas de stock"
+                    className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-pill text-text-secondary transition-colors duration-fast ease-out hover:bg-brand-900/10 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900"
+                  >
+                    <Eye className="h-5 w-5" aria-hidden="true" />
+                  </button>
                   <button
                     type="button"
                     onClick={() => onEdit(deposito)}
