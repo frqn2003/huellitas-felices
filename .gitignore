@@ -40,3 +40,10 @@ env.download
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# herramientas del agente
+.atl/
+
+# artefactos locales del agente
+__pycache__/
+dev-server.log

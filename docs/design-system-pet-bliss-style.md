@@ -262,6 +262,31 @@ Usar para:
 -   bloques internos;
 -   áreas que necesiten contraste con el fondo crema.
 
+### Colores de estado (badges)
+
+Paleta semántica **exclusiva para etiquetas de estado** (pills con punto o
+ícono + texto). Nunca usarla para botones, fondos de sección ni CTAs — esos
+siguen usando verde oscuro / amarillo / destructive.
+
+| Semántica | Color | Punto | Texto del chip | Estados típicos |
+|-----------|-------|-------|----------------|-----------------|
+| Positivo / completado | Verde vibrante | `status-success` `#16A34A` | `status-success-strong` `#15803D` | Activo, Normal, Ingreso, Recibida Total, Adjudicada |
+| Pendiente / atención | Amarillo vibrante | `status-warning` `#F59E0B` | `status-warning-strong` `#B45309` | Pendiente, Bajo, Ajuste, Abierta, Recibida Parcial |
+| En proceso / tránsito | Azul | `status-info` `#2563EB` | `status-info-strong` `#1D4ED8` | Enviada, Transferencia |
+| Negativo / crítico | Rojo | `status-danger` `#DC2626` | `status-danger-strong` `#B91C1C` | Crítico, Egreso, Cancelada |
+| Neutro | Gris crema | `text-secondary` | `text-secondary` | Inactivo |
+
+Reglas:
+
+-   Patrón único de chip: fondo `bg-status-X/10`, texto `-strong`, punto
+    sólido `status-X`. Implementado en el componente `StatusBadge`
+    (`src/components/ui/StatusBadge.tsx`) — los badges de cada módulo son
+    wrappers que solo definen su mapeo.
+-   Siempre indicador visual (punto o ícono) + texto; nunca color solo.
+-   El amarillo de estado (`#F59E0B`) es distinto del amarillo de acción
+    (`accent-500 #F9A900`): uno comunica "pendiente", el otro dispara la
+    acción principal. No intercambiarlos.
+
 ------------------------------------------------------------------------
 
 # 6. Tokens de color sugeridos
@@ -283,6 +308,16 @@ Usar para:
   --color-text-secondary: #547066;
 
   --color-border: #DDD8C8;
+
+  /* Colores de estado: SOLO etiquetas/badges de estado (ver 5.3) */
+  --color-status-success: #16A34A;
+  --color-status-success-strong: #15803D;
+  --color-status-warning: #F59E0B;
+  --color-status-warning-strong: #B45309;
+  --color-status-danger: #DC2626;
+  --color-status-danger-strong: #B91C1C;
+  --color-status-info: #2563EB;
+  --color-status-info-strong: #1D4ED8;
 }
 ```
 

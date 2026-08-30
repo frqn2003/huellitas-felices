@@ -11,6 +11,18 @@
   --color-text-primary: #114f3c;
   --color-text-secondary: #547066;
   --color-border: #ddd8c8;
+  --color-destructive: #dc2626;
+
+  /* Colores de estado: SOLO para etiquetas/badges de estado.
+     Nunca para botones, fondos de sección ni CTAs (esos usan brand/accent/destructive). */
+  --color-status-success: #16a34a;
+  --color-status-success-strong: #15803d;
+  --color-status-warning: #f59e0b;
+  --color-status-warning-strong: #b45309;
+  --color-status-danger: #dc2626;
+  --color-status-danger-strong: #b91c1c;
+  --color-status-info: #2563eb;
+  --color-status-info-strong: #1d4ed8;
 
   --font-display: var(--font-baloo), ui-sans-serif, system-ui, sans-serif;
   --font-sans: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
