@@ -46,6 +46,9 @@ Patrones recurrentes por pantalla: `<Entidad>Table`, `<Entidad>Filtros*`, `<Enti
 ### ordenes-compra
 `CancelarOrdenModal` · `EstadoOrdenBadge` · `FiltrosOrdenes` · `OrdenFormModal` · `OrdenesTable`
 
+### recepciones
+`RecepcionesTable` · `FiltrosRecepciones` · `FiltrosChipsRecepciones` · `RecepcionFormModal` · `RecepcionDetalleModal` · `EstadoRecepcionBadge`
+
 ### proveedores
 `BajaProveedorModal` · `EstadoProveedorBadge` (mapea sobre `StatusBadge`: success/neutral) · `FiltrosProveedores` · `ProveedorFormModal` · `ProveedoresTable`
 
