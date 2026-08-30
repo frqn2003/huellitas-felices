@@ -7,11 +7,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { Button } from "@/components/ui/Button";
 import { Pagination } from "@/components/ui/Pagination";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
-import {
-
-  type Deposito,
-  type FichaStock,
-} from "@/data/stock";
+import { SUCURSALES, type Deposito, type FichaStock } from "@/data/stock";
 import type { Articulo } from "@/data/articulos";
 import { apiGet, apiGetOpcional, apiSend, mensajeDeError } from "@/lib/api-client";
 import {

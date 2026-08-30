@@ -1,7 +1,7 @@
 "use client";
 
 import { Building2, Eye, MapPin, Pencil, Warehouse } from "lucide-react";
-import { SUCURSALES, type Deposito } from "@/data/stock";
+import { type Deposito, type SucursalOpcion } from "@/data/stock";
 
 interface DepositosListProps {
   depositos: Deposito[];
@@ -13,7 +13,7 @@ interface DepositosListProps {
   onView: (deposito: Deposito) => void;
 }
 
-export function DepositosList({ depositos, loading, onEdit, onNew, onView }: DepositosListProps) {
+export function DepositosList({ depositos, sucursales, loading, onEdit, onNew, onView }: DepositosListProps) {
   if (loading) {
     return (
       <div className="flex flex-col gap-6" aria-hidden="true">

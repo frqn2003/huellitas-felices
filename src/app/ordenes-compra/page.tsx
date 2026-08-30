@@ -50,6 +50,15 @@ import {
   ordenesDisponibles,
   type Recepcion,
 } from "@/data/recepciones";
+import {
+  FILTROS_RECEPCION_VACIOS,
+  FiltrosChipsRecepciones,
+  FiltrosRecepciones,
+  type FiltrosRecepcion,
+} from "@/components/recepciones/FiltrosRecepciones";
+import { RecepcionesTable } from "@/components/recepciones/RecepcionesTable";
+import { RecepcionFormModal } from "@/components/recepciones/RecepcionFormModal";
+import { RecepcionDetalleModal } from "@/components/recepciones/RecepcionDetalleModal";
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
