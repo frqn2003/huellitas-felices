@@ -28,6 +28,9 @@ Patrones recurrentes por pantalla: `<Entidad>Table`, `<Entidad>Filtros*`, `<Enti
 ### articulos
 `ArticuloFormModal` · `ArticulosTable` · `ArticuloThumb` · `DesactivarModal` · `EstadoBadge` · `FiltrosArticulos`
 
+### auth
+`LoginForm` · `TwoFactorModal` · `BlockedOverlay`
+
 ### compras
 `ComprasTabs` (tabs compartidos Proveedores / Cotizaciones / Órdenes de compra)
 

@@ -15,8 +15,9 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { useAuth } from "@/context/AuthContext";
 
 interface SidebarItem {
   label: string;
@@ -48,9 +49,6 @@ const SECCIONES: SidebarSection[] = [
     ],
   },
 ];
-
-// BACKEND: datos de sesión desde GET /api/auth/sesion (nombre, rol).
-const USUARIO_ACTUAL = { nombre: "Ana Martínez", rol: "Administradora" };
 
 function iniciales(nombre: string) {
   return nombre
@@ -112,6 +110,20 @@ function NavBody({
   collapsed: boolean;
   onNavigate?: () => void;
 }) {
+  const { state, logout } = useAuth();
+  const router = useRouter();
+  const isAuthenticated = state.status === "authenticated";
+
+  const usuarioNombre = isAuthenticated
+    ? `${state.usuario.nombre} ${state.usuario.apellido}`
+    : "Usuario";
+  const rolNombre = isAuthenticated ? state.rol.nombre : "";
+
+  const handleLogout = () => {
+    logout();
+    router.push("/login");
+  };
+
   return (
     <>
       <nav className="flex flex-1 flex-col gap-3 px-3 py-4" aria-label="Menú principal">
@@ -133,23 +145,21 @@ function NavBody({
           <span
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-accent-500 font-display text-sm font-extrabold text-brand-900"
             role="img"
-            aria-label={`Avatar de ${USUARIO_ACTUAL.nombre}`}
+            aria-label={`Avatar de ${usuarioNombre}`}
           >
-            {iniciales(USUARIO_ACTUAL.nombre)}
+            {iniciales(usuarioNombre)}
           </span>
           {!collapsed && (
             <>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-bold text-cream-50">{USUARIO_ACTUAL.nombre}</p>
-                <p className="truncate text-xs text-cream-50/60">{USUARIO_ACTUAL.rol}</p>
+                <p className="truncate text-sm font-bold text-cream-50">{usuarioNombre}</p>
+                <p className="truncate text-xs text-cream-50/60">{rolNombre}</p>
               </div>
-              {/* BACKEND: cerrar sesión con POST /api/auth/logout. */}
               <button
                 type="button"
-                disabled
-                aria-label="Cerrar sesión (disponible con backend)"
-                title="Disponible en la integración con backend"
-                className="flex h-11 w-11 cursor-not-allowed items-center justify-center rounded-pill text-cream-50/40 transition-colors duration-fast ease-out"
+                onClick={handleLogout}
+                aria-label="Cerrar sesión"
+                className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-pill text-cream-50/75 transition-colors duration-fast ease-out hover:bg-cream-50/10 hover:text-cream-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cream-50"
               >
                 <LogOut className="h-5 w-5" aria-hidden="true" />
               </button>
