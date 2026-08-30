@@ -28,11 +28,17 @@ Patrones recurrentes por pantalla: `<Entidad>Table`, `<Entidad>Filtros*`, `<Enti
 ### articulos
 `ArticuloFormModal` · `ArticulosTable` · `ArticuloThumb` · `DesactivarModal` · `EstadoBadge` · `FiltrosArticulos`
 
+### auth
+`LoginForm` · `TwoFactorModal` · `BlockedOverlay`
+
 ### compras
 `ComprasTabs` (tabs compartidos Proveedores / Cotizaciones / Órdenes de compra)
 
 ### cotizaciones
 `CancelarSolicitudModal` · `CompararCotizacionesModal` · `CotizacionFormModal` · `EstadoSolicitudBadge` · `FiltrosCotizaciones` · `SolicitudFormModal` · `SolicitudesTable`
+
+### configuracion
+`ConfiguracionForm` — perfil del usuario logueado: información de cuenta (solo lectura) + tu cuenta (editable). Guarda con modal de confirmación de contraseña y modal "Cambiar contraseña". Usa `Input`/`Button`/`Modal`/`StatusBadge`/`Toast` y `useAuth().actualizarUsuario`.
 
 ### layout
 `Sidebar` (nav principal)
@@ -42,6 +48,9 @@ Patrones recurrentes por pantalla: `<Entidad>Table`, `<Entidad>Filtros*`, `<Enti
 
 ### ordenes-compra
 `CancelarOrdenModal` · `EstadoOrdenBadge` · `FiltrosOrdenes` · `OrdenFormModal` · `OrdenesTable`
+
+### recepciones
+`RecepcionesTable` · `FiltrosRecepciones` · `FiltrosChipsRecepciones` · `RecepcionFormModal` · `RecepcionDetalleModal` · `EstadoRecepcionBadge`
 
 ### proveedores
 `BajaProveedorModal` · `EstadoProveedorBadge` (mapea sobre `StatusBadge`: success/neutral) · `FiltrosProveedores` · `ProveedorFormModal` · `ProveedoresTable`

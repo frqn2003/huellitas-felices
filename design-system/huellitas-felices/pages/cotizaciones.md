@@ -1,6 +1,6 @@
 # Página: Compras · tab Cotizaciones (`/ordenes-compra?tab=cotizaciones`)
 
-> HU-COMP-02 · Extiende `../MASTER.md` (Pet Bliss). Los tokens base NO cambian;
+> HU-COMP-02 (v2, brief `docs/briefs/HU-COMP-02-02.md`) · Extiende `../MASTER.md` (Pet Bliss). Los tokens base NO cambian;
 > este archivo documenta las decisiones específicas de esta pantalla.
 > Desde la consolidación del módulo, este contenido vive como tab "Cotizaciones"
 > dentro del módulo **Compras** (`/ordenes-compra`, componente `ComprasTabs`,
@@ -80,7 +80,7 @@ Siempre punto + texto (nunca solo color).
   (deja de recibir cotizaciones; las registradas quedan como historial), icono
   Trash2 igual que la acción de fila.
 
-## Flujo adjudicación → órdenes (HU-COMP-02)
+## Flujo adjudicación → órdenes (HU-COMP-02 v2)
 
 Al confirmar "Generar órdenes de compra": la solicitud pasa a Adjudicada y se
 crean N órdenes de compra directamente (una por proveedor, solo con los

@@ -45,6 +45,11 @@ const CATALOGOS_VACIOS: CatalogosOrden = {
   depositos: [],
   condicionesPago: [],
 };
+import {
+  recepcionesIniciales,
+  ordenesDisponibles,
+  type Recepcion,
+} from "@/data/recepciones";
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -144,6 +149,15 @@ function ComprasScreen() {
   const [aCotizar, setACotizar] = useState<SolicitudCotizacion | null>(null);
   const [aComparar, setAComparar] = useState<SolicitudCotizacion | null>(null);
   const [aCancelarSolicitud, setACancelarSolicitud] = useState<SolicitudCotizacion | null>(null);
+
+  // ── Estado del tab "Recepciones" ─────────────────────────────────────
+  const [recepciones, setRecepciones] = useState<Recepcion[]>([]);
+  const [busquedaRec, setBusquedaRec] = useState("");
+  const [filtrosRec, setFiltrosRec] = useState<FiltrosRecepcion>(FILTROS_RECEPCION_VACIOS);
+  const [pageSizeRec, setPageSizeRec] = useState(10);
+  const [pageRec, setPageRec] = useState(1);
+  const [formRecepcionOpen, setFormRecepcionOpen] = useState(false);
+  const [aVerDetalleRec, setAVerDetalleRec] = useState<Recepcion | null>(null);
 
   const [catalogos, setCatalogos] = useState<CatalogosOrden>(CATALOGOS_VACIOS);
   const [fichas, setFichas] = useState<
@@ -422,6 +436,68 @@ function ComprasScreen() {
     setFiltrosCot(FILTROS_SOLICITUD_VACIOS);
   };
 
+  // ── Filtrado recepciones ─────────────────────────────────────────────
+  const filtradasRec = useMemo(() => {
+    const q = busquedaRec.trim().toLowerCase();
+    const lista = recepciones.filter((r) => {
+      const matchBusqueda =
+        !q ||
+        r.numero.toLowerCase().includes(q) ||
+        r.ordenCompra.numero.toLowerCase().includes(q) ||
+        r.ordenCompra.proveedor.razonSocial.toLowerCase().includes(q);
+      const matchTipo =
+        filtrosRec.tipo === "Todas" || r.tipo_recepcion === filtrosRec.tipo;
+      const matchProveedor =
+        !filtrosRec.proveedorId ||
+        r.ordenCompra.proveedor.id === Number(filtrosRec.proveedorId);
+      return matchBusqueda && matchTipo && matchProveedor;
+    });
+    return lista.sort((a, b) =>
+      filtrosRec.ordenFecha === "antiguas"
+        ? Date.parse(a.fecha_hora) - Date.parse(b.fecha_hora)
+        : Date.parse(b.fecha_hora) - Date.parse(a.fecha_hora),
+    );
+  }, [recepciones, busquedaRec, filtrosRec]);
+
+  const totalPagesRec = Math.max(1, Math.ceil(filtradasRec.length / pageSizeRec));
+  const safePageRec = Math.min(pageRec, totalPagesRec);
+  const pageItemsRec = filtradasRec.slice(
+    (safePageRec - 1) * pageSizeRec,
+    safePageRec * pageSizeRec,
+  );
+  const pageStartRec = filtradasRec.length === 0 ? 0 : (safePageRec - 1) * pageSizeRec + 1;
+  const pageEndRec = Math.min(safePageRec * pageSizeRec, filtradasRec.length);
+  const hasActiveFiltersRec =
+    busquedaRec.trim() !== "" ||
+    filtrosRec.tipo !== FILTROS_RECEPCION_VACIOS.tipo ||
+    filtrosRec.proveedorId !== "";
+
+  const handleBusquedaRec = (value: string) => {
+    setBusquedaRec(value);
+    setPageRec(1);
+  };
+
+  const handleFiltrosRec = (next: FiltrosRecepcion) => {
+    setFiltrosRec(next);
+    setPageRec(1);
+  };
+
+  const limpiarTodoRec = () => {
+    setBusquedaRec("");
+    setFiltrosRec(FILTROS_RECEPCION_VACIOS);
+  };
+
+  const handleSaveRecepcion = (recepcion: Recepcion) => {
+    setRecepciones((prev) => [recepcion, ...prev]);
+    setFormRecepcionOpen(false);
+    showToast("success", "Recepción registrada correctamente");
+  };
+
+  const ordenesPendientes = useMemo(() => {
+    const ocIds = new Set(recepciones.map((r) => r.orden_compra_id));
+    return ordenesDisponibles.filter((oc) => !ocIds.has(oc.id));
+  }, [recepciones]);
+
   const handleCrearSolicitud = async (input: Parameters<typeof crearSolicitud>[0]) => {
     const res = await crearSolicitud(input);
     if (res.error) {
@@ -501,6 +577,7 @@ function ComprasScreen() {
 
   const esOrdenes = tab === "ordenes";
   const esCotizaciones = tab === "cotizaciones";
+  const esRecepciones = tab === "recepciones";
 
   return (
     <div className="flex min-h-screen bg-cream-50">
@@ -542,6 +619,16 @@ function ComprasScreen() {
                   >
                     <FilePlus2 className="h-5 w-5" aria-hidden="true" />
                     Nueva solicitud
+                  </Button>
+                )}
+                {esRecepciones && (
+                  <Button
+                    onClick={() => setFormRecepcionOpen(true)}
+                    disabled={loading || error}
+                    size="lg"
+                  >
+                    <PackagePlus className="h-5 w-5" aria-hidden="true" />
+                    Nueva
                   </Button>
                 )}
               </div>
@@ -607,6 +694,37 @@ function ComprasScreen() {
                 </div>
                 <div className="flex flex-wrap items-center">
                   <FiltrosCotChips filtros={filtrosCot} onChange={handleFiltrosCot} />
+                </div>
+              </div>
+            )}
+
+            {esRecepciones && (
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <div className="relative flex-1">
+                    <Search
+                      className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-text-secondary"
+                      aria-hidden="true"
+                    />
+                    <input
+                      type="search"
+                      value={busquedaRec}
+                      onChange={(e) => handleBusquedaRec(e.target.value)}
+                      placeholder="Buscar por N° de recepción, OC o proveedor..."
+                      aria-label="Buscar por número de recepción, orden de compra o proveedor"
+                      disabled={loading || error}
+                      className="h-11 w-full cursor-text rounded-pill border border-border bg-surface pl-12 pr-4 text-base text-text-primary transition-colors duration-fast ease-out placeholder:text-text-secondary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20 disabled:cursor-not-allowed disabled:opacity-45"
+                    />
+                  </div>
+                  <FiltrosRecepciones
+                    filtros={filtrosRec}
+                    onChange={handleFiltrosRec}
+                    disabled={loading || error}
+                    hideChips
+                  />
+                </div>
+                <div className="flex flex-wrap items-center">
+                  <FiltrosChipsRecepciones filtros={filtrosRec} onChange={handleFiltrosRec} />
                 </div>
               </div>
             )}
@@ -708,6 +826,38 @@ function ComprasScreen() {
                   )}
                 </div>
               )}
+
+              {esRecepciones && (
+                <div
+                  id="panel-recepciones"
+                  role="tabpanel"
+                  aria-labelledby="tab-recepciones"
+                  className="flex flex-col gap-6"
+                >
+                  <RecepcionesTable
+                    recepciones={pageItemsRec}
+                    loading={loading}
+                    hasActiveFilters={hasActiveFiltersRec}
+                    onClearFilters={limpiarTodoRec}
+                    onNueva={() => setFormRecepcionOpen(true)}
+                    onView={setAVerDetalleRec}
+                  />
+                  {!loading && pageItemsRec.length > 0 && (
+                    <Pagination
+                      page={safePageRec}
+                      totalPages={totalPagesRec}
+                      totalItems={filtradasRec.length}
+                      pageStart={pageStartRec}
+                      pageEnd={pageEndRec}
+                      pageSize={pageSizeRec}
+                      onPageChange={setPageRec}
+                      onPageSizeChange={setPageSizeRec}
+                      disabled={loading || error}
+                      itemLabel="recepciones"
+                    />
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
@@ -765,6 +915,19 @@ function ComprasScreen() {
         solicitud={aCancelarSolicitud}
         onClose={() => setACancelarSolicitud(null)}
         onConfirm={handleCancelarSolicitud}
+      />
+
+      {/* ── Modales del tab Recepciones ── */}
+      <RecepcionFormModal
+        open={formRecepcionOpen}
+        onClose={() => setFormRecepcionOpen(false)}
+        onConfirm={handleSaveRecepcion}
+        ordenes={ordenesPendientes}
+        numeroSiguiente={recepciones.length + 1}
+      />
+      <RecepcionDetalleModal
+        recepcion={aVerDetalleRec}
+        onClose={() => setAVerDetalleRec(null)}
       />
     </div>
   );

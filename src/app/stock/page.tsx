@@ -235,10 +235,10 @@ function StockScreen() {
         f.deposito.sucursal.toLowerCase().includes(q);
       const matchSucursal =
         !filtros.sucursalId ||
-        f.deposito.sucursal ===
-        sucursales.find((s) => s.id === Number(filtros.sucursalId))?.nombre;
+        f.deposito.sucursal === SUCURSALES.find((s) => s.id === Number(filtros.sucursalId))?.nombre;
+      const matchDeposito = !filtros.depositoId || f.depositoId === Number(filtros.depositoId);
       const matchEstado = filtros.estadoStock === "todos" || f.estadoCalculado === filtros.estadoStock;
-      return matchBusqueda && matchSucursal && matchEstado;
+      return matchBusqueda && matchSucursal && matchDeposito && matchEstado;
     });
   }, [fichasVisibles, busqueda, filtros, sucursales]);
 
@@ -250,6 +250,7 @@ function StockScreen() {
   const hasActiveFilters =
     busqueda.trim() !== "" ||
     filtros.sucursalId !== "" ||
+    filtros.depositoId !== "" ||
     filtros.estadoStock !== "todos";
 
   const handleBusqueda = (value: string) => {
@@ -265,6 +266,16 @@ function StockScreen() {
   const limpiarTodo = () => {
     setBusqueda("");
     setFiltros(FILTROS_STOCK_VACIOS);
+  };
+
+  const verFichasDeposito = (deposito: Deposito) => {
+    setFiltros({
+      sucursalId: String(deposito.sucursalId),
+      depositoId: String(deposito.id),
+      estadoStock: "todos",
+    });
+    setPage(1);
+    setTab("fichas");
   };
 
   const openNuevaFicha = () => {
@@ -604,13 +615,14 @@ function StockScreen() {
                   </div>
                   <FiltrosStock
                     filtros={filtros}
+                    depositos={depositos}
                     onChange={handleFiltros}
                     disabled={loading || error}
                     hideChips
                   />
                 </div>
                 <div className="flex flex-wrap items-center">
-                  <FiltrosStockChips filtros={filtros} onChange={handleFiltros} />
+                  <FiltrosStockChips filtros={filtros} depositos={depositos} onChange={handleFiltros} />
                 </div>
               </div>
             )}
@@ -688,6 +700,7 @@ function StockScreen() {
                     loading={loading}
                     onEdit={openEdicionDeposito}
                     onNew={openNuevoDeposito}
+                    onView={verFichasDeposito}
                   />
                 </div>
               )}
