@@ -34,11 +34,14 @@ Patrones recurrentes por pantalla: `<Entidad>Table`, `<Entidad>Filtros*`, `<Enti
 ### compras
 `ComprasTabs` (tabs compartidos Proveedores / Cotizaciones / Órdenes de compra)
 
-### cotizaciones
-`CancelarSolicitudModal` · `CompararCotizacionesModal` · `CotizacionFormModal` · `EstadoSolicitudBadge` · `FiltrosCotizaciones` · `SolicitudFormModal` · `SolicitudesTable`
+### comprobantes
+`ComprobantesContent` · `DropzoneComprobante` · `OcrFieldGroup` · `DetalleLineasTable` · `EstadoComprobanteBadge` · `FiltrosComprobantes` · `FiltrosComprobantesChips` · `ComprobantesTable` · `AnularComprobanteModal` · `PreviewComprobantePdf` · `ui/ConfirmarDialog`
 
 ### configuracion
 `ConfiguracionForm` — perfil del usuario logueado: información de cuenta (solo lectura) + tu cuenta (editable). Guarda con modal de confirmación de contraseña y modal "Cambiar contraseña". Usa `Input`/`Button`/`Modal`/`StatusBadge`/`Toast` y `useAuth().actualizarUsuario`.
+
+### cotizaciones
+`CancelarSolicitudModal` · `CompararCotizacionesModal` · `CotizacionFormModal` · `EstadoSolicitudBadge` · `FiltrosCotizaciones` · `SolicitudFormModal` · `SolicitudesTable`
 
 ### layout
 `Sidebar` (nav principal)
@@ -49,11 +52,11 @@ Patrones recurrentes por pantalla: `<Entidad>Table`, `<Entidad>Filtros*`, `<Enti
 ### ordenes-compra
 `CancelarOrdenModal` · `EstadoOrdenBadge` · `FiltrosOrdenes` · `OrdenFormModal` · `OrdenesTable`
 
+### proveedores
+`BajaProveedorModal` · `EstadoProveedorBadge` (mapea sobre `StatusBadge`: success/neutral) · `FiltrosProveedores` · `ProveedorFormModal` · `ProveedoresTable` · `ProveedoresTabs`
+
 ### recepciones
 `RecepcionesTable` · `FiltrosRecepciones` · `FiltrosChipsRecepciones` · `RecepcionFormModal` · `RecepcionDetalleModal` · `EstadoRecepcionBadge`
-
-### proveedores
-`BajaProveedorModal` · `EstadoProveedorBadge` (mapea sobre `StatusBadge`: success/neutral) · `FiltrosProveedores` · `ProveedorFormModal` · `ProveedoresTable`
 
 ### stock
 `DepositoFormModal` · `DepositosList` · `EstadoStockBadge` · `FichaFormModal` · `FichasTable` · `FiltrosStock` · `StockTabs`

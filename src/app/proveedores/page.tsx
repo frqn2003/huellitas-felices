@@ -1,14 +1,21 @@
 "use client";
 
 import { AlertTriangle, Building2, Download, Plus, RotateCcw } from "lucide-react";
-import { useContext, useMemo, useState } from "react";
+import { Suspense, useContext, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { BajaProveedorModal } from "@/components/proveedores/BajaProveedorModal";
+import {
+  ComprobantesContent,
+  type ComprobantesContentHandle,
+  type TabView,
+} from "@/components/comprobantes/ComprobantesContent";
 import type { FiltroEstado } from "@/components/proveedores/FiltrosProveedores";
 import { FiltrosProveedores } from "@/components/proveedores/FiltrosProveedores";
 import type { ProveedorModalMode } from "@/components/proveedores/ProveedorFormModal";
 import { ProveedorFormModal } from "@/components/proveedores/ProveedorFormModal";
 import { ProveedoresTable } from "@/components/proveedores/ProveedoresTable";
+import { ProveedoresTabs, type TabProveedores } from "@/components/proveedores/ProveedoresTabs";
 import { Button } from "@/components/ui/Button";
 import { Pagination } from "@/components/ui/Pagination";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
@@ -51,11 +58,11 @@ function exportarCSV(proveedores: Proveedor[]) {
   URL.revokeObjectURL(url);
 }
 
-function ProveedoresPageContent() {
+function ProveedoresScreen() {
   const { showToast } = useToast();
 
   const context = useContext(ProveedoresContext);
-  if (!context) throw new Error("ProveedoresPageContent debe usarse dentro de ProveedoresProvider");
+  if (!context) throw new Error("ProveedoresScreen debe usarse dentro de ProveedoresProvider");
 
   const {
     proveedores,
@@ -68,6 +75,14 @@ function ProveedoresPageContent() {
     darDeBaja,
   } = context;
 
+  // La pestaña inicial sale de la URL: /proveedores?tab=comprobantes viene del
+  // redirect de la vieja ruta /proveedores/comprobantes.
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const [tab, setTab] = useState<TabProveedores>(
+    tabParam === "comprobantes" ? "comprobantes" : "proveedores",
+  );
+
   const [busqueda, setBusqueda] = useState("");
   const [estadoFiltro, setEstadoFiltro] = useState<FiltroEstado>("Todos");
 
@@ -78,6 +93,10 @@ function ProveedoresPageContent() {
   const [modalMode, setModalMode] = useState<ProveedorModalMode>("crear");
   const [proveedorActivo, setProveedorActivo] = useState<Proveedor | null>(null);
   const [aDarDeBaja, setADarDeBaja] = useState<Proveedor | null>(null);
+
+  // El header abre el flujo "Nuevo comprobante" (vive dentro de ComprobantesContent).
+  const comprobantesRef = useRef<ComprobantesContentHandle>(null);
+  const [vistaComprobantes, setVistaComprobantes] = useState<TabView>("historial");
 
   const filtrados = useMemo(() => {
     const base = proveedores;
@@ -154,96 +173,148 @@ function ProveedoresPageContent() {
 
   const handleReintentar = () => recargar();
 
+  const esProveedores = tab === "proveedores";
+  const esComprobantes = tab === "comprobantes";
+
   return (
-    <div className="mx-auto flex w-full max-w-[min(1200px,calc(100%-48px))] flex-col gap-6 py-8">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <span className="flex h-12 w-12 items-center justify-center rounded-sm bg-brand-900/10">
-            <Building2 className="h-6 w-6 text-brand-900" aria-hidden="true" />
-          </span>
-          <div className="flex flex-col">
-            <h1 className="font-display text-2xl font-extrabold uppercase tracking-tight text-brand-900">
-              Proveedores
-            </h1>
-            <p className="text-sm font-medium text-text-secondary">
-              Directorio y estado de cuentas de proveedores
-            </p>
+    <div className="flex min-h-screen bg-cream-50">
+      <Sidebar />
+      <main className="flex min-w-0 flex-1 flex-col">
+        <div className="border-b border-border bg-cream-50 px-4 py-6 sm:px-8">
+          <div className="mx-auto flex max-w-7xl flex-col gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <span className="flex h-12 w-12 items-center justify-center rounded-sm bg-brand-900/10">
+                  <Building2 className="h-6 w-6 text-brand-900" aria-hidden="true" />
+                </span>
+                <div className="flex flex-col">
+                  <h1 className="font-display text-2xl font-extrabold uppercase tracking-tight text-brand-900">
+                    Proveedores
+                  </h1>
+                  <p className="text-sm font-medium text-text-secondary">
+                    Directorio, estado de cuentas y comprobantes de proveedores
+                  </p>
+                </div>
+              </div>
+
+              {esProveedores && (
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button size="lg" onClick={() => abrirModal("crear")} disabled={loading || error}>
+                    <Plus className="h-5 w-5" aria-hidden="true" />
+                    Nuevo proveedor
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    onClick={() => {
+                      exportarCSV(filtrados);
+                      showToast("success", "Exportación completada: el listado filtrado se descargó en CSV");
+                    }}
+                    disabled={loading || error || filtrados.length === 0}
+                  >
+                    <Download className="h-4 w-4" aria-hidden="true" />
+                    Exportar
+                  </Button>
+                </div>
+              )}
+
+              {esComprobantes && vistaComprobantes === "historial" && (
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button
+                    size="lg"
+                    onClick={() => { comprobantesRef.current?.irANuevo(); setVistaComprobantes("nuevo"); }}
+                    aria-label="Subir nuevo comprobante"
+                  >
+                    <Plus className="h-5 w-5" aria-hidden="true" />
+                    Nuevo comprobante
+                  </Button>
+                </div>
+              )}
+            </div>
+            <ProveedoresTabs active={tab} onChange={setTab} disabled={loading || error} />
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <Button size="lg" onClick={() => abrirModal("crear")} disabled={loading || error}>
-            <Plus className="h-5 w-5" aria-hidden="true" />
-            Nuevo proveedor
-          </Button>
-          <Button
-            variant="outline"
-            size="lg"
-            onClick={() => {
-              exportarCSV(filtrados);
-              showToast("success", "Exportación completada: el listado filtrado se descargó en CSV");
-            }}
-            disabled={loading || error || filtrados.length === 0}
-          >
-            <Download className="h-4 w-4" aria-hidden="true" />
-            Exportar
-          </Button>
-        </div>
-      </header>
+        <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 py-6 sm:px-8">
+          {esProveedores && (
+            <section
+              id="panel-proveedores"
+              role="tabpanel"
+              aria-labelledby="tab-proveedores"
+              className="flex flex-col gap-5"
+            >
+              {error ? (
+                <div className="flex flex-col items-center gap-4 rounded-md border border-destructive/40 bg-surface px-6 py-16 text-center shadow-card">
+                  <span className="flex h-14 w-14 items-center justify-center rounded-md bg-destructive/10">
+                    <AlertTriangle className="h-7 w-7 text-destructive" aria-hidden="true" />
+                  </span>
+                  <div className="flex flex-col gap-1">
+                    <h3 className="font-display text-lg font-extrabold uppercase tracking-tight text-brand-900">
+                      No se pudieron cargar los proveedores
+                    </h3>
+                    <p className="max-w-sm text-sm text-text-secondary">
+                      Hubo un problema al consultar el directorio. Revisá tu conexión e intentá de nuevo.
+                    </p>
+                  </div>
+                  <Button variant="secondary" onClick={handleReintentar}>
+                    <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                    Reintentar
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <FiltrosProveedores
+                    busqueda={busqueda}
+                    onBusquedaChange={handleBusqueda}
+                    estado={estadoFiltro}
+                    onEstadoChange={handleEstado}
+                  />
 
-      {error ? (
-        <div className="flex flex-col items-center gap-4 rounded-md border border-destructive/40 bg-surface px-6 py-16 text-center shadow-card">
-          <span className="flex h-14 w-14 items-center justify-center rounded-md bg-destructive/10">
-            <AlertTriangle className="h-7 w-7 text-destructive" aria-hidden="true" />
-          </span>
-          <div className="flex flex-col gap-1">
-            <h3 className="font-display text-lg font-extrabold uppercase tracking-tight text-brand-900">
-              No se pudieron cargar los proveedores
-            </h3>
-            <p className="max-w-sm text-sm text-text-secondary">
-              Hubo un problema al consultar el directorio. Revisá tu conexión e intentá de nuevo.
-            </p>
-          </div>
-          <Button variant="secondary" onClick={handleReintentar}>
-            <RotateCcw className="h-4 w-4" aria-hidden="true" />
-            Reintentar
-          </Button>
-        </div>
-      ) : (
-        <section className="flex flex-col gap-5">
-          <FiltrosProveedores
-            busqueda={busqueda}
-            onBusquedaChange={handleBusqueda}
-            estado={estadoFiltro}
-            onEstadoChange={handleEstado}
-          />
+                  <ProveedoresTable
+                    proveedores={pageItems}
+                    loading={loading}
+                    hasActiveFilters={hasActiveFilters}
+                    onClearFilters={handleClearFilters}
+                    onNueva={() => abrirModal("crear")}
+                    onVer={(prov) => abrirModal("ver", prov)}
+                    onEditar={(prov) => abrirModal("editar", prov)}
+                    onBaja={setADarDeBaja}
+                  />
 
-          <ProveedoresTable
-            proveedores={pageItems}
-            loading={loading}
-            hasActiveFilters={hasActiveFilters}
-            onClearFilters={handleClearFilters}
-            onNueva={() => abrirModal("crear")}
-            onVer={(prov) => abrirModal("ver", prov)}
-            onEditar={(prov) => abrirModal("editar", prov)}
-            onBaja={setADarDeBaja}
-          />
-
-          {!loading && pageItems.length > 0 && (
-            <Pagination
-              page={safePage}
-              totalPages={totalPages}
-              totalItems={filtrados.length}
-              pageStart={pageStart}
-              pageEnd={pageEnd}
-              pageSize={pageSize}
-              onPageChange={setPage}
-              onPageSizeChange={setPageSize}
-              disabled={error}
-            />
+                  {!loading && pageItems.length > 0 && (
+                    <Pagination
+                      page={safePage}
+                      totalPages={totalPages}
+                      totalItems={filtrados.length}
+                      pageStart={pageStart}
+                      pageEnd={pageEnd}
+                      pageSize={pageSize}
+                      onPageChange={setPage}
+                      onPageSizeChange={setPageSize}
+                      disabled={error}
+                    />
+                  )}
+                </>
+              )}
+            </section>
           )}
-        </section>
-      )}
+
+          {esComprobantes && (
+            <div
+              id="panel-comprobantes"
+              role="tabpanel"
+              aria-labelledby="tab-comprobantes"
+              className="flex flex-col"
+            >
+              <ComprobantesContent
+                ref={comprobantesRef}
+                tab={vistaComprobantes}
+                onTabChange={setVistaComprobantes}
+              />
+            </div>
+          )}
+        </div>
+      </main>
 
       <ProveedorFormModal
         open={modalOpen}
@@ -267,12 +338,11 @@ export default function ProveedoresPage() {
   return (
     <ToastProvider>
       <ProveedoresProvider>
-        <div className="flex min-h-screen bg-cream-50">
-          <Sidebar />
-          <main className="flex min-w-0 flex-1 flex-col">
-            <ProveedoresPageContent />
-          </main>
-        </div>
+        {/* useSearchParams necesita un límite de Suspense: durante el prerender
+            la query todavía no se conoce. */}
+        <Suspense fallback={null}>
+          <ProveedoresScreen />
+        </Suspense>
       </ProveedoresProvider>
     </ToastProvider>
   );
