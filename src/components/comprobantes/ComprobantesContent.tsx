@@ -19,6 +19,7 @@ import { DropzoneComprobante } from "@/components/comprobantes/DropzoneComproban
 import type { FiltrosComprobanteValues } from "@/components/comprobantes/FiltrosComprobantes";
 import { OcrFieldGroup } from "@/components/comprobantes/OcrFieldGroup";
 import { PreviewComprobantePdf } from "@/components/comprobantes/PreviewComprobantePdf";
+import { VerComprobanteModal } from "@/components/comprobantes/VerComprobanteModal";
 
 // ─── Datos hardcodeados ───────────────────────────────────────────────────────
 
@@ -50,11 +51,24 @@ const DATOS_OCR = {
   camposNoReconocidos: ["alicuotaIVA linea 2"],
 };
 
+/** Convierte un monto numérico al formato plano (sin símbolo) usado por el input readOnly de monto. */
+const formatNumeroMoneda = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
+
 const HISTORIAL_INICIAL: ComprobanteRow[] = [
-  { id: 101, proveedor: "Distribuidora Vet SA", tipo: "Factura A", numero: "0003-00001278", oc: "OC-2026-0045", fecha: "2026-08-25", monto: 321255.00, estado: "Vigente" },
-  { id: 98, proveedor: "Insumos Veterinarios del Norte SRL", tipo: "Factura B", numero: "0001-00000542", oc: "OC-2026-0031", fecha: "2026-08-12", monto: 87400.00, estado: "Vigente" },
-  { id: 95, proveedor: "Distribuidora Vet SA", tipo: "Nota de Crédito A", numero: "0003-00000034", oc: "OC-2026-0040", fecha: "2026-08-05", monto: -15000.00, estado: "Vigente", comprobanteOriginal: "0003-00001250" },
-  { id: 90, proveedor: "Juan Pérez Alimentos Balanceados", tipo: "Factura C", numero: "0001-00000112", oc: "OC-2026-0028", fecha: "2026-07-30", monto: 42000.00, estado: "Anulado", comprobanteAnulador: "0001-00000113" },
+  { id: 101, proveedor: "Distribuidora Vet SA", cuit: "30-71234567-8", tipo: "Factura A", numero: "0003-00001278", oc: "OC-2026-0045", ocId: 1, fecha: "2026-08-25", monto: 321255.00, estado: "Vigente", lineas: [
+    { id: 1, articuloCodigo: "VAC-001", descripcion: "Vacuna Quíntuple Canina", cantidad: 50, precioUnitario: 4200.00, alicuotaIVA: 21, subtotal: 210000.00 },
+    { id: 2, articuloCodigo: "ANT-014", descripcion: "Antibiótico Amoxicilina 500mg", cantidad: 30, precioUnitario: 1850.00, alicuotaIVA: null, subtotal: 55500.00 },
+  ] },
+  { id: 98, proveedor: "Insumos Veterinarios del Norte SRL", cuit: "30-70987654-3", tipo: "Factura B", numero: "0001-00000542", oc: "OC-2026-0031", fecha: "2026-08-12", monto: 87400.00, estado: "Vigente", lineas: [
+    { id: 1, articuloCodigo: "JER-020", descripcion: "Jeringas descartables 5ml", cantidad: 200, precioUnitario: 380.00, alicuotaIVA: 21, subtotal: 76000.00 },
+    { id: 2, articuloCodigo: "AGU-011", descripcion: "Agujas hipodérmicas 21G", cantidad: 100, precioUnitario: 114.00, alicuotaIVA: 10.5, subtotal: 11400.00 },
+  ] },
+  { id: 95, proveedor: "Distribuidora Vet SA", cuit: "30-71234567-8", tipo: "Nota de Crédito A", numero: "0003-00000034", oc: "OC-2026-0040", fecha: "2026-08-05", monto: -15000.00, estado: "Vigente", comprobanteOriginal: "0003-00001250", facturaOriginalId: "101", lineas: [
+    { id: 1, articuloCodigo: "VAC-001", descripcion: "Devolución Vacuna Quíntuple Canina", cantidad: -5, precioUnitario: 3000.00, alicuotaIVA: 21, subtotal: -15000.00 },
+  ] },
+  { id: 90, proveedor: "Juan Pérez Alimentos Balanceados", cuit: "20-25874196-5", tipo: "Factura C", numero: "0001-00000112", oc: "OC-2026-0028", fecha: "2026-07-30", monto: 42000.00, estado: "Anulado", comprobanteAnulador: "0001-00000113", lineas: [
+    { id: 1, articuloCodigo: "BAL-030", descripcion: "Alimento balanceado adulto 20kg", cantidad: 12, precioUnitario: 3500.00, alicuotaIVA: null, subtotal: 42000.00 },
+  ] },
 ];
 
 const LINEAS_OCR_INICIAL: LineaComprobante[] = [
@@ -83,10 +97,12 @@ interface ComprobantesContentProps {
   /** Permite limpiar búsqueda/filtros desde el estado vacío de la tabla. */
   onBusquedaChange: (q: string) => void;
   onFiltrosChange: (filtros: FiltrosComprobanteValues) => void;
+  /** Redirige al detalle de cta. cte. del proveedor del comprobante (cross-navegación). */
+  onVerCtaCte?: (filas: ComprobanteRow) => void;
 }
 
 export const ComprobantesContent = forwardRef<ComprobantesContentHandle, ComprobantesContentProps>(
-  function ComprobantesContent({ tab, onTabChange, busqueda, filtros, onBusquedaChange, onFiltrosChange }, ref) {
+  function ComprobantesContent({ tab, onTabChange, busqueda, filtros, onBusquedaChange, onFiltrosChange, onVerCtaCte }, ref) {
   const { showToast } = useToast();
   const reduceMotion = useReducedMotion();
 
@@ -122,16 +138,48 @@ export const ComprobantesContent = forwardRef<ComprobantesContentHandle, Comprob
   );
   const [confirmarCancelar, setConfirmarCancelar] = useState(false);
 
+  // Modal de detalle ("Ver" con el ojo) + modo edición de un comprobante del historial
+  const [verModal, setVerModal] = useState<{ open: boolean; comprobante: ComprobanteRow | null }>({
+    open: false,
+    comprobante: null,
+  });
+  // id del comprobante en edición; null = alta (nuevo comprobante)
+  const [editandoId, setEditandoId] = useState<number | null>(null);
+
   // El botón "Nuevo comprobante" vive en el header de la pantalla; acá
   // exponemos un handler para que abra el flujo en el paso 1.
+  const cargarParaEditar = (comprobante: ComprobanteRow) => {
+    const [puntoVentaEdicion = "", numeroEmisionEdicion = ""] = comprobante.numero.split("-");
+    setEditandoId(comprobante.id);
+    setTipo(comprobante.tipo);
+    setPuntoVenta(puntoVentaEdicion);
+    setNumero(numeroEmisionEdicion);
+    setFecha(comprobante.fecha);
+    setCuit(comprobante.cuit ?? "");
+    setOcId(comprobante.ocId?.toString() ?? "");
+    setFacturaOriginalId(comprobante.facturaOriginalId ?? "");
+    setLineas(comprobante.lineas ?? []);
+    setMontoTotal(formatNumeroMoneda(comprobante.monto));
+    setErrores({});
+    setUploadError("");
+    setIsUploading(false);
+    setArchivo(null);
+    setFormPaso(1);
+    setPaso(2);
+    onTabChange("nuevo");
+  };
+
   useImperativeHandle(ref, () => ({
     irANuevo: () => {
+      setEditandoId(null);
       setUploadError("");
       setIsUploading(false);
       setArchivo(null);
       setPaso(1);
       setFormPaso(1);
     },
+    /** Abre el flujo de edición en el paso de datos cargando un comprobante del historial. */
+    irAEditar: cargarParaEditar,
     /** Vuelve la paginación del historial a la página 1 (al cambiar búsqueda/filtros). */
     resetPaginacion: () => {
       setPage(1);
@@ -195,19 +243,53 @@ export const ComprobantesContent = forwardRef<ComprobantesContentHandle, Comprob
     if (Object.keys(errs).length > 0) return;
 
     // BACKEND: reemplazar por POST /api/comprobantes con { tipo, puntoVenta, numero, fecha, cuit, ocId, facturaOriginalId, lineas }
-    const nuevo: ComprobanteRow = {
-      id: Math.max(0, ...historial.map((h) => h.id)) + 1,
-      proveedor: PROVEEDORES.find((p) => p.cuit === cuit)?.razonSocial ?? "Proveedor desconocido",
-      tipo,
-      numero: `${puntoVenta.padStart(4, "0")}-${numero.padStart(8, "0")}`,
-      oc: ORDENES_COMPRA.find((o) => o.id.toString() === ocId)?.numero ?? ocId,
-      fecha,
-      monto: lineas.reduce((s, l) => s + l.subtotal, 0),
-      estado: "Vigente",
-    };
-    setHistorial((prev) => [nuevo, ...prev]);
-    showToast("success", "Comprobante guardado correctamente.");
+    // BACKEND: en modo edición reemplazar por PUT /api/comprobantes/{id} con el mismo payload.
+    const proveedor = PROVEEDORES.find((p) => p.cuit === cuit)?.razonSocial ?? "Proveedor desconocido";
+    const numeroCompleto = `${puntoVenta.padStart(4, "0")}-${numero.padStart(8, "0")}`;
+    const oc = ORDENES_COMPRA.find((o) => o.id.toString() === ocId)?.numero ?? ocId;
+    const monto = lineas.reduce((s, l) => s + l.subtotal, 0);
+
+    if (editandoId !== null) {
+      const prev = historial.find((h) => h.id === editandoId);
+      setHistorial((prevList) =>
+        prevList.map((f) =>
+          f.id === editandoId
+            ? {
+                ...f,
+                proveedor,
+                tipo,
+                numero: numeroCompleto,
+                oc,
+                cuit,
+                lineas,
+                ocId: ocId ? Number(ocId) : undefined,
+                fecha,
+                monto,
+                estado: prev?.estado ?? f.estado,
+              }
+            : f,
+        ),
+      );
+      showToast("success", "Comprobante modificado correctamente.");
+    } else {
+      const nuevo: ComprobanteRow = {
+        id: Math.max(0, ...historial.map((h) => h.id)) + 1,
+        proveedor,
+        cuit,
+        tipo,
+        numero: numeroCompleto,
+        oc,
+        ocId: ocId ? Number(ocId) : undefined,
+        lineas,
+        fecha,
+        monto,
+        estado: "Vigente",
+      };
+      setHistorial((prev) => [nuevo, ...prev]);
+      showToast("success", "Comprobante guardado correctamente.");
+    }
     // Reiniciar formulario
+    setEditandoId(null);
     setPaso(1);
     setFormPaso(1);
     setArchivo(null);
@@ -287,7 +369,7 @@ export const ComprobantesContent = forwardRef<ComprobantesContentHandle, Comprob
                   type="button"
                   variant="outline"
                   size="md"
-                  onClick={() => { setPaso(1); setErrores({}); setArchivo(null); onTabChange("historial"); }}
+                  onClick={() => { setEditandoId(null); setPaso(1); setErrores({}); setArchivo(null); onTabChange("historial"); }}
                   className="self-start"
                 >
                   Volver al historial
@@ -304,7 +386,9 @@ export const ComprobantesContent = forwardRef<ComprobantesContentHandle, Comprob
 
                 {/* Panel formulario */}
                 <div className="flex flex-col gap-5 lg:w-[45%]">
-                  <h2 className="font-display text-sm font-extrabold uppercase tracking-tight text-brand-900">Datos del comprobante</h2>
+                  <h2 className="font-display text-sm font-extrabold uppercase tracking-tight text-brand-900">
+                    {editandoId !== null ? "Editar comprobante" : "Datos del comprobante"}
+                  </h2>
 
                   {formPaso === 1 ? (
                     <>
@@ -443,7 +527,7 @@ export const ComprobantesContent = forwardRef<ComprobantesContentHandle, Comprob
                           Cancelar
                         </Button>
                         <Button type="button" variant="primary" onClick={handleGuardar}>
-                          Guardar comprobante
+                          {editandoId !== null ? "Guardar cambios" : "Guardar comprobante"}
                         </Button>
                       </div>
                     </>
@@ -467,11 +551,15 @@ export const ComprobantesContent = forwardRef<ComprobantesContentHandle, Comprob
               filas={historialPagina}
               hasActiveFilters={hasActiveFilters}
               onClearFilters={handleClearFilters}
-              onVer={(_id) => { /* BACKEND: redirigir a detalle o abrir modal de vista */ }}
+              onVer={(id) => {
+                const f = historial.find((h) => h.id === id);
+                if (f) setVerModal({ open: true, comprobante: f });
+              }}
               onAnular={(id) => {
                 const f = historial.find((h) => h.id === id);
                 if (f) setAnularModal({ open: true, id, numero: f.numero });
               }}
+              onVerCtaCte={onVerCtaCte}
             />
 
             {/* Paginación */}
@@ -499,16 +587,32 @@ export const ComprobantesContent = forwardRef<ComprobantesContentHandle, Comprob
         onConfirm={handleAnularConfirm}
       />
 
+      {/* Modal de detalle ("Ver" con el ojo) → permite modificar reutilizando el flujo de datos */}
+      <VerComprobanteModal
+        open={verModal.open}
+        comprobante={verModal.comprobante}
+        onClose={() => setVerModal({ open: false, comprobante: null })}
+        onModificar={(c) => {
+          setVerModal({ open: false, comprobante: null });
+          cargarParaEditar(c);
+        }}
+      />
+
       {/* Confirmación de cancelación */}
       <ConfirmarDialog
         open={confirmarCancelar}
         onClose={() => setConfirmarCancelar(false)}
-        title="Cancelar carga del comprobante"
-        description="Se descartarán los datos cargados y volverás al historial. Esta acción no se puede deshacer."
-        confirmLabel="Descartar comprobante"
+        title={editandoId !== null ? "Cancelar edición del comprobante" : "Cancelar carga del comprobante"}
+        description={
+          editandoId !== null
+            ? "Se descartarán los cambios realizados y volverás al historial. Esta acción no se puede deshacer."
+            : "Se descartarán los datos cargados y volverás al historial. Esta acción no se puede deshacer."
+        }
+        confirmLabel="Descartar cambios"
         cancelLabel="Seguir editando"
         onConfirm={() => {
           setConfirmarCancelar(false);
+          setEditandoId(null);
           setPaso(1);
           setFormPaso(1);
           setErrores({});

@@ -4,12 +4,19 @@ import { AlertTriangle, Building2, Download, Plus, RotateCcw, Search } from "luc
 import { Suspense, useContext, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { CtaCorrienteDetalle } from "@/components/proveedores/CtaCorrienteDetalle";
+import { CtaCorrienteList } from "@/components/proveedores/CtaCorrienteList";
+import {
+  RegistrarPagoModal,
+  type PagoNuevo,
+} from "@/components/proveedores/RegistrarPagoModal";
 import { BajaProveedorModal } from "@/components/proveedores/BajaProveedorModal";
 import {
   ComprobantesContent,
   type ComprobantesContentHandle,
   type TabView,
 } from "@/components/comprobantes/ComprobantesContent";
+import type { ComprobanteRow } from "@/components/comprobantes/ComprobantesTable";
 import type { FiltroEstado } from "@/components/proveedores/FiltrosProveedores";
 import { FiltrosProveedores } from "@/components/proveedores/FiltrosProveedores";
 import {
@@ -28,6 +35,16 @@ import { ToastProvider, useToast } from "@/components/ui/Toast";
 import { ProveedoresContext, ProveedoresProvider } from "@/context/ProveedoresContext";
 import type { NuevoProveedorInput } from "@/context/ProveedoresContext";
 import type { Proveedor } from "@/data/proveedores";
+import {
+  COMPROBANTES_POR_PROVEEDOR,
+  DIAS_ALERTA_PROXIMO_VENCER,
+  PAGOS_POR_PROVEEDOR,
+  PROVEEDORES_CTA_CTE,
+  type ComprobantePendiente,
+  type EstadoCtaCte,
+  type PagoProveedor,
+  type ProveedorCtaCte,
+} from "@/data/cuentas-corrientes";
 
 function exportarCSV(proveedores: Proveedor[]) {
   const cabeceras = [
@@ -64,6 +81,50 @@ function exportarCSV(proveedores: Proveedor[]) {
   URL.revokeObjectURL(url);
 }
 
+function exportarCSVCtaCte(listado: ProveedorCtaCte[]) {
+  const cabeceras = ["Proveedor", "CUIT", "Deuda total", "Proximo vencimiento", "Estado"];
+  const filas = listado.map((p) =>
+    [
+      `"${p.razonSocial.replace(/"/g, '""')}"`,
+      p.cuit,
+      String(p.saldoActual),
+      p.proximoVencimiento ?? "",
+      p.estadoCta,
+    ].join(";"),
+  );
+  const csv = [cabeceras.join(";"), ...filas].join("\n");
+  const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "cuentas-corrientes.csv";
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function proveedorPorRazonSocial(listado: ProveedorCtaCte[], razonSocial: string) {
+  return (
+    listado.find(
+      (p) => p.razonSocial.toLowerCase() === razonSocial.trim().toLowerCase(),
+    ) ??
+    null
+  );
+}
+
+/** Deriva el estado cta.cte. de un proveedor a partir de su saldo y vencimiento. */
+function derivarEstadoCta(saldoActual: number, proximoVencimiento: string | null): EstadoCtaCte {
+  if (saldoActual < 0) return "Credito";
+  if (saldoActual === 0) return "Saldado";
+  if (!proximoVencimiento) return "Pendiente";
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  const vto = new Date(`${proximoVencimiento}T00:00:00`);
+  const diffDias = Math.round((vto.getTime() - hoy.getTime()) / 86400000);
+  if (diffDias < 0) return "Vencido";
+  if (diffDias <= DIAS_ALERTA_PROXIMO_VENCER) return "ProximoAVencer";
+  return "Pendiente";
+}
+
 function ProveedoresScreen() {
   const { showToast } = useToast();
 
@@ -86,7 +147,7 @@ function ProveedoresScreen() {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
   const [tab, setTab] = useState<TabProveedores>(
-    tabParam === "comprobantes" ? "comprobantes" : "proveedores",
+    tabParam === "comprobantes" ? "comprobantes" : tabParam === "cta-corriente" ? "cta-corriente" : "proveedores",
   );
 
   const [busqueda, setBusqueda] = useState("");
@@ -108,6 +169,22 @@ function ProveedoresScreen() {
   // El header abre el flujo "Nuevo comprobante" (vive dentro de ComprobantesContent).
   const comprobantesRef = useRef<ComprobantesContentHandle>(null);
   const [vistaComprobantes, setVistaComprobantes] = useState<TabView>("historial");
+
+  // ── Cuenta corriente (tab "Cta. Cte.") ──────────────────────────────────────
+  const [ctaCteBusqueda, setCtaCteBusqueda] = useState("");
+  const [ctaCteEstado, setCtaCteEstado] = useState<EstadoCtaCte | "Todos">("Todos");
+  const [ctaCteLoading, setCtaCteLoading] = useState(false);
+  const [ctaCteError, setCtaCteError] = useState(false);
+  // Listado y detalle viven en estado local para poder reflejar los pagos en tiempo real.
+  const [ctaCteListado, setCtaCteListado] = useState<ProveedorCtaCte[]>(PROVEEDORES_CTA_CTE);
+  const [ctaCteComprobantes, setCtaCteComprobantes] =
+    useState<Record<number, ComprobantePendiente[]>>(COMPROBANTES_POR_PROVEEDOR);
+  const [ctaCtePagos, setCtaCtePagos] =
+    useState<Record<number, PagoProveedor[]>>(PAGOS_POR_PROVEEDOR);
+  const [vistaCtaCte, setVistaCtaCte] = useState<"lista" | "detalle">("lista");
+  const [proveedorCtaCte, setProveedorCtaCte] = useState<ProveedorCtaCte | null>(null);
+  const [comprobanteResaltado, setComprobanteResaltado] = useState<number | null>(null);
+  const [registrarPagoOpen, setRegistrarPagoOpen] = useState(false);
 
   const filtrados = useMemo(() => {
     const base = proveedores;
@@ -165,6 +242,126 @@ function ProveedoresScreen() {
     comprobantesRef.current?.resetPaginacion();
   };
 
+  // ── Handlers de cuenta corriente ─────────────────────────────────────────────
+
+  const ctaCteFiltrados = useMemo(() => {
+    return ctaCteListado.filter((p) => {
+      if (ctaCteEstado !== "Todos" && p.estadoCta !== ctaCteEstado) return false;
+      if (ctaCteBusqueda) {
+        const q = ctaCteBusqueda.toLowerCase();
+        return (
+          p.razonSocial.toLowerCase().includes(q) || p.cuit.toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+  }, [ctaCteListado, ctaCteBusqueda, ctaCteEstado]);
+
+  const hasActiveFiltersCtaCte =
+    ctaCteBusqueda !== "" || ctaCteEstado !== "Todos";
+
+  const handleClearCtaCte = () => {
+    setCtaCteBusqueda("");
+    setCtaCteEstado("Todos");
+  };
+
+  const abrirDetalleCta = (prov: ProveedorCtaCte) => {
+    setProveedorCtaCte(prov);
+    setComprobanteResaltado(null);
+    setVistaCtaCte("detalle");
+  };
+
+  const abrirRegistrarPago = () => {
+    if (!proveedorCtaCte) return;
+    setRegistrarPagoOpen(true);
+  };
+
+  const handleRegistrarPago = (pago: PagoNuevo) => {
+    // BACKEND: reemplazar por POST /api/pagos con { numero, formaPago, fecha, monto, imputaciones }
+    if (!proveedorCtaCte) return;
+    const provId = proveedorCtaCte.id;
+
+    // Registrar el nuevo pago.
+    setCtaCtePagos((prev) => ({
+      ...prev,
+      [provId]: [
+        ...(prev[provId] ?? []),
+        {
+          id: Math.max(0, ...(ctaCtePagos[provId] ?? []).map((p) => p.id)) + 1,
+          numero: pago.numero,
+          fecha: pago.fecha,
+          formaPago: pago.formaPago,
+          monto: pago.monto,
+          imputaciones: pago.imputaciones.map((i) => ({
+            comprobanteId: i.comprobanteId,
+            numero:
+              ctaCteComprobantes[provId]?.find((c) => c.id === i.comprobanteId)?.numero ?? "",
+            monto: i.monto,
+          })),
+        },
+      ],
+    }));
+
+    // Bajar el saldo pendiente de cada comprobante imputado y recalcular el saldo
+    // actual del proveedor y su estado.
+    setCtaCteComprobantes((prevComps) => {
+      const comps = (prevComps[provId] ?? []).map((c) => {
+        const imp = pago.imputaciones.find((i) => i.comprobanteId === c.id);
+        if (!imp) return c;
+        const nuevoSaldo = c.saldoPendiente - imp.monto;
+        const estado: EstadoCtaCte = nuevoSaldo <= 0 ? "Saldado" : c.estadoCta;
+        return { ...c, saldoPendiente: nuevoSaldo, estadoCta: estado };
+      });
+      const nuevoSaldo = comps.reduce((acc, c) => acc + c.saldoPendiente, 0);
+      setCtaCteListado((prev) =>
+        prev.map((p) =>
+          p.id === provId
+            ? {
+                ...p,
+                saldoActual: nuevoSaldo,
+                estadoCta: derivarEstadoCta(nuevoSaldo, p.proximoVencimiento),
+              }
+            : p,
+        ),
+      );
+      setProveedorCtaCte((prevProv) =>
+        prevProv
+          ? {
+              ...prevProv,
+              saldoActual: nuevoSaldo,
+              estadoCta: derivarEstadoCta(nuevoSaldo, prevProv.proximoVencimiento),
+            }
+          : prevProv,
+      );
+      return { ...prevComps, [provId]: comps };
+    });
+
+    setRegistrarPagoOpen(false);
+    showToast("success", "Pago registrado correctamente. Se actualizó el saldo del proveedor.");
+  };
+
+  // Cross-navegación: botón "Ver en Cta. Cte." del historial de comprobantes.
+  const handleVerCtaCte = (fila: ComprobanteRow) => {
+    const prov = proveedorPorRazonSocial(ctaCteListado, fila.proveedor);
+    if (!prov) {
+      showToast("error", "No se encontró una cuenta corriente para ese proveedor.");
+      return;
+    }
+    setTab("cta-corriente");
+    setVistaCtaCte("detalle");
+    setProveedorCtaCte(prov);
+    setComprobanteResaltado(fila.id);
+  };
+
+  const handleReintentarCtaCte = () => {
+    setCtaCteError(false);
+    setCtaCteLoading(true);
+    // BACKEND: reemplazar por GET /api/proveedores/cuenta-corriente
+    window.setTimeout(() => {
+      setCtaCteLoading(false);
+    }, 600);
+  };
+
   const abrirModal = (modo: ProveedorModalMode, prov?: Proveedor) => {
     setModalMode(modo);
     setProveedorActivo(prov || null);
@@ -203,6 +400,7 @@ function ProveedoresScreen() {
 
   const esProveedores = tab === "proveedores";
   const esComprobantes = tab === "comprobantes";
+  const esCtaCorriente = tab === "cta-corriente";
 
   return (
     <div className="flex min-h-screen bg-cream-50">
@@ -258,6 +456,23 @@ function ProveedoresScreen() {
                   </Button>
                 </div>
               )}
+
+              {esCtaCorriente && vistaCtaCte === "lista" && (
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    onClick={() => {
+                      exportarCSVCtaCte(ctaCteFiltrados);
+                      showToast("success", "Exportación completada: el resumen se descargó en CSV");
+                    }}
+                    disabled={ctaCteLoading || ctaCteError || ctaCteFiltrados.length === 0}
+                  >
+                    <Download className="h-4 w-4" aria-hidden="true" />
+                    Exportar
+                  </Button>
+                </div>
+              )}
             </div>
             <ProveedoresTabs active={tab} onChange={setTab} disabled={loading || error} />
 
@@ -301,6 +516,40 @@ function ProveedoresScreen() {
                     onChange={handleFiltrosComprobantes}
                   />
                 </div>
+              </div>
+            )}
+
+            {esCtaCorriente && vistaCtaCte === "lista" && (
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div className="relative flex-1">
+                  <Search
+                    className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-text-secondary"
+                    aria-hidden="true"
+                  />
+                  <input
+                    type="search"
+                    value={ctaCteBusqueda}
+                    onChange={(e) => setCtaCteBusqueda(e.target.value)}
+                    placeholder="Buscar por proveedor o CUIT..."
+                    aria-label="Buscar por proveedor o CUIT"
+                    className="h-11 w-full cursor-text rounded-pill border border-border bg-surface pl-12 pr-4 text-base text-text-primary transition-colors duration-fast ease-out placeholder:text-text-secondary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
+                  />
+                </div>
+                <label className="flex items-center gap-2 text-sm font-bold text-text-primary">
+                  Estado
+                  <select
+                    value={ctaCteEstado}
+                    onChange={(e) => setCtaCteEstado(e.target.value as EstadoCtaCte | "Todos")}
+                    className="h-11 cursor-pointer rounded-pill border border-border bg-surface px-4 text-sm font-semibold text-text-primary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
+                  >
+                    <option value="Todos">Todos</option>
+                    <option value="Vencido">Vencido</option>
+                    <option value="ProximoAVencer">Próximo a vencer</option>
+                    <option value="Pendiente">Pendiente</option>
+                    <option value="Credito">Crédito a favor</option>
+                    <option value="Saldado">Saldado</option>
+                  </select>
+                </label>
               </div>
             )}
           </div>
@@ -378,7 +627,58 @@ function ProveedoresScreen() {
                   filtros={filtrosComprobantes}
                   onBusquedaChange={handleBusquedaComprobantes}
                   onFiltrosChange={handleFiltrosComprobantes}
+                  onVerCtaCte={handleVerCtaCte}
                 />
+            </div>
+          )}
+
+          {esCtaCorriente && (
+            <div
+              id="panel-cta-corriente"
+              role="tabpanel"
+              aria-labelledby="tab-cta-corriente"
+              className="flex flex-col"
+            >
+              {ctaCteError ? (
+                <div className="flex flex-col items-center gap-4 rounded-md border border-destructive/40 bg-surface px-6 py-16 text-center shadow-card">
+                  <span className="flex h-14 w-14 items-center justify-center rounded-md bg-destructive/10">
+                    <AlertTriangle className="h-7 w-7 text-destructive" aria-hidden="true" />
+                  </span>
+                  <div className="flex flex-col gap-1">
+                    <h3 className="font-display text-lg font-extrabold uppercase tracking-tight text-brand-900">
+                      No se pudieron cargar las cuentas corrientes
+                    </h3>
+                    <p className="max-w-sm text-sm text-text-secondary">
+                      Hubo un problema al consultar los saldos de los proveedores. Revisá tu conexión e intentá de nuevo.
+                    </p>
+                  </div>
+                  <Button variant="secondary" onClick={handleReintentarCtaCte}>
+                    <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                    Reintentar
+                  </Button>
+                </div>
+              ) : vistaCtaCte === "lista" ? (
+                <CtaCorrienteList
+                  proveedores={ctaCteFiltrados}
+                  loading={ctaCteLoading}
+                  hasActiveFilters={hasActiveFiltersCtaCte}
+                  onClearFilters={handleClearCtaCte}
+                  onVer={abrirDetalleCta}
+                />
+              ) : proveedorCtaCte ? (
+                <CtaCorrienteDetalle
+                  proveedor={proveedorCtaCte}
+                  comprobantes={ctaCteComprobantes[proveedorCtaCte.id] ?? []}
+                  pagos={ctaCtePagos[proveedorCtaCte.id] ?? []}
+                  comprobanteResaltado={comprobanteResaltado}
+                  onVolver={() => setVistaCtaCte("lista")}
+                  onExportar={() => {
+                    // BACKEND: reemplazar por POST /api/proveedores/{id}/cta-corriente/pdf
+                    showToast("success", "Exportación completada: el detalle se descargó en PDF");
+                  }}
+                  onRegistrarPago={abrirRegistrarPago}
+                />
+              ) : null}
             </div>
           )}
         </div>
@@ -397,6 +697,15 @@ function ProveedoresScreen() {
         proveedor={aDarDeBaja}
         onClose={() => setADarDeBaja(null)}
         onConfirm={confirmarBaja}
+      />
+
+      <RegistrarPagoModal
+        open={registrarPagoOpen}
+        proveedor={proveedorCtaCte}
+        comprobantes={proveedorCtaCte ? (ctaCteComprobantes[proveedorCtaCte.id] ?? []) : []}
+        pagosExistentes={proveedorCtaCte ? (ctaCtePagos[proveedorCtaCte.id] ?? []) : []}
+        onClose={() => setRegistrarPagoOpen(false)}
+        onConfirm={handleRegistrarPago}
       />
     </div>
   );

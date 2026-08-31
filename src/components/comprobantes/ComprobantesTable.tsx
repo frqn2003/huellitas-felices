@@ -1,5 +1,6 @@
-import { Eye, SearchX, Trash2 } from "lucide-react";
+import { Eye, SearchX, Trash2, Wallet } from "lucide-react";
 import { EstadoComprobanteBadge } from "./EstadoComprobanteBadge";
+import type { LineaComprobante } from "./DetalleLineasTable";
 
 export interface ComprobanteRow {
   id: number;
@@ -7,11 +8,19 @@ export interface ComprobanteRow {
   tipo: string;
   numero: string;
   oc: string;
+  /** CUIT del proveedor emisor (para edición y detalle). */
+  cuit?: string;
+  /** Detalle de líneas del comprobante (para edición y detalle). */
+  lineas?: LineaComprobante[];
   fecha: string;
   monto: number;
   estado: "Vigente" | "Anulado";
   comprobanteOriginal?: string;
   comprobanteAnulador?: string;
+  /** id de la OC vinculada en el catálogo (para preseleccionar en edición). */
+  ocId?: number;
+  /** id de la factura original que corrige una NC/ND (para preseleccionar en edición). */
+  facturaOriginalId?: string;
 }
 
 interface ComprobantesTableProps {
@@ -20,6 +29,7 @@ interface ComprobantesTableProps {
   onAnular: (id: number) => void;
   hasActiveFilters: boolean;
   onClearFilters: () => void;
+  onVerCtaCte?: (fila: ComprobanteRow) => void;
 }
 
 const HEADERS = ["N° Comprobante", "Fecha", "Tipo", "OC vinculada", "Proveedor", "Monto", "Estado", "Acciones"];
@@ -30,6 +40,7 @@ export function ComprobantesTable({
   onAnular,
   hasActiveFilters,
   onClearFilters,
+  onVerCtaCte,
 }: ComprobantesTableProps) {
   if (filas.length === 0) {
     return (
@@ -122,6 +133,17 @@ export function ComprobantesTable({
                     >
                       <Eye className="h-5 w-5" aria-hidden="true" />
                     </button>
+                    {onVerCtaCte && (
+                      <button
+                        type="button"
+                        onClick={() => onVerCtaCte(f)}
+                        aria-label={`Ver cuenta corriente de ${f.proveedor}`}
+                        title="Ver en Cta. Cte."
+                        className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-pill text-text-secondary transition-colors duration-fast ease-out hover:bg-brand-900/10 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900"
+                      >
+                        <Wallet className="h-5 w-5" aria-hidden="true" />
+                      </button>
+                    )}
                     {f.estado === "Vigente" && (
                       <button
                         type="button"

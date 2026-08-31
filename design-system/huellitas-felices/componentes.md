@@ -35,7 +35,9 @@ Patrones recurrentes por pantalla: `<Entidad>Table`, `<Entidad>Filtros*`, `<Enti
 `ComprasTabs` (tabs compartidos Proveedores / Cotizaciones / Órdenes de compra)
 
 ### comprobantes
-`ComprobantesContent` · `DropzoneComprobante` · `OcrFieldGroup` · `DetalleLineasTable` · `EstadoComprobanteBadge` · `FiltrosComprobantes` · `FiltrosComprobantesChips` · `ComprobantesTable` · `AnularComprobanteModal` · `PreviewComprobantePdf` · `ui/ConfirmarDialog`
+`ComprobantesContent` · `DropzoneComprobante` · `OcrFieldGroup` · `DetalleLineasTable` · `EstadoComprobanteBadge` · `FiltrosComprobantes` · `FiltrosComprobantesChips` · `ComprobantesTable` · `AnularComprobanteModal` · `PreviewComprobantePdf` · `VerComprobanteModal` (detalle en lectura con visor placeholder BACKEND + botón "Modificar datos") · `ui/ConfirmarDialog`
+> `ComprobantesContent` y `ComprobantesTable` se extendieron con la prop `onVerCtaCte` (cross-navegación al detalle de cuenta corriente de un proveedor).
+> `ComprobantesContent` habilita el ojo `onVer` con `VerComprobanteModal` y expone `irAEditar` (ref) para modificar un comprobante del historial reutilizando el flujo de datos de "nuevo" (modo edición en `handleGuardar`). `ComprobanteRow` se enriqueció con `cuit`, `lineas`, `ocId` y `facturaOriginalId`.
 
 ### configuracion
 `ConfiguracionForm` — perfil del usuario logueado: información de cuenta (solo lectura) + tu cuenta (editable). Guarda con modal de confirmación de contraseña y modal "Cambiar contraseña". Usa `Input`/`Button`/`Modal`/`StatusBadge`/`Toast` y `useAuth().actualizarUsuario`.
@@ -53,7 +55,8 @@ Patrones recurrentes por pantalla: `<Entidad>Table`, `<Entidad>Filtros*`, `<Enti
 `CancelarOrdenModal` · `EstadoOrdenBadge` · `FiltrosOrdenes` · `OrdenFormModal` · `OrdenesTable`
 
 ### proveedores
-`BajaProveedorModal` · `EstadoProveedorBadge` (mapea sobre `StatusBadge`: success/neutral) · `FiltrosProveedores` · `ProveedorFormModal` · `ProveedoresTable` · `ProveedoresTabs`
+`BajaProveedorModal` · `CtaCorrienteDetalle` (detalle de cuenta corriente: comprobantes pendientes + pagos, fila expandible de pagos imputados) · `CtaCorrienteList` (listado resumen de cuentas corrientes con saldo neto) · `EstadoCtaCteBadge` (mapea sobre `StatusBadge`: Vencido=danger, Próximo a vencer/Pendiente=warning, Crédito=success, Saldado=neutral) · `EstadoProveedorBadge` (mapea sobre `StatusBadge`: success/neutral) · `FiltrosProveedores` · `ProveedorFormModal` · `ProveedoresTable` · `ProveedoresTabs` · `RegistrarPagoModal` (modal de pago con imputación múltiple sobre `Modal` + validaciones)
+> `ProveedoresTabs` extendido con el tercer tab `"cta-corriente"` (`Landmark`).
 
 ### recepciones
 `RecepcionesTable` · `FiltrosRecepciones` · `FiltrosChipsRecepciones` · `RecepcionFormModal` · `RecepcionDetalleModal` · `EstadoRecepcionBadge`
