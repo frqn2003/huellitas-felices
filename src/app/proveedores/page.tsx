@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Building2, Download, Plus, RotateCcw } from "lucide-react";
+import { AlertTriangle, Building2, Download, Plus, RotateCcw, Search } from "lucide-react";
 import { Suspense, useContext, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
@@ -12,6 +12,12 @@ import {
 } from "@/components/comprobantes/ComprobantesContent";
 import type { FiltroEstado } from "@/components/proveedores/FiltrosProveedores";
 import { FiltrosProveedores } from "@/components/proveedores/FiltrosProveedores";
+import {
+  FiltrosComprobantes,
+  FiltrosComprobantesChips,
+  FILTROS_COMPROBANTES_VACIOS,
+  type FiltrosComprobanteValues,
+} from "@/components/comprobantes/FiltrosComprobantes";
 import type { ProveedorModalMode } from "@/components/proveedores/ProveedorFormModal";
 import { ProveedorFormModal } from "@/components/proveedores/ProveedorFormModal";
 import { ProveedoresTable } from "@/components/proveedores/ProveedoresTable";
@@ -85,6 +91,11 @@ function ProveedoresScreen() {
 
   const [busqueda, setBusqueda] = useState("");
   const [estadoFiltro, setEstadoFiltro] = useState<FiltroEstado>("Todos");
+  const [formaPagoFiltro, setFormaPagoFiltro] = useState("");
+
+  // Historial de comprobantes — la búsqueda y los filtros viven en el header de la pantalla.
+  const [busquedaComprobantes, setBusquedaComprobantes] = useState("");
+  const [filtrosComprobantes, setFiltrosComprobantes] = useState<FiltrosComprobanteValues>(FILTROS_COMPROBANTES_VACIOS);
 
   const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
@@ -102,6 +113,7 @@ function ProveedoresScreen() {
     const base = proveedores;
     return base.filter((prov) => {
       if (estadoFiltro !== "Todos" && prov.estado !== estadoFiltro) return false;
+      if (formaPagoFiltro && !prov.formasPago.includes(formaPagoFiltro)) return false;
       if (busqueda) {
         const query = busqueda.toLowerCase();
         return (
@@ -111,7 +123,7 @@ function ProveedoresScreen() {
       }
       return true;
     });
-  }, [proveedores, busqueda, estadoFiltro]);
+  }, [proveedores, busqueda, estadoFiltro, formaPagoFiltro]);
 
   const totalPages = Math.max(1, Math.ceil(filtrados.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -119,11 +131,12 @@ function ProveedoresScreen() {
   const pageStart = filtrados.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
   const pageEnd = Math.min(safePage * pageSize, filtrados.length);
 
-  const hasActiveFilters = busqueda !== "" || estadoFiltro !== "Todos";
+  const hasActiveFilters = busqueda !== "" || estadoFiltro !== "Todos" || formaPagoFiltro !== "";
 
   const handleClearFilters = () => {
     setBusqueda("");
     setEstadoFiltro("Todos");
+    setFormaPagoFiltro("");
     setPage(1);
   };
 
@@ -135,6 +148,21 @@ function ProveedoresScreen() {
   const handleEstado = (e: FiltroEstado) => {
     setEstadoFiltro(e);
     setPage(1);
+  };
+
+  const handleFormaPago = (f: string) => {
+    setFormaPagoFiltro(f);
+    setPage(1);
+  };
+
+  const handleBusquedaComprobantes = (q: string) => {
+    setBusquedaComprobantes(q);
+    comprobantesRef.current?.resetPaginacion();
+  };
+
+  const handleFiltrosComprobantes = (f: FiltrosComprobanteValues) => {
+    setFiltrosComprobantes(f);
+    comprobantesRef.current?.resetPaginacion();
   };
 
   const abrirModal = (modo: ProveedorModalMode, prov?: Proveedor) => {
@@ -232,6 +260,49 @@ function ProveedoresScreen() {
               )}
             </div>
             <ProveedoresTabs active={tab} onChange={setTab} disabled={loading || error} />
+
+            {esProveedores && !error && (
+              <FiltrosProveedores
+                busqueda={busqueda}
+                onBusquedaChange={handleBusqueda}
+                estado={estadoFiltro}
+                onEstadoChange={handleEstado}
+                formaPago={formaPagoFiltro}
+                onFormaPagoChange={handleFormaPago}
+              />
+            )}
+
+            {esComprobantes && vistaComprobantes === "historial" && (
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <div className="relative flex-1">
+                    <Search
+                      className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-text-secondary"
+                      aria-hidden="true"
+                    />
+                    <input
+                      type="search"
+                      value={busquedaComprobantes}
+                      onChange={(e) => handleBusquedaComprobantes(e.target.value)}
+                      placeholder="Buscar por nro. de comprobante, OC o proveedor..."
+                      aria-label="Buscar por número de comprobante, OC o proveedor"
+                      className="h-11 w-full cursor-text rounded-pill border border-border bg-surface pl-12 pr-4 text-base text-text-primary transition-colors duration-fast ease-out placeholder:text-text-secondary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
+                    />
+                  </div>
+                  <FiltrosComprobantes
+                    values={filtrosComprobantes}
+                    onChange={handleFiltrosComprobantes}
+                    hideChips
+                  />
+                </div>
+                <div className="flex flex-wrap items-center">
+                  <FiltrosComprobantesChips
+                    filtros={filtrosComprobantes}
+                    onChange={handleFiltrosComprobantes}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -263,13 +334,6 @@ function ProveedoresScreen() {
                 </div>
               ) : (
                 <>
-                  <FiltrosProveedores
-                    busqueda={busqueda}
-                    onBusquedaChange={handleBusqueda}
-                    estado={estadoFiltro}
-                    onEstadoChange={handleEstado}
-                  />
-
                   <ProveedoresTable
                     proveedores={pageItems}
                     loading={loading}
@@ -306,11 +370,15 @@ function ProveedoresScreen() {
               aria-labelledby="tab-comprobantes"
               className="flex flex-col"
             >
-              <ComprobantesContent
-                ref={comprobantesRef}
-                tab={vistaComprobantes}
-                onTabChange={setVistaComprobantes}
-              />
+<ComprobantesContent
+                  ref={comprobantesRef}
+                  tab={vistaComprobantes}
+                  onTabChange={setVistaComprobantes}
+                  busqueda={busquedaComprobantes}
+                  filtros={filtrosComprobantes}
+                  onBusquedaChange={handleBusquedaComprobantes}
+                  onFiltrosChange={handleFiltrosComprobantes}
+                />
             </div>
           )}
         </div>

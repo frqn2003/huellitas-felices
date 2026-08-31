@@ -8,6 +8,7 @@
 
 - Sin stepper visual: el paso 1 muestra dropzone + botón "Volver al historial"; el paso 2 tiene layout 2 paneles (preview 55% + formulario 45%) en `lg:flex-row`, apilado en mobile.
 - La vista (historial | nuevo) la controla la pantalla (`/proveedores`): el botón naranja "Nuevo comprobante" del header se oculta mientras estás en el flujo nuevo y reaparece al guardar/cancelar (`onTabChange`).
+- **Búsqueda y filtros del historial viven en el header de la pantalla** (encima del borde inferior), no en el panel: barra de búsqueda + botón `FiltrosComprobantes` + chips. El estado (`busqueda`, `filtros`) lo controla `proveedores/page.tsx` y se pasa a `ComprobantesContent` como props; al cambiar filtros/búsqueda la página invoca `comprobantesRef.resetPaginacion()`.
 - El formulario del paso 2 se divide en 2 sub-pasos (`formPaso`) para no scrollear mientras se lee el PDF: **cabecera** (Tipo, Pto venta+Número, Fecha, CUIT, OC, Factura original si NC/ND) + botón "Siguiente" (valida cabecera `validarCabecera()`); luego **Monto total + Detalle de líneas** con acciones Volver | Cancelar | Guardar comprobante.
 
 ## Estados OCR → campos

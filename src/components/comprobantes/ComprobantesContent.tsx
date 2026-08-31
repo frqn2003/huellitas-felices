@@ -4,9 +4,6 @@
 // Al integrar con backend, reemplazar los datos hardcodeados por llamadas a la API.
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import {
-  Search,
-} from "lucide-react";
 import { forwardRef, useImperativeHandle, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -16,14 +13,10 @@ import { useToast } from "@/components/ui/Toast";
 import { AnularComprobanteModal } from "@/components/comprobantes/AnularComprobanteModal";
 import { ConfirmarDialog } from "@/components/ui/ConfirmarDialog";
 import { ComprobantesTable, type ComprobanteRow } from "@/components/comprobantes/ComprobantesTable";
+import { FILTROS_COMPROBANTES_VACIOS } from "@/components/comprobantes/FiltrosComprobantes";
 import { DetalleLineasTable, type LineaComprobante } from "@/components/comprobantes/DetalleLineasTable";
 import { DropzoneComprobante } from "@/components/comprobantes/DropzoneComprobante";
-import {
-  FiltrosComprobantes,
-  FiltrosComprobantesChips,
-  FILTROS_COMPROBANTES_VACIOS,
-  type FiltrosComprobanteValues,
-} from "@/components/comprobantes/FiltrosComprobantes";
+import type { FiltrosComprobanteValues } from "@/components/comprobantes/FiltrosComprobantes";
 import { OcrFieldGroup } from "@/components/comprobantes/OcrFieldGroup";
 import { PreviewComprobantePdf } from "@/components/comprobantes/PreviewComprobantePdf";
 
@@ -76,16 +69,24 @@ export type TabView = "nuevo" | "historial";
 export interface ComprobantesContentHandle {
   /** Abre el flujo "Nuevo comprobante" en el paso 1 (disparado desde el header). */
   irANuevo: () => void;
+  /** Vuelve la paginación del historial a la página 1 (al cambiar búsqueda/filtros). */
+  resetPaginacion: () => void;
 }
 
 interface ComprobantesContentProps {
   /** Vista actual del módulo comprobantes (la controla la pantalla, no este componente). */
   tab: TabView;
   onTabChange: (tab: TabView) => void;
+  /** Búsqueda y filtros del historial (la barra vive en el header de la pantalla). */
+  busqueda: string;
+  filtros: FiltrosComprobanteValues;
+  /** Permite limpiar búsqueda/filtros desde el estado vacío de la tabla. */
+  onBusquedaChange: (q: string) => void;
+  onFiltrosChange: (filtros: FiltrosComprobanteValues) => void;
 }
 
 export const ComprobantesContent = forwardRef<ComprobantesContentHandle, ComprobantesContentProps>(
-  function ComprobantesContent({ tab, onTabChange }, ref) {
+  function ComprobantesContent({ tab, onTabChange, busqueda, filtros, onBusquedaChange, onFiltrosChange }, ref) {
   const { showToast } = useToast();
   const reduceMotion = useReducedMotion();
 
@@ -112,8 +113,6 @@ export const ComprobantesContent = forwardRef<ComprobantesContentHandle, Comprob
 
   // Historial
   const [historial, setHistorial] = useState<ComprobanteRow[]>(HISTORIAL_INICIAL);
-  const [filtros, setFiltros] = useState<FiltrosComprobanteValues>(FILTROS_COMPROBANTES_VACIOS);
-  const [busqueda, setBusqueda] = useState("");
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
 
@@ -132,6 +131,10 @@ export const ComprobantesContent = forwardRef<ComprobantesContentHandle, Comprob
       setArchivo(null);
       setPaso(1);
       setFormPaso(1);
+    },
+    /** Vuelve la paginación del historial a la página 1 (al cambiar búsqueda/filtros). */
+    resetPaginacion: () => {
+      setPage(1);
     },
   }));
 
@@ -235,15 +238,18 @@ export const ComprobantesContent = forwardRef<ComprobantesContentHandle, Comprob
     return true;
   });
 
-  const handleBusqueda = (value: string) => {
-    setBusqueda(value);
-    setPage(1);
-  };
-
   const totalPages = Math.max(1, Math.ceil(historialFiltrado.length / PAGE_SIZE));
   const pageStart = (page - 1) * PAGE_SIZE + 1;
   const pageEnd = Math.min(page * PAGE_SIZE, historialFiltrado.length);
   const historialPagina = historialFiltrado.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const hasActiveFilters =
+    busqueda.trim() !== "" || Object.values(filtros).some((v) => v !== "");
+
+  const handleClearFilters = () => {
+    onBusquedaChange("");
+    onFiltrosChange(FILTROS_COMPROBANTES_VACIOS);
+  };
 
   // ── Anular ────────────────────────────────────────────────────────────────────
   const handleAnularConfirm = (motivo: string) => {
@@ -456,40 +462,11 @@ export const ComprobantesContent = forwardRef<ComprobantesContentHandle, Comprob
             transition={{ duration: reduceMotion ? 0 : 0.2, ease: "easeOut" }}
             className="flex flex-col gap-5"
           >
-            {/* Filtros */}
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <div className="relative flex-1">
-                  <Search
-                    className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-text-secondary"
-                    aria-hidden="true"
-                  />
-                  <input
-                    type="search"
-                    value={busqueda}
-                    onChange={(e) => handleBusqueda(e.target.value)}
-                    placeholder="Buscar por nro. de comprobante, OC o proveedor..."
-                    aria-label="Buscar por número de comprobante, OC o proveedor"
-                    className="h-11 w-full cursor-text rounded-pill border border-border bg-surface pl-12 pr-4 text-base text-text-primary transition-colors duration-fast ease-out placeholder:text-text-secondary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
-                  />
-                </div>
-                <FiltrosComprobantes
-                  values={filtros}
-                  onChange={(v) => { setFiltros(v); setPage(1); }}
-                  hideChips
-                />
-              </div>
-              <div className="flex flex-wrap items-center">
-                <FiltrosComprobantesChips
-                  filtros={filtros}
-                  onChange={(v) => { setFiltros(v); setPage(1); }}
-                />
-              </div>
-            </div>
-
             {/* Tabla */}
             <ComprobantesTable
               filas={historialPagina}
+              hasActiveFilters={hasActiveFilters}
+              onClearFilters={handleClearFilters}
               onVer={(_id) => { /* BACKEND: redirigir a detalle o abrir modal de vista */ }}
               onAnular={(id) => {
                 const f = historial.find((h) => h.id === id);
