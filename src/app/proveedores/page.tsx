@@ -4,8 +4,15 @@ import { AlertTriangle, Building2, Download, Plus, RotateCcw, Search } from "luc
 import { Suspense, useContext, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { CtaCorrienteCardHeader } from "@/components/proveedores/CtaCorrienteCardHeader";
 import { CtaCorrienteDetalle } from "@/components/proveedores/CtaCorrienteDetalle";
 import { CtaCorrienteList } from "@/components/proveedores/CtaCorrienteList";
+import {
+  FILTROS_CTA_LISTA_VACIOS,
+  FiltrosCtaCorrienteList,
+  FiltrosCtaCorrienteListChips,
+  type FiltrosCtaCorrienteListValues,
+} from "@/components/proveedores/FiltrosCtaCorriente";
 import {
   RegistrarPagoModal,
   type PagoNuevo,
@@ -172,7 +179,8 @@ function ProveedoresScreen() {
 
   // ── Cuenta corriente (tab "Cta. Cte.") ──────────────────────────────────────
   const [ctaCteBusqueda, setCtaCteBusqueda] = useState("");
-  const [ctaCteEstado, setCtaCteEstado] = useState<EstadoCtaCte | "Todos">("Todos");
+  const [filtrosCtaCteLista, setFiltrosCtaCteLista] =
+    useState<FiltrosCtaCorrienteListValues>(FILTROS_CTA_LISTA_VACIOS);
   const [ctaCteLoading, setCtaCteLoading] = useState(false);
   const [ctaCteError, setCtaCteError] = useState(false);
   // Listado y detalle viven en estado local para poder reflejar los pagos en tiempo real.
@@ -246,7 +254,19 @@ function ProveedoresScreen() {
 
   const ctaCteFiltrados = useMemo(() => {
     return ctaCteListado.filter((p) => {
-      if (ctaCteEstado !== "Todos" && p.estadoCta !== ctaCteEstado) return false;
+      if (filtrosCtaCteLista.estado !== "Todos" && p.estadoCta !== filtrosCtaCteLista.estado) return false;
+      if (
+        filtrosCtaCteLista.vencimientoDesde &&
+        p.proximoVencimiento &&
+        p.proximoVencimiento < filtrosCtaCteLista.vencimientoDesde
+      ) return false;
+      if (
+        filtrosCtaCteLista.vencimientoHasta &&
+        p.proximoVencimiento &&
+        p.proximoVencimiento > filtrosCtaCteLista.vencimientoHasta
+      ) return false;
+      if (filtrosCtaCteLista.montoMin && p.saldoActual < Number(filtrosCtaCteLista.montoMin)) return false;
+      if (filtrosCtaCteLista.montoMax && p.saldoActual > Number(filtrosCtaCteLista.montoMax)) return false;
       if (ctaCteBusqueda) {
         const q = ctaCteBusqueda.toLowerCase();
         return (
@@ -255,14 +275,14 @@ function ProveedoresScreen() {
       }
       return true;
     });
-  }, [ctaCteListado, ctaCteBusqueda, ctaCteEstado]);
+  }, [ctaCteListado, ctaCteBusqueda, filtrosCtaCteLista]);
 
   const hasActiveFiltersCtaCte =
-    ctaCteBusqueda !== "" || ctaCteEstado !== "Todos";
+    ctaCteBusqueda !== "" || Object.values(filtrosCtaCteLista).some((v) => v !== "" && v !== "Todos");
 
   const handleClearCtaCte = () => {
     setCtaCteBusqueda("");
-    setCtaCteEstado("Todos");
+    setFiltrosCtaCteLista(FILTROS_CTA_LISTA_VACIOS);
   };
 
   const abrirDetalleCta = (prov: ProveedorCtaCte) => {
@@ -408,19 +428,23 @@ function ProveedoresScreen() {
       <main className="flex min-w-0 flex-1 flex-col">
         <div className="border-b border-border bg-cream-50 px-4 py-6 sm:px-8">
           <div className="mx-auto flex max-w-7xl flex-col gap-4">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <span className="flex h-12 w-12 items-center justify-center rounded-sm bg-brand-900/10">
-                  <Building2 className="h-6 w-6 text-brand-900" aria-hidden="true" />
-                </span>
-                <div className="flex flex-col">
-                  <h1 className="font-display text-2xl font-extrabold uppercase tracking-tight text-brand-900">
-                    Proveedores
-                  </h1>
-                  <p className="text-sm font-medium text-text-secondary">
-                    Directorio, estado de cuentas y comprobantes de proveedores
-                  </p>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-sm bg-brand-900/10">
+                    <Building2 className="h-6 w-6 text-brand-900" aria-hidden="true" />
+                  </span>
+                  <div className="flex flex-col">
+                    <h1 className="font-display text-2xl font-extrabold uppercase tracking-tight text-brand-900">
+                      Proveedores
+                    </h1>
+                    <p className="text-sm font-medium text-text-secondary">
+                      Directorio, estado de cuentas y comprobantes de proveedores
+                    </p>
+                  </div>
                 </div>
+
+                <ProveedoresTabs active={tab} onChange={setTab} disabled={loading || error} />
               </div>
 
               {esProveedores && (
@@ -473,8 +497,17 @@ function ProveedoresScreen() {
                   </Button>
                 </div>
               )}
+
+              {esCtaCorriente && vistaCtaCte === "detalle" && proveedorCtaCte && (
+                <CtaCorrienteCardHeader
+                  proveedor={proveedorCtaCte}
+                  onExportar={() => {
+                    showToast("success", "Exportación completada: el detalle se descargó en PDF");
+                  }}
+                  onRegistrarPago={abrirRegistrarPago}
+                />
+              )}
             </div>
-            <ProveedoresTabs active={tab} onChange={setTab} disabled={loading || error} />
 
             {esProveedores && !error && (
               <FiltrosProveedores

@@ -4,6 +4,7 @@
 // Al integrar con backend, reemplazar los datos hardcodeados por llamadas a la API.
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { ArrowLeft } from "lucide-react";
 import { forwardRef, useImperativeHandle, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -129,8 +130,8 @@ export const ComprobantesContent = forwardRef<ComprobantesContentHandle, Comprob
 
   // Historial
   const [historial, setHistorial] = useState<ComprobanteRow[]>(HISTORIAL_INICIAL);
+  const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
-  const PAGE_SIZE = 10;
 
   // Modal anulación
   const [anularModal, setAnularModal] = useState<{ open: boolean; id: number; numero: string }>(
@@ -320,10 +321,11 @@ export const ComprobantesContent = forwardRef<ComprobantesContentHandle, Comprob
     return true;
   });
 
-  const totalPages = Math.max(1, Math.ceil(historialFiltrado.length / PAGE_SIZE));
-  const pageStart = (page - 1) * PAGE_SIZE + 1;
-  const pageEnd = Math.min(page * PAGE_SIZE, historialFiltrado.length);
-  const historialPagina = historialFiltrado.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(historialFiltrado.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageStart = historialFiltrado.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const pageEnd = Math.min(safePage * pageSize, historialFiltrado.length);
+  const historialPagina = historialFiltrado.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const hasActiveFilters =
     busqueda.trim() !== "" || Object.values(filtros).some((v) => v !== "");
@@ -359,21 +361,26 @@ export const ComprobantesContent = forwardRef<ComprobantesContentHandle, Comprob
           >
             {paso === 1 ? (
               /* Paso 1 — Dropzone */
-              <div className="mx-auto flex w-full max-w-lg flex-col gap-4">
-                <DropzoneComprobante
-                  onFile={handleFile}
-                  isUploading={isUploading}
-                  error={uploadError}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="md"
-                  onClick={() => { setEditandoId(null); setPaso(1); setErrores({}); setArchivo(null); onTabChange("historial"); }}
-                  className="self-start"
-                >
-                  Volver al historial
-                </Button>
+              <div className="flex flex-col gap-4">
+                <div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => { setEditandoId(null); setPaso(1); setErrores({}); setArchivo(null); onTabChange("historial"); }}
+                    className="self-start px-0 text-text-secondary hover:text-brand-900"
+                  >
+                    <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+                    Volver al historial
+                  </Button>
+                </div>
+                <div className="mx-auto w-full max-w-lg">
+                  <DropzoneComprobante
+                    onFile={handleFile}
+                    isUploading={isUploading}
+                    error={uploadError}
+                  />
+                </div>
               </div>
             ) : (
               /* Paso 2 — Preview + Formulario */
@@ -563,16 +570,17 @@ export const ComprobantesContent = forwardRef<ComprobantesContentHandle, Comprob
             />
 
             {/* Paginación */}
-            {historialFiltrado.length > PAGE_SIZE && (
+            {historialPagina.length > 0 && (
               <Pagination
-                page={page}
+                page={safePage}
                 totalPages={totalPages}
                 totalItems={historialFiltrado.length}
                 pageStart={pageStart}
                 pageEnd={pageEnd}
-                pageSize={PAGE_SIZE}
+                pageSize={pageSize}
                 onPageChange={setPage}
-                onPageSizeChange={() => {}}
+                onPageSizeChange={setPageSize}
+                itemLabel="comprobantes"
               />
             )}
           </motion.div>

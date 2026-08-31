@@ -24,13 +24,6 @@ export interface PagoNuevo {
   imputaciones: { comprobanteId: number; monto: number }[];
 }
 
-interface RegistroImputacion {
-  comprobanteId: number;
-  numero: string;
-  saldoPendiente: number;
-  seleccionado: boolean;
-  monto: string;
-}
 
 interface RegistrarPagoModalProps {
   open: boolean;
@@ -67,41 +60,60 @@ export function RegistrarPagoModal({
   const [formaPago, setFormaPago] = useState<FormaPago | "">("");
   const [fecha, setFecha] = useState(hoyISO());
   const [montoTotal, setMontoTotal] = useState("");
-  const [imputaciones, setImputaciones] = useState<RegistroImputacion[]>([]);
+  const [seleccionados, setSeleccionados] = useState<
+    Record<number, { seleccionado: boolean; monto: string }>
+  >({});
   const [errores, setErrores] = useState<Record<string, string>>({});
   const [confirmarCancelar, setConfirmarCancelar] = useState(false);
+
+  const imputaciones = useMemo(
+    () =>
+      imputables.map((c) => {
+        const item = seleccionados[c.id];
+        return {
+          comprobanteId: c.id,
+          numero: c.numero,
+          saldoPendiente: c.saldoPendiente,
+          seleccionado: item?.seleccionado ?? false,
+          monto: item?.monto ?? "",
+        };
+      }),
+    [imputables, seleccionados],
+  );
 
   const reset = () => {
     setNumero("");
     setFormaPago("");
     setFecha(hoyISO());
     setMontoTotal("");
-    setImputaciones(
-      imputables.map((c) => ({
-        comprobanteId: c.id,
-        numero: c.numero,
-        saldoPendiente: c.saldoPendiente,
-        seleccionado: false,
-        monto: "",
-      })),
-    );
+    setSeleccionados({});
     setErrores({});
   };
 
   const toggleComprobante = (id: number) => {
-    setImputaciones((prev) =>
-      prev.map((i) =>
-        i.comprobanteId === id
-          ? { ...i, seleccionado: !i.seleccionado, monto: !i.seleccionado ? String(i.saldoPendiente) : "" }
-          : i,
-      ),
-    );
+    const comp = imputables.find((c) => c.id === id);
+    if (!comp) return;
+    setSeleccionados((prev) => {
+      const actual = prev[id]?.seleccionado ?? false;
+      const nuevoSeleccionado = !actual;
+      return {
+        ...prev,
+        [id]: {
+          seleccionado: nuevoSeleccionado,
+          monto: nuevoSeleccionado ? String(comp.saldoPendiente) : "",
+        },
+      };
+    });
   };
 
   const setImputacion = (id: number, monto: string) => {
-    setImputaciones((prev) =>
-      prev.map((i) => (i.comprobanteId === id ? { ...i, monto } : i)),
-    );
+    setSeleccionados((prev) => ({
+      ...prev,
+      [id]: {
+        seleccionado: true,
+        monto,
+      },
+    }));
   };
 
   const totalIngresado = imputaciones

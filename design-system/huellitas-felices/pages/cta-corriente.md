@@ -24,8 +24,8 @@ Vencimiento dentro de **≤ 7 días** desde hoy = `ProximoAVencer`; pasado = `Ve
 
 ### 4. Layout del detalle
 - **Header del proveedor:** razón social, CUIT y `saldo actual` (neto) con el código de color anterior + acciones exportar PDF / registrar pago.
+- **Navegación de retorno:** botón "Volver a cuentas" (ghost con `ArrowLeft`) al **inicio** del detalle, arriba del header del proveedor, para que el retorno sea visible sin scroll (patrón de convención de plataforma).
 - **Paneles**: Comprobantes pendientes y Pagos registrados. En desktop dos columnas (`sm:grid-cols-2`), en mobile apilados (1 col). Cada comprobante con columna expandible de "pagos imputados" (`Eye`).
-- **Botón "Volver a cuentas"** (ghost) al pie del detalle.
 
 ### 5. Formulario de pago (modal)
 Reutiliza `Modal` + `Input`/`Select` + `ConfirmarDialog`. Estructura:
