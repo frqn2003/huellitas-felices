@@ -8,9 +8,9 @@ import { CtaCorrienteCardHeader } from "@/components/proveedores/CtaCorrienteCar
 import { CtaCorrienteDetalle } from "@/components/proveedores/CtaCorrienteDetalle";
 import { CtaCorrienteList } from "@/components/proveedores/CtaCorrienteList";
 import {
-  FILTROS_CTA_LISTA_VACIOS,
   FiltrosCtaCorrienteList,
   FiltrosCtaCorrienteListChips,
+  FILTROS_CTA_LISTA_VACIOS,
   type FiltrosCtaCorrienteListValues,
 } from "@/components/proveedores/FiltrosCtaCorriente";
 import {
@@ -193,6 +193,9 @@ function ProveedoresScreen() {
   const [proveedorCtaCte, setProveedorCtaCte] = useState<ProveedorCtaCte | null>(null);
   const [comprobanteResaltado, setComprobanteResaltado] = useState<number | null>(null);
   const [registrarPagoOpen, setRegistrarPagoOpen] = useState(false);
+  // Paginación de la lista de cuentas corrientes.
+  const [ctaCtePage, setCtaCtePage] = useState(1);
+  const [ctaCtePageSize, setCtaCtePageSize] = useState(10);
 
   const filtrados = useMemo(() => {
     const base = proveedores;
@@ -280,9 +283,30 @@ function ProveedoresScreen() {
   const hasActiveFiltersCtaCte =
     ctaCteBusqueda !== "" || Object.values(filtrosCtaCteLista).some((v) => v !== "" && v !== "Todos");
 
+  // Paginación de la lista de cuentas corrientes (mismo cálculo que en proveedores).
+  const ctaCteTotalPages = Math.max(1, Math.ceil(ctaCteFiltrados.length / ctaCtePageSize));
+  const ctaCteSafePage = Math.min(ctaCtePage, ctaCteTotalPages);
+  const ctaCtePageItems = ctaCteFiltrados.slice(
+    (ctaCteSafePage - 1) * ctaCtePageSize,
+    ctaCteSafePage * ctaCtePageSize,
+  );
+  const ctaCtePageStart = ctaCteFiltrados.length === 0 ? 0 : (ctaCteSafePage - 1) * ctaCtePageSize + 1;
+  const ctaCtePageEnd = Math.min(ctaCteSafePage * ctaCtePageSize, ctaCteFiltrados.length);
+
   const handleClearCtaCte = () => {
     setCtaCteBusqueda("");
     setFiltrosCtaCteLista(FILTROS_CTA_LISTA_VACIOS);
+    setCtaCtePage(1);
+  };
+
+  const handleCtaCteBusqueda = (q: string) => {
+    setCtaCteBusqueda(q);
+    setCtaCtePage(1);
+  };
+
+  const handleFiltrosCtaCteLista = (f: FiltrosCtaCorrienteListValues) => {
+    setFiltrosCtaCteLista(f);
+    setCtaCtePage(1);
   };
 
   const abrirDetalleCta = (prov: ProveedorCtaCte) => {
@@ -553,36 +577,33 @@ function ProveedoresScreen() {
             )}
 
             {esCtaCorriente && vistaCtaCte === "lista" && (
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <div className="relative flex-1">
-                  <Search
-                    className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-text-secondary"
-                    aria-hidden="true"
-                  />
-                  <input
-                    type="search"
-                    value={ctaCteBusqueda}
-                    onChange={(e) => setCtaCteBusqueda(e.target.value)}
-                    placeholder="Buscar por proveedor o CUIT..."
-                    aria-label="Buscar por proveedor o CUIT"
-                    className="h-11 w-full cursor-text rounded-pill border border-border bg-surface pl-12 pr-4 text-base text-text-primary transition-colors duration-fast ease-out placeholder:text-text-secondary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <div className="relative flex-1">
+                    <Search
+                      className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-text-secondary"
+                      aria-hidden="true"
+                    />
+                    <input
+                      type="search"
+                      value={ctaCteBusqueda}
+                      onChange={(e) => handleCtaCteBusqueda(e.target.value)}
+                      placeholder="Buscar por proveedor o CUIT..."
+                      aria-label="Buscar por proveedor o CUIT"
+                      className="h-11 w-full cursor-text rounded-pill border border-border bg-surface pl-12 pr-4 text-base text-text-primary transition-colors duration-fast ease-out placeholder:text-text-secondary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
+                    />
+                  </div>
+                  <FiltrosCtaCorrienteList
+                    values={filtrosCtaCteLista}
+                    onChange={handleFiltrosCtaCteLista}
+                    disabled={ctaCteLoading || ctaCteError}
+                    hideChips
                   />
                 </div>
-                <label className="flex items-center gap-2 text-sm font-bold text-text-primary">
-                  Estado
-                  <select
-                    value={ctaCteEstado}
-                    onChange={(e) => setCtaCteEstado(e.target.value as EstadoCtaCte | "Todos")}
-                    className="h-11 cursor-pointer rounded-pill border border-border bg-surface px-4 text-sm font-semibold text-text-primary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
-                  >
-                    <option value="Todos">Todos</option>
-                    <option value="Vencido">Vencido</option>
-                    <option value="ProximoAVencer">Próximo a vencer</option>
-                    <option value="Pendiente">Pendiente</option>
-                    <option value="Credito">Crédito a favor</option>
-                    <option value="Saldado">Saldado</option>
-                  </select>
-                </label>
+                <FiltrosCtaCorrienteListChips
+                  values={filtrosCtaCteLista}
+                  onChange={handleFiltrosCtaCteLista}
+                />
               </div>
             )}
           </div>
@@ -691,13 +712,30 @@ function ProveedoresScreen() {
                   </Button>
                 </div>
               ) : vistaCtaCte === "lista" ? (
-                <CtaCorrienteList
-                  proveedores={ctaCteFiltrados}
-                  loading={ctaCteLoading}
-                  hasActiveFilters={hasActiveFiltersCtaCte}
-                  onClearFilters={handleClearCtaCte}
-                  onVer={abrirDetalleCta}
-                />
+                <>
+                  <CtaCorrienteList
+                    proveedores={ctaCtePageItems}
+                    loading={ctaCteLoading}
+                    hasActiveFilters={hasActiveFiltersCtaCte}
+                    onClearFilters={handleClearCtaCte}
+                    onVer={abrirDetalleCta}
+                  />
+
+                  {!ctaCteLoading && ctaCtePageItems.length > 0 && (
+                    <Pagination
+                      page={ctaCteSafePage}
+                      totalPages={ctaCteTotalPages}
+                      totalItems={ctaCteFiltrados.length}
+                      pageStart={ctaCtePageStart}
+                      pageEnd={ctaCtePageEnd}
+                      pageSize={ctaCtePageSize}
+                      onPageChange={setCtaCtePage}
+                      onPageSizeChange={setCtaCtePageSize}
+                      disabled={ctaCteError}
+                      itemLabel="cuentas corrientes"
+                    />
+                  )}
+                </>
               ) : proveedorCtaCte ? (
                 <CtaCorrienteDetalle
                   proveedor={proveedorCtaCte}
