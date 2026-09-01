@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Landmark,
   LogOut,
   Menu,
   Package,
@@ -39,6 +40,7 @@ const SECCIONES: SidebarSection[] = [
       { label: "Compras", href: "/ordenes-compra", icon: ShoppingCart },
       { label: "Lista de Precios", href: "#lista-precios", icon: Tags },
       { label: "Proveedores", href: "/proveedores", icon: Truck },
+      { label: "Cuentas Corrientes", href: "/cuentas-corrientes", icon: Landmark },
     ],
   },
   {

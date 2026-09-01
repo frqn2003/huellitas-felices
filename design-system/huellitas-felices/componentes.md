@@ -45,6 +45,12 @@ Patrones recurrentes por pantalla: `<Entidad>Table`, `<Entidad>Filtros*`, `<Enti
 ### cotizaciones
 `CancelarSolicitudModal` · `CompararCotizacionesModal` · `CotizacionFormModal` · `EstadoSolicitudBadge` · `FiltrosCotizaciones` · `SolicitudFormModal` · `SolicitudesTable`
 
+### cuentas-corrientes
+Módulo global de Cuentas Corrientes (HU-FIN-03): maneja AMBOS lados, proveedores (pago_proveedor) y clientes (cobranza_cliente), en un mismo listado. Reutiliza piezas de `proveedores/` (`EstadoCtaCteBadge`) y `ui/`.
+`CtaCteListaGlobal` (listado unificado con badge de tipo de entidad Proveedor/Cliente + saldo con signo y etiqueta) · `CtaCorrienteDetalleGlobal` (detalle por entidad con tabs pill Comprobantes/Pagos + acciones Exportar PDF y Registrar) · `RegistrarPagoCtaCteModal` (modal de registro de pago/cobranza con imputación múltiple sobre `Modal`, reutiliza la validación del patrón `RegistrarPagoModal` de proveedores)
+> Datos y tipos generalizados (retrocompatibles) en `src/data/cuentas-corrientes.ts`: `CuentaCorriente`, `Pago`, `EntidadCtaCte`, `TipoPago`, `CUENTAS_CORRIENTES_GLOBAL`, `COMPROBANTES_GLOBAL`, `PAGOS_GLOBAL`. No se tocan los tipos de proveedores existentes.
+> Ruta nueva `/cuentas-corrientes` con ítem "Cuentas Corrientes" (`Landmark`) en la sección Operaciones de `Sidebar`.
+
 ### layout
 `Sidebar` (nav principal)
 
