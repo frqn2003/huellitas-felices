@@ -293,10 +293,6 @@ function CuentasCorrientesScreen() {
               comprobantes={comprobantes[cuentaActiva.id] ?? []}
               pagos={pagos[cuentaActiva.id] ?? []}
               onVolver={() => setVista("lista")}
-              onExportar={() => {
-                // BACKEND: reemplazar por POST /api/entidades/{id}/cta-corriente/pdf
-                showToast("success", "Exportación completada: el detalle se descargó en PDF");
-              }}
               onRegistrar={() => abrirRegistrar(cuentaActiva)}
             />
           ) : (

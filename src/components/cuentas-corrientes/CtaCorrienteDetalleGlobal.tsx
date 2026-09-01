@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Landmark, ReceiptText, Download, Plus } from "lucide-react";
+import { ArrowLeft, Landmark, ReceiptText, Plus } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Pagination } from "@/components/ui/Pagination";
@@ -15,7 +15,6 @@ interface CtaCorrienteDetalleGlobalProps {
   comprobantes: ComprobantePendiente[];
   pagos: Pago[];
   onVolver: () => void;
-  onExportar: () => void;
   onRegistrar: () => void;
 }
 
@@ -24,7 +23,6 @@ export function CtaCorrienteDetalleGlobal({
   comprobantes,
   pagos,
   onVolver,
-  onExportar,
   onRegistrar,
 }: CtaCorrienteDetalleGlobalProps) {
   const [subTab, setSubTab] = useState<SubTab>("comprobantes");
@@ -98,10 +96,6 @@ export function CtaCorrienteDetalleGlobal({
           </button>
         </div>
         <div className="ml-auto flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={onExportar}>
-            <Download className="h-4 w-4" aria-hidden="true" />
-            Exportar PDF
-          </Button>
           <Button size="sm" onClick={onRegistrar}>
             <Plus className="h-4 w-4" aria-hidden="true" />
             Registrar {verbo}
