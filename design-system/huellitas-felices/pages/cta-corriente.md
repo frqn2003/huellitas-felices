@@ -1,6 +1,6 @@
 # Cuenta Corriente de Proveedores (Cta. Cte.) - Pet Bliss Style
 
-> Esta pantalla convive dentro de `/proveedores` como tercer tab (`"cta-corriente"`), junto a Proveedores y Comprobantes. Complementa a `pages/proveedores.md`; los tokens globales del MASTER siguen siendo la base.
+> El tab "Cta. Cte." que vivía dentro de `/proveedores` se eliminó por redundancia: la cuenta corriente ahora es un **módulo global en `/cuentas-corrientes`** (ver `pages/cuentas-corrientes.md`). Este doc conserva las reglas de negocio/patrón de la cuenta corriente de proveedores que el módulo global reutiliza. Complementa a `pages/proveedores.md`; los tokens globales del MASTER siguen siendo la base.
 
 ## Tokens y directivas específicas
 
@@ -35,7 +35,7 @@ Reutiliza `Modal` + `Input`/`Select` + `ConfirmarDialog`. Estructura:
 - **Cancelar** → `ConfirmarDialog` ("Continuar editando" / "Descartar pago").
 
 ### 6. Cross-navegación desde Comprobantes
-El historial de comprobantes expone un botón `Landmark` "Ver en Cta. Cte." por fila (`onVerCtaCte`). Al usarlo: cambia el tab a `cta-corriente`, entra en detalle del proveedor y **resalta** el comprobante (`ring-brand-900` + fondo `accent-500/10`).
+El historial de comprobantes expone un botón `Landmark` "Ver en Cta. Cte." por fila (`onVerCtaCte`). Al usarlo: navega al módulo global `/cuentas-corrientes` (ya no cambia a un tab local, que se eliminó por redundancia).
 
 ## Estados
 - Vacío (sin cuentas / sin comprobantes / sin pagos) con `SearchX`→ aquí `Wallet` y "Limpiar filtros".

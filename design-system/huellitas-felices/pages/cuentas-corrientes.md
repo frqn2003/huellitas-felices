@@ -1,6 +1,6 @@
 # Cuentas Corrientes (global) - Pet Bliss Style
 
-> Módulo global (HU-FIN-03) en su propia ruta `/cuentas-corrientes` (ítem `Landmark` "Cuentas Corrientes" en la sección Operaciones del `Sidebar`). Unifica el lado proveedores (ya existente en `/proveedores` tab "Cta. Cte.") y el lado clientes (cobranzas). Complementa a `pages/cta-corriente.md`; los tokens globales del MASTER siguen siendo la base.
+> Módulo global (HU-FIN-03) en su propia ruta `/cuentas-corrientes` (ítem `Landmark` "Cuentas Corrientes" en la sección Operaciones del `Sidebar`). Unifica el lado proveedores (cuenta corriente de proveedores, antes tab "Cta. Cte." de `/proveedores`, ahora accesible aquí) y el lado clientes (cobranzas). Complementa a `pages/cta-corriente.md`; los tokens globales del MASTER siguen siendo la base.
 
 ## Decisiones de alcance
 - **Sin ABM de clientes**: los clientes se hardcodean directamente en la cuenta corriente (el CRUD de clientes no es parte de esta entrega).
@@ -30,7 +30,7 @@ Mismo patrón de tabla que proveedores/comprobantes: wrapper `overflow-hidden` +
 - Paginación `Pagination` en ambas tablas.
 
 ## Formulario de registro unificado (Pantalla C)
-Misma validación que el `RegistrarPagoModal` de proveedores pero con verbo/sustantivo según entidad:
+Misma validación que la regla del formulario de pago de cuenta corriente de proveedores (`pages/cta-corriente.md`) pero con verbo/sustantivo según entidad:
 - N° comprobante (único), forma de pago, fecha (no futura, default hoy), monto total (>0).
 - Imputación múltiple a comprobantes con saldo > 0; monto por comprobante ≤ saldo; total ingresado > 0 y ≤ monto total.
 - Notas de Crédito (saldos negativos) no se imputan acá — hint lo aclara.

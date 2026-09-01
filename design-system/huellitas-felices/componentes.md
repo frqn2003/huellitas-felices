@@ -47,7 +47,7 @@ Patrones recurrentes por pantalla: `<Entidad>Table`, `<Entidad>Filtros*`, `<Enti
 
 ### cuentas-corrientes
 Módulo global de Cuentas Corrientes (HU-FIN-03): maneja AMBOS lados, proveedores (pago_proveedor) y clientes (cobranza_cliente), en un mismo listado. Reutiliza piezas de `proveedores/` (`EstadoCtaCteBadge`) y `ui/`.
-`CtaCteListaGlobal` (listado unificado con badge de tipo de entidad Proveedor/Cliente + saldo con signo y etiqueta) · `CtaCorrienteDetalleGlobal` (detalle por entidad con tabs pill Comprobantes/Pagos + acciones Exportar PDF y Registrar) · `RegistrarPagoCtaCteModal` (modal de registro de pago/cobranza con imputación múltiple sobre `Modal`, reutiliza la validación del patrón `RegistrarPagoModal` de proveedores)
+`CtaCteListaGlobal` (listado unificado con badge de tipo de entidad Proveedor/Cliente + saldo con signo y etiqueta) · `CtaCorrienteDetalleGlobal` (detalle por entidad con tabs pill Comprobantes/Pagos + acciones Exportar PDF y Registrar) · `RegistrarPagoCtaCteModal` (modal de registro de pago/cobranza con imputación múltiple sobre `Modal` + validaciones)
 > Datos y tipos generalizados (retrocompatibles) en `src/data/cuentas-corrientes.ts`: `CuentaCorriente`, `Pago`, `EntidadCtaCte`, `TipoPago`, `CUENTAS_CORRIENTES_GLOBAL`, `COMPROBANTES_GLOBAL`, `PAGOS_GLOBAL`. No se tocan los tipos de proveedores existentes.
 > Ruta nueva `/cuentas-corrientes` con ítem "Cuentas Corrientes" (`Landmark`) en la sección Operaciones de `Sidebar`.
 
@@ -61,8 +61,7 @@ Módulo global de Cuentas Corrientes (HU-FIN-03): maneja AMBOS lados, proveedore
 `CancelarOrdenModal` · `EstadoOrdenBadge` · `FiltrosOrdenes` · `OrdenFormModal` · `OrdenesTable`
 
 ### proveedores
-`BajaProveedorModal` · `CtaCorrienteCardHeader` (tarjeta compacta resumen de cuenta corriente para la cabecera superior) · `CtaCorrienteDetalle` (detalle de cuenta corriente con pestañas de navegación pill entre comprobantes pendientes y pagos registrados, con filtros avanzados emergentes `FiltrosCtaCorriente` y paginación `Pagination`) · `CtaCorrienteList` (listado resumen de cuentas corrientes con saldo neto) · `EstadoCtaCteBadge` (mapea sobre `StatusBadge`: Vencido=danger, Próximo a vencer/Pendiente=warning, Crédito=success, Saldado=neutral) · `EstadoProveedorBadge` (mapea sobre `StatusBadge`: success/neutral) · `FiltrosCtaCorriente` (`FiltrosCtaComprobantes` y `FiltrosCtaPagos`: panel flotante emergente con contador e indicadores chip) · `FiltrosProveedores` · `ProveedorFormModal` · `ProveedoresTable` · `ProveedoresTabs` · `RegistrarPagoModal` (modal de pago con imputación múltiple sobre `Modal` + validaciones)
-> `ProveedoresTabs` extendido con el tercer tab `"cta-corriente"` (`Landmark`).
+`BajaProveedorModal` · `EstadoCtaCteBadge` (mapea sobre `StatusBadge`: Vencido=danger, Próximo a vencer/Pendiente=warning, Crédito=success, Saldado=neutral) · `EstadoProveedorBadge` (mapea sobre `StatusBadge`: success/neutral) · `FiltrosProveedores` · `ProveedorFormModal` · `ProveedoresTable` · `ProveedoresTabs`
 
 ### recepciones
 `RecepcionesTable` · `FiltrosRecepciones` · `FiltrosChipsRecepciones` · `RecepcionFormModal` · `RecepcionDetalleModal` · `EstadoRecepcionBadge`
