@@ -42,7 +42,7 @@ export function CtaCteListaGlobal({ cuentas, onVerDetalle, onRegistrar }: CtaCte
               <th scope="col" className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wide text-text-secondary">
                 Tipo
               </th>
-              <th scope="col" className="pl-6 pr-4 py-3 text-right text-xs font-extrabold uppercase tracking-wide text-text-secondary">
+              <th scope="col" className="px-6 py-3 text-right text-xs font-extrabold uppercase tracking-wide text-text-secondary">
                 Saldo
               </th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wide text-text-secondary">
@@ -88,7 +88,7 @@ export function CtaCteListaGlobal({ cuentas, onVerDetalle, onRegistrar }: CtaCte
                       {meta.label}
                     </span>
                   </td>
-                  <td className="pl-6 pr-4 py-4 text-right">
+                  <td className="px-6 py-4 text-right">
                     <span className={`text-base font-medium ${saldo.tone}`}>
                       {saldo.sign}{formatARS(Math.abs(c.saldoActual))}
                     </span>
