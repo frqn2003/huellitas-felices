@@ -8,6 +8,7 @@ Documentación del equipo de backend. Leer en este orden:
 | 1 | [`PLAN-SPRINT1.md`](PLAN-SPRINT1.md) | Alcance del sprint, contrato de API, reglas de negocio por HU, fases, DoD | Para entender **qué** hay que construir |
 | 2 | [`AJUSTES-DER.md`](AJUSTES-DER.md) | Comparación del DER real contra el contrato del front: bloqueantes, deuda, queries de verificación | Para entender **qué falta en la base** |
 | 3 | [`GUIA-IMPLEMENTACION.md`](GUIA-IMPLEMENTACION.md) | Decisiones cerradas, arquitectura en capas, estructura de carpetas, métodos por módulo, convenciones, migraciones, testing | Para entender **cómo** construirlo — es la referencia del día a día |
+| 4 | [`HU-COMP-03.md`](HU-COMP-03.md) | **Sprint 2.** Recepción de mercadería contra OC: decisiones cerradas, DDL, contrato de API, algoritmo del service y los conflictos con el brief del front | Al implementar HU-COMP-03 (primera HU del Sprint 2) |
 
 > Los docs 1–3 son de **referencia**: asumen que ya sabés qué es una capa de
 > servicio o una transacción. El doc 0 es el que enseña eso.

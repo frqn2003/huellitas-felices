@@ -41,6 +41,7 @@ CREATE SEQUENCE IF NOT EXISTS orden_compra_cod_seq;
 CREATE SEQUENCE IF NOT EXISTS orden_compra_detalle_id_seq;
 CREATE SEQUENCE IF NOT EXISTS orden_compra_id_seq;
 CREATE SEQUENCE IF NOT EXISTS origen_movimiento_id_seq;
+CREATE SEQUENCE IF NOT EXISTS presentacion_id_seq;
 CREATE SEQUENCE IF NOT EXISTS proveedor_id_seq;
 CREATE SEQUENCE IF NOT EXISTS rol_id_seq;
 CREATE SEQUENCE IF NOT EXISTS solicitud_cotizacion_id_seq;
@@ -66,7 +67,9 @@ CREATE TABLE articulo (
   fabricante_id integer(32,0) NOT NULL,
   imagen_url character varying(255),
   created_at timestamp without time zone DEFAULT now() NOT NULL,
-  updated_at timestamp without time zone DEFAULT now() NOT NULL
+  updated_at timestamp without time zone DEFAULT now() NOT NULL,
+  contenido_neto numeric(10,2) DEFAULT 1 NOT NULL,
+  presentacion_id integer(32,0) NOT NULL
 );
 
 CREATE TABLE auditoria (
@@ -187,6 +190,11 @@ CREATE TABLE origen_movimiento (
   nombre character varying(40) NOT NULL
 );
 
+CREATE TABLE presentacion (
+  id integer(32,0) DEFAULT nextval('presentacion_id_seq'::regclass) NOT NULL,
+  nombre character varying(50) NOT NULL
+);
+
 CREATE TABLE proveedor (
   id integer(32,0) DEFAULT nextval('proveedor_id_seq'::regclass) NOT NULL,
   razon_social character varying(150) NOT NULL,
@@ -247,6 +255,7 @@ CREATE TABLE usuario (
 -- CLAVES PRIMARIAS, ÚNICOS Y CHECKS
 -- =========================================================
 
+ALTER TABLE articulo ADD CONSTRAINT ck_articulo_contenido_neto CHECK ((contenido_neto > (0)::numeric));
 ALTER TABLE articulo ADD CONSTRAINT articulo_pkey PRIMARY KEY (id);
 ALTER TABLE articulo ADD CONSTRAINT articulo_codigo_key UNIQUE (codigo);
 ALTER TABLE auditoria ADD CONSTRAINT ck_auditoria_valores CHECK ((((operacion = 'INSERT'::tipo_operacion_auditoria) AND (valores_anteriores IS NULL) AND (valores_nuevos IS NOT NULL)) OR ((operacion = 'UPDATE'::tipo_operacion_auditoria) AND (valores_anteriores IS NOT NULL) AND (valores_nuevos IS NOT NULL)) OR ((operacion = 'DELETE'::tipo_operacion_auditoria) AND (valores_anteriores IS NOT NULL) AND (valores_nuevos IS NULL))));
@@ -285,6 +294,8 @@ ALTER TABLE orden_compra_detalle ADD CONSTRAINT ck_ocd_precio CHECK ((precio_aco
 ALTER TABLE orden_compra_detalle ADD CONSTRAINT orden_compra_detalle_pkey PRIMARY KEY (id);
 ALTER TABLE origen_movimiento ADD CONSTRAINT origen_movimiento_pkey PRIMARY KEY (id);
 ALTER TABLE origen_movimiento ADD CONSTRAINT origen_movimiento_nombre_key UNIQUE (nombre);
+ALTER TABLE presentacion ADD CONSTRAINT presentacion_pkey PRIMARY KEY (id);
+ALTER TABLE presentacion ADD CONSTRAINT presentacion_nombre_key UNIQUE (nombre);
 ALTER TABLE proveedor ADD CONSTRAINT proveedor_pkey PRIMARY KEY (id);
 ALTER TABLE proveedor_forma_pago ADD CONSTRAINT proveedor_forma_pago_pkey PRIMARY KEY (proveedor_id, forma_pago_id);
 ALTER TABLE rol ADD CONSTRAINT rol_pkey PRIMARY KEY (id);
@@ -305,6 +316,7 @@ ALTER TABLE usuario ADD CONSTRAINT usuario_pkey PRIMARY KEY (id);
 
 ALTER TABLE articulo ADD CONSTRAINT articulo_categoria_id_fkey FOREIGN KEY (categoria_id) REFERENCES categoria(id);
 ALTER TABLE articulo ADD CONSTRAINT articulo_fabricante_id_fkey FOREIGN KEY (fabricante_id) REFERENCES fabricante(id);
+ALTER TABLE articulo ADD CONSTRAINT articulo_presentacion_id_fkey FOREIGN KEY (presentacion_id) REFERENCES presentacion(id);
 ALTER TABLE articulo ADD CONSTRAINT articulo_unidad_medida_id_fkey FOREIGN KEY (unidad_medida_id) REFERENCES unidad_medida(id);
 ALTER TABLE auditoria ADD CONSTRAINT auditoria_usuario_id_fkey FOREIGN KEY (usuario_id) REFERENCES usuario(id) ON DELETE SET NULL;
 ALTER TABLE cotizacion ADD CONSTRAINT cotizacion_forma_pago_id_fkey FOREIGN KEY (forma_pago_id) REFERENCES forma_pago(id);
