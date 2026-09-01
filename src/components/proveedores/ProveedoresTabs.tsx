@@ -1,9 +1,9 @@
 "use client";
 
-import { Landmark, ReceiptText, Truck } from "lucide-react";
+import { ReceiptText, Truck } from "lucide-react";
 import { useRef } from "react";
 
-export type TabProveedores = "proveedores" | "comprobantes" | "cta-corriente";
+export type TabProveedores = "proveedores" | "comprobantes";
 
 interface ProveedoresTabsProps {
   active: TabProveedores;
@@ -18,14 +18,12 @@ const TABS: {
 }[] = [
   { id: "proveedores", label: "Proveedores", icon: Truck },
   { id: "comprobantes", label: "Comprobantes", icon: ReceiptText },
-  { id: "cta-corriente", label: "Cta. Cte.", icon: Landmark },
 ];
 
 export function ProveedoresTabs({ active, onChange, disabled = false }: ProveedoresTabsProps) {
   const tabRefs = useRef<Record<TabProveedores, HTMLButtonElement | null>>({
     proveedores: null,
     comprobantes: null,
-    "cta-corriente": null,
   });
 
   const handleKeyDown = (e: React.KeyboardEvent, index: number) => {

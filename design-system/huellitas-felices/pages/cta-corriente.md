@@ -35,7 +35,7 @@ Reutiliza `Modal` + `Input`/`Select` + `ConfirmarDialog`. Estructura:
 - **Cancelar** → `ConfirmarDialog` ("Continuar editando" / "Descartar pago").
 
 ### 6. Cross-navegación desde Comprobantes
-El historial de comprobantes expone un botón `Wallet` "Ver en Cta. Cte." por fila (`onVerCtaCte`). Al usarlo: cambia el tab a `cta-corriente`, entra en detalle del proveedor y **resalta** el comprobante (`ring-brand-900` + fondo `accent-500/10`).
+El historial de comprobantes expone un botón `Landmark` "Ver en Cta. Cte." por fila (`onVerCtaCte`). Al usarlo: cambia el tab a `cta-corriente`, entra en detalle del proveedor y **resalta** el comprobante (`ring-brand-900` + fondo `accent-500/10`).
 
 ## Estados
 - Vacío (sin cuentas / sin comprobantes / sin pagos) con `SearchX`→ aquí `Wallet` y "Limpiar filtros".

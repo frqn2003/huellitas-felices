@@ -1,4 +1,4 @@
-import { Eye, SearchX, Trash2, Wallet } from "lucide-react";
+import { Eye, Landmark, SearchX, Trash2 } from "lucide-react";
 import { EstadoComprobanteBadge } from "./EstadoComprobanteBadge";
 import type { LineaComprobante } from "./DetalleLineasTable";
 
@@ -141,7 +141,7 @@ export function ComprobantesTable({
                         title="Ver en Cta. Cte."
                         className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-pill text-text-secondary transition-colors duration-fast ease-out hover:bg-brand-900/10 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900"
                       >
-                        <Wallet className="h-5 w-5" aria-hidden="true" />
+                        <Landmark className="h-5 w-5" aria-hidden="true" />
                       </button>
                     )}
                     {f.estado === "Vigente" && (
