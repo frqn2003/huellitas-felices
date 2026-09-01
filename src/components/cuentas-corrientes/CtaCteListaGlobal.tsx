@@ -51,7 +51,7 @@ export function CtaCteListaGlobal({ cuentas, onVerDetalle, onRegistrar }: CtaCte
               <th scope="col" className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wide text-text-secondary">
                 Próx. vencimiento
               </th>
-              <th scope="col" className="px-6 py-3 text-right text-xs font-extrabold uppercase tracking-wide text-text-secondary">
+              <th scope="col" className="pl-6 pr-4 py-3 text-right text-xs font-extrabold uppercase tracking-wide text-text-secondary">
                 Acciones
               </th>
             </tr>
@@ -100,7 +100,7 @@ export function CtaCteListaGlobal({ cuentas, onVerDetalle, onRegistrar }: CtaCte
                   <td className="px-6 py-4 text-sm font-medium text-text-secondary">
                     {formatFecha(c.proximoVencimiento)}
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="pl-6 pr-4 py-4">
                     <div className="flex items-center justify-end gap-2">
                       <Button variant="outline" size="sm" onClick={() => onRegistrar(c)}>
                         <Plus className="h-4 w-4" aria-hidden="true" />
