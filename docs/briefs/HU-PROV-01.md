@@ -1,7 +1,5 @@
 # HU-PROV-01: [Como personal de depósito, quiero registrar, editar y consultar proveedores con sus datos fiscales y de contacto mediante un formulario paramétrico único, para tener el listado de proveedores disponibles para realizar compras]
 
-> Copiar este archivo como `HU-XXX.md` (ej: `HU-001.md`) y completar. Referencia: `docs/COMO-USAR.md`.
-
 ## Contexto
 
 - **Ruta propuesta:** `/proveedores`

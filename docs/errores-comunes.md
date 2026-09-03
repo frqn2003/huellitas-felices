@@ -1,11 +1,11 @@
 # Errores comunes — Lecciones aprendidas
 
-Log vivo del equipo de diseño para **no volver a cometer los mismos errores**. Se consulta al inicio de `/disenar` y se alimenta **a propósito** con el comando `/error` (nunca se actualiza solo).
+Log vivo del equipo de diseño para **no volver a cometer los mismos errores**. Se consulta al inicio de `/disenar` y se alimenta **automáticamente** durante los pasos 6/7: si el agente detecta un error (propio, del renderizado o del feedback del usuario), lo registra solo, sin comando manual.
 
 ## Cómo usar este archivo
 
 1. **Al diseñar:** leer las "Reglas activas" antes de codear y verificarlas en el paso de verificación técnica.
-2. **Al detectar un error** (en lint/tsc, checklist de accesibilidad, feedback del usuario o revisión): registrarlo con `/error <descripción>`.
+2. **Al detectar un error** (en lint/tsc, renderizado, checklist de accesibilidad, feedback del usuario o revisión): se registra automáticamente. No hay comando `/error`; el agente lo hace durante `/disenar`.
 3. Si un error ya está registrado pero cambió la regla para evitarlo, editar la entrada existente (no duplicar).
 
 ---
@@ -15,7 +15,7 @@ Log vivo del equipo de diseño para **no volver a cometer los mismos errores**. 
 <!-- Checklist rápido derivado de los errores registrados abajo.
      Cada nueva entrada puede sumar una regla acá. Mantener corto (máx ~15). -->
 
-_(Todavía no hay reglas. Se completan con `/error`)_
+_(Todavía no hay reglas. Se completan automáticamente durante `/disenar`)_
 
 ---
 

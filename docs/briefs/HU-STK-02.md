@@ -1,8 +1,6 @@
 
 # HU-STK-02: Como personal de depósito, quiero gestionar los depósitos de cada sucursal y, para cada artículo, su ficha de stock con umbrales mínimo y crítico, para tener control del inventario en cada ubicación física y recibir alertas cuando sea necesario reponer
 
-> Copiar este archivo como `HU-STK-02.md` y completar. Referencia: `docs/COMO-USAR.md`.
-
 ## Contexto
 
 - **Ruta propuesta:** `/stock`

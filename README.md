@@ -40,7 +40,7 @@ Si falta alguna, instalarla manualmente:
 
 ```bash
 # Wondel.ai (UX)
-npx skills add wondelai/skills -a opencode -y --skill ux-heuristics --skill design-everyday-things --skill refactoring-ui --skill microinteractions --skill web-typography --skill lean-ux
+npx skills add wondelai/skills -a opencode -y --skill ux-heuristics
 
 # UI/UX Pro Max
 npx ui-ux-pro-max-cli init -a opencode -f
@@ -76,7 +76,7 @@ npm run dev
 - `docs/design-system-pet-bliss-style.md` — design system (versión humana, fuente de verdad).
 - `design-system/huellitas-felices/MASTER.md` — design system para la skill ui-ux-pro-max (reglas que reemplazan al catálogo de la skill).
 - `docs/briefs/_plantilla.md` — plantilla de brief por pantalla (HU + wireframe).
-- `docs/COMO-USAR.md` — guía rápida del flujo de trabajo.
+- `docs/COMO-USAR.md` — guía del equipo: comandos `/brief` `/disenar` `/subir`, instalación de Engram + Gentle AI, y comandos rápidos de memoria.
 - `AGENTS.md` — acuerdos del equipo y reglas para agentes de IA.
 
 ## Convenciones del equipo

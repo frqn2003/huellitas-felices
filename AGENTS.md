@@ -26,12 +26,12 @@ Guía de trabajo para agentes de IA en este repositorio. Es el acuerdo del equip
 
 ## Documentación de referencia
 
-- `docs/COMO-USAR.md` — guía rápida viva del equipo: flujo de trabajo, cómo escribir briefs y qué hace cada comando.
+- `docs/COMO-USAR.md` — guía del equipo: comandos OpenCode (`/brief`, `/disenar`, `/subir`), instalación de Engram + Gentle AI en una PC nueva, y comandos rápidos de memoria.
 - `docs/briefs/` (base `_plantilla.md`) — briefs por pantalla (HU + wireframe + datos + criterios de aceptación); son el insumo de `/disenar`.
 - `docs/design-system-pet-bliss-style.md` — design system "Pet Bliss Style": tokens de color, tipografía, spacing, grid, radius, motion y reglas de composición. **Es la fuente de verdad del lenguaje visual (versión humana).**
 - `design-system/huellitas-felices/MASTER.md` — design system "Pet Bliss" en el formato de la skill ui-ux-pro-max (**versión para la skill**). Ver "Regla de tokens" abajo.
 - `design-system/huellitas-felices/componentes.md` — inventario de componentes de `src/components/`. Consultarlo **antes de crear componentes** y actualizarlo al crear/extender.
-- `docs/errores-comunes.md` — log de errores/lecciones del equipo. Leer sus "Reglas activas" al diseñar; se alimenta a propósito con el comando `/error`.
+- `docs/errores-comunes.md` — log de errores/lecciones del equipo. Leer sus "Reglas activas" al diseñar; se alimenta **automáticamente** durante `/disenar` (ya no existe el comando `/error`).
 
 ## Workflow obligatorio (comando `/disenar`)
 
@@ -41,7 +41,7 @@ El flujo completo diseño → código → verificación corre con el comando **`
 2. **UI/UX Pro Max (skill visual)** → generar y pulir visualmente los componentes.
 3. **Verificación técnica** → `npm run lint` + `npx tsc --noEmit` + checklist de accesibilidad sobre el código (sin navegador).
 
-> Regla del equipo: **ui-ux-pro-max** es la skill visual que genera. No se usa ningún test de navegador ni screenshots automáticos para el front.
+> Regla del equipo: **ui-ux-pro-max** es la skill visual que genera. La verificación de que la pantalla funciona se hace con la skill **browser-automation** (headless browser) en el paso 6b de `/disenar` — sin instalar nuevas dependencias.
 > Antes de codear: **buscar y reusar componentes** existentes (ver inventario en `design-system/huellitas-felices/componentes.md`); extender antes que duplicar.
 > Las skills se activan cuando el pedido coincide con su descripción: para activación garantizada, nombrarlas explícitamente (ej: "usá la skill ux-heuristics").
 
@@ -53,7 +53,7 @@ El flujo completo diseño → código → verificación corre con el comando **`
 ## Log de errores
 
 - Los errores/lecciones del equipo viven en `docs/errores-comunes.md`. El agente los consulta al diseñar y verifica las "Reglas activas" en la verificación técnica.
-- El log **solo se alimenta a propósito** con el comando `/error` (nunca el agente lo actualiza por su cuenta).
+- El log se alimenta **automáticamente** durante `/disenar` (pasos 6/7): si se detecta un error, el agente lo registra sin esperar a que el usuario lo haga. Ya no existe el comando `/error`.
 
 ## Regla de tokens (IMPORTANTE)
 

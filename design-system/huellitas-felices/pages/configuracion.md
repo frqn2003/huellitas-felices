@@ -4,7 +4,7 @@
 
 ## Contexto
 
-Pantalla de **configuración de cuenta del usuario logueado** (`/configuracion`). Perfil personal: el usuario ve y edita sus propios datos (nombre, apellido, email, teléfono) y cambia su contraseña. Rol, DNI, estado y fecha de ingreso son solo lectura. Brief: `docs/briefs/CorreccionConfiguracionLogin.md`.
+Pantalla de **configuración de cuenta del usuario logueado** (`/configuracion`). Perfil personal: el usuario ve y edita sus propios datos (nombre, apellido, email, teléfono) y cambia su contraseña. Rol, DNI, estado y fecha de ingreso son solo lectura. Brief: `docs/briefs/HU-SIS-05.md`. 
 
 ## Desviaciones y decisiones
 
