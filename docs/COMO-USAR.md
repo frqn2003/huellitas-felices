@@ -16,7 +16,7 @@ Documento vivo del equipo de diseño. Describe cómo se trabaja con OpenCode y d
 
 ```
 1. INVESTIGACIÓN + WIREFRAMES   → los hace el equipo a mano (Figjam/papel)
-2. IDEA REFINADA                → se escribe en un .md (ver "Cómo escribir el brief")
+2. IDEA REFINADA                → se escribe en un .md con /brief (o a mano, ver "Cómo escribir el brief")
 3. OPENCODE CODEA               → /diseñar <brief> con las skills
 4. ENTREGA                      → pantalla hardcodeada + testeada
 ```
@@ -44,9 +44,26 @@ En un `.md` de `docs/briefs/` (usar `_plantilla.md` como base):
 [qué debe cumplir la pantalla para darse por terminada]
 ```
 
+### Cómo armar el brief automáticamente: `/brief`
+
+En vez de escribir el `.md` a mano, podés generar el brief con una descripción corta + tu idea inicial:
+
+```
+/brief HU-STK-04: Como administrador, quiero ver el stock por depósito para reponer antes de que se agote. Idea: tabla con filtros por depósito, badges de estado y alerta de reposición.
+```
+
+El comando:
+1. Interpreta la HU + tu idea inicial.
+2. **Te hace preguntas** sobre lo que le falta (ruta, estados, prioridad, etc.). Solo lo que no puede inferir.
+3. Juntan contexto: busca las tablas relevantes en `docs/esquema-bd-front.md`, los componentes existentes en `disenar/componentes` y HUs previas del módulo.
+4. Genera `docs/briefs/HU-XXX.md` completo: wireframe, user flow, fuente de datos (BD), componentes sugeridos, datos hardcodeados (respetando tipos del esquema), estados y criterios de aceptación.
+5. Te muestra el resultado para revisar antes de `/disenar`.
+
+> `/brief` solo arma el brief. No codea. El diseño se hace después con `/disenar`.
+
 ### Cómo lanzar la pantalla: `/diseñar`
 
-Con el brief escrito, desde OpenCode ejecutar:
+Con el brief escrito (a mano o con `/brief`), desde OpenCode ejecutar:
 
 ```
 /diseñar HU-001
