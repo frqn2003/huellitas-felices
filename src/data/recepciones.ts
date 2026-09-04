@@ -5,6 +5,8 @@ export type TipoRecepcion = "parcial" | "total";
 
 export type ObservacionRecepcion = "faltante" | "danado" | "error";
 
+export type SucursalOpcion = { id: number; nombre: string };
+
 export interface RecepcionDetalle {
   id: number;
   recepcion_id: number;
@@ -25,6 +27,7 @@ export interface Recepcion {
     numero: string;
     proveedor: { id: number; razonSocial: string };
   };
+  sucursal: string;
   deposito_id: number;
   deposito: { id: number; nombre: string };
   tipo_recepcion: TipoRecepcion;
@@ -83,6 +86,7 @@ export const recepcionesIniciales: Recepcion[] = [
       numero: "OC-0005",
       proveedor: { id: 1, razonSocial: "Nutrición Animal SRL" },
     },
+    sucursal: "Centro",
     deposito_id: 1,
     deposito: { id: 1, nombre: "Depósito Central" },
     tipo_recepcion: "total",
@@ -123,6 +127,7 @@ export const recepcionesIniciales: Recepcion[] = [
       numero: "OC-0006",
       proveedor: { id: 2, razonSocial: "VetInsumos Norte SA" },
     },
+    sucursal: "Centro",
     deposito_id: 1,
     deposito: { id: 1, nombre: "Depósito Central" },
     tipo_recepcion: "parcial",
@@ -174,6 +179,7 @@ export const recepcionesIniciales: Recepcion[] = [
       numero: "OC-0007",
       proveedor: { id: 3, razonSocial: "Farmavet Distribuidora" },
     },
+    sucursal: "Norte",
     deposito_id: 2,
     deposito: { id: 2, nombre: "Sucursal A" },
     tipo_recepcion: "total",
@@ -302,8 +308,17 @@ export const PROVEEDORES_RECEPCIONES = [
 
 // BACKEND: reemplazar por GET /api/depositos
 export const DEPOSITOS = [
-  { id: 1, nombre: "Depósito Central" },
-  { id: 2, nombre: "Sucursal A" },
+  { id: 1, sucursalId: 1, sucursal: "Centro", nombre: "Depósito Central", ubicacion: "Av. Principal 123" },
+  { id: 2, sucursalId: 2, sucursal: "Norte", nombre: "Depósito Norte", ubicacion: "Calle Norte 456" },
+  { id: 3, sucursalId: 3, sucursal: "Sur", nombre: "Depósito Sur", ubicacion: "Av. Sur 789" },
+  { id: 4, sucursalId: 1, sucursal: "Centro", nombre: "Depósito Auxiliar", ubicacion: "Av. Principal 123 - Subsuelo" },
+  { id: 5, sucursalId: 3, sucursal: "Sur", nombre: "Depósito Vacunas", ubicacion: "Av. Sur 789 - Ala este" },
+];
+
+export const SUCURSALES: SucursalOpcion[] = [
+  { id: 1, nombre: "Centro" },
+  { id: 2, nombre: "Norte" },
+  { id: 3, nombre: "Sur" },
 ];
 
 export const SIMULAR_VACIO = false;

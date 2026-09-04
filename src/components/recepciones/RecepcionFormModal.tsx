@@ -10,6 +10,7 @@ import type {
 } from "@/data/recepciones";
 import {
   DEPOSITOS,
+  SUCURSALES,
   TIPOS_RECEPCION,
   OBSERVACIONES_RECEPCION,
   numeroRecepcion,
@@ -22,6 +23,7 @@ import { Select } from "@/components/ui/Select";
 export interface RecepcionDraft {
   ordenCompraId: string;
   depositoId: string;
+  sucursalId: string;
   tipoRecepcion: TipoRecepcion;
   observacionGeneral: string;
   items: RecepcionItemDraft[];
@@ -41,6 +43,7 @@ export interface RecepcionItemDraft {
 const EMPTY_DRAFT: RecepcionDraft = {
   ordenCompraId: "",
   depositoId: "",
+  sucursalId: "",
   tipoRecepcion: "total",
   observacionGeneral: "",
   items: [],
@@ -108,9 +111,12 @@ function RecepcionFormContent({
 
   const handleOrdenChange = (ordenId: string) => {
     const orden = ordenes.find((o) => o.id === Number(ordenId));
+    // El depósito de la OC determina la sucursal a mostrar
+    const depositoOrden = DEPOSITOS.find((d) => d.id === orden?.deposito.id);
     setDraft((prev) => ({
       ...prev,
       ordenCompraId: ordenId,
+      sucursalId: orden && depositoOrden ? String(depositoOrden.sucursalId) : "",
       depositoId: orden ? String(orden.deposito.id) : "",
       items: orden
         ? orden.articulos.map((a) => ({
@@ -130,6 +136,7 @@ function RecepcionFormContent({
   const validacion = useMemo(() => {
     const errores: string[] = [];
     if (!draft.ordenCompraId) errores.push("Seleccioná una orden de compra.");
+    if (!draft.sucursalId) errores.push("Seleccioná la sucursal destino.");
     if (!draft.depositoId) errores.push("Seleccioná el depósito destino.");
 
     const items = draft.items;
@@ -191,6 +198,13 @@ function RecepcionFormContent({
     );
   }, [draft.items]);
 
+  // Filtrar depósitos por sucursal seleccionada (patrón FichaFormModal)
+  const sucursalId = draft.sucursalId ? Number(draft.sucursalId) : 0;
+  const depositosSucursal = useMemo(() => {
+    if (!sucursalId) return DEPOSITOS;
+    return DEPOSITOS.filter((d) => d.sucursalId === sucursalId);
+  }, [sucursalId]);
+
   const showErrors = submitAttempted;
 
   function handleItemChange(
@@ -224,6 +238,7 @@ function RecepcionFormContent({
             proveedor: ordenSeleccionada.proveedor,
           }
         : { numero: "", proveedor: { id: 0, razonSocial: "" } },
+      sucursal: SUCURSALES.find((s) => s.id === Number(draft.sucursalId))?.nombre ?? "",
       deposito_id: Number(draft.depositoId),
       deposito:
         DEPOSITOS.find((d) => d.id === Number(draft.depositoId)) ??
@@ -286,22 +301,47 @@ function RecepcionFormContent({
           </Select>
 
           <Select
+            label="Sucursal"
+            requiredMark
+            value={draft.sucursalId}
+            onChange={(e) => setDraft((prev) => ({
+              ...prev,
+              sucursalId: e.target.value,
+              depositoId: "", // Resetear depósito al cambiar sucursal
+            }))}
+            error={
+              showErrors && !draft.sucursalId
+                ? "Seleccioná una sucursal"
+                : undefined
+            }
+            hint="Selecciona la sucursal para ver sus depósitos disponibles"
+          >
+            <option value="">[ Seleccionar sucursal ]</option>
+            {SUCURSALES.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.nombre}
+              </option>
+            ))}
+          </Select>
+
+          <Select
             label="Depósito destino"
             requiredMark
             value={draft.depositoId}
             onChange={(e) =>
               setDraft((prev) => ({ ...prev, depositoId: e.target.value }))
             }
+            disabled={!draft.sucursalId} // Deshabilitado hasta que se seleccione sucursal
             error={
               showErrors && !draft.depositoId
                 ? "Seleccioná el depósito"
                 : undefined
             }
           >
-            <option value="">Seleccionar depósito</option>
-            {DEPOSITOS.map((d) => (
+            <option value="">[ Seleccionar sucursal primero ]</option>
+            {depositosSucursal.map((d) => (
               <option key={d.id} value={d.id}>
-                {d.nombre}
+                {d.nombre} — {d.ubicacion}
               </option>
             ))}
           </Select>
