@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, UserRound, ChevronRight, Plus } from "lucide-react";
+import { Building2, UserRound, Eye, Plus } from "lucide-react";
 import { EstadoCtaCteBadge } from "@/components/proveedores/EstadoCtaCteBadge";
 import { Button } from "@/components/ui/Button";
 import type { CuentaCorriente } from "@/data/cuentas-corrientes";
@@ -107,7 +107,7 @@ export function CtaCteListaGlobal({ cuentas, onVerDetalle, onRegistrar }: CtaCte
                         {c.tipo === "proveedor" ? "Pagar" : "Cobrar"}
                       </Button>
                       <Button variant="ghost" size="sm" onClick={() => onVerDetalle(c)} aria-label={`Ver detalle de ${c.nombre}`}>
-                        <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                        <Eye className="h-4 w-4" aria-hidden="true" />
                       </Button>
                     </div>
                   </td>
