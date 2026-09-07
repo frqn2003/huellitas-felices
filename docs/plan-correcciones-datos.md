@@ -24,12 +24,23 @@ Se relevaron 10 módulos. Resultado:
 | # | Decisión | Por qué bloquea |
 |---|---|---|
 | D1 | **Recepciones**: ¿las tablas `recepcion_mercaderia*` se eliminaron (rediseñar el módulo) o faltan en el diccionario (agregarlas)? | Decisión más grande del sprint 2. Hoy el front modela tablas inexistentes. |
-| D2 | **`origen_id`**: ¿columna nullable o el front debe mandar siempre `transferencia_sucursal`/`ajuste_manual`? | El dict dice `int FK NOT NULL`, pero el front lo manda `null` en transferencias/ajustes. |
-| D3 | **`direccion_entrega`**: ¿columna real en `orden_compra` o se resuelve por `deposito.ubicacion`? | El modal de OC cree que la BD guarda el varchar; el dict no la tiene. |
-| D4 | **Catálogo `forma_pago`**: fijar valores canónicos. | Hoy el front tiene dos sets incompatibles: `["Contado","Cuenta Corriente","Cheque a 30 días"]` (proveedores) y `["Efectivo","Transferencia","Cheque","Tarjeta"]` (cta. cte.). El dict dice que el catálogo lo expone la API, no el front. |
+| D2 | **`origen_id`**: ✅ RESUELTO (2026-09-06) — `origen_id` SIEMPRE se llena: `transferencia_sucursal` para transferencias, `ajuste_manual` para ajustes. El que puede ser `null` es `origen_entidad_id` (id de entidad concreta; un ajuste manual no tiene entidad atrás). | El dict dice `int FK NOT NULL`, pero el front lo manda `null` en transferencias/ajustes. |
+| D3 | **`direccion_entrega`**: ✅ RESUELTO (2026-09-06) — opción B: NO hay columna; se muestra `deposito.ubicacion` del depósito elegido. Quitar el campo del formulario de OC. | El dict no tiene la columna; el modal de OC asume que la BD la guarda. |
+| D4 | **Catálogo `forma_pago`**: ✅ RESUELTO (2026-09-06) — catálogo único centralizado en el front, con valores placeholder **inventados siguiendo el esquema** y comentario `// BACKEND: GET /api/formas-pago`. | Hoy el front tiene dos sets incompatibles: `["Contado","Cuenta Corriente","Cheque a 30 días"]` (proveedores) y `["Efectivo","Transferencia","Cheque","Tarjeta"]` (cta. cte.). El dict dice que el catálogo lo expone la API, no el front, pero la API aún no existe → placeholder. |
 | D5 | **`cliente` / `venta`**: fuera del diccionario, pero `pago.tipo = cobranza_cliente` y la cta. cte. global los necesitan. | Bloquea el lado cliente de cuentas corrientes. |
 | D6 | **`telefono`** en `usuario`: ¿se agrega columna? | El front ya la usa en el perfil; el dict no la tiene. |
-| D7 | **`cod_sol`** en `solicitud_cotizacion`: ¿se agrega columna o se deriva? | La OC tiene `cod_ord`; la solicitud no tiene número visible en el dict. |
+| D7 | **`cod_sol`** en `solicitud_cotizacion`: ✅ RESUELTO (2026-09-06) — NO se agrega columna. El front deriva el número del `id` tal cual (se muestra el id solo, sin prefijo `SOL-`). | La OC tiene `cod_ord`; la solicitud no tiene número visible en el dict. |
+
+---
+
+## Decisiones de diseño del equipo
+
+| # | Decisión | Estado |
+|---|---|---|
+| C1 | **Convención de contrato**: tipos TS en **snake_case directo** como la BD (`razon_social`, `imagen_url`), sin mapeo camelCase. El JSON del backend llega tal cual. | ✅ Resuelto (2026-09-06) |
+| C2 | **Catálogos**: placeholder en `src/data` con comentario `// BACKEND:` para que el equipo de back los reemplace (la API aún no existe). | ✅ Resuelto con D4 |
+| C3 | **Derivados / etiquetas**: la BD es la fuente de verdad. En movimientos de stock se usa SOLO el enum de la BD (`ingreso`/`egreso`); se descartan Transferencia/Ajuste como valores. El texto que se muestra es el valor crudo del enum (sin traducción); solo se aplican colores/estilos. | ✅ Resuelto (2026-09-06) |
+| C4 | **Formularios**: al agregar campos faltantes (`presentacion_id`, `numero_lote`, `fecha_vencimiento`, `contenido_neto`, `calificacion`...), también se actualizan los formularios de alta/edición (coherente con la BD). | ✅ Resuelto (2026-09-06) |
 
 ---
 
@@ -50,7 +61,7 @@ Se relevaron 10 módulos. Resultado:
 | # | Campo front (actual) | Inconsistencia | Corrección | Por qué |
 |---|---|---|---|---|
 | 6 | `razonSocial`, `plazoEntregaDias`, `estado` | → `razon_social`, `plazo_entrega_dias`, enum `activo/inactivo` | Renombrar + usar valores del enum | Naming del dict |
-| 7 | `["Contado","Cuenta Corriente","Cheque a 30 días"]` | Catálogo front ≠ catálogo de `forma_pago` de cta. cte. | Unificar catálogo; poblar desde `GET /api/formas-pago`; DBA fija el canónico (D4) | El dict prohíbe listas hardcodeadas en el front |
+| 7 | `["Contado","Cuenta Corriente","Cheque a 30 días"]` | Catálogo front ≠ catálogo de `forma_pago` de cta. cte. | ✅ Resuelto (D4): catálogo único en el front con placeholder inventado según esquema + `// BACKEND: GET /api/formas-pago` | El dict prohíbe listas hardcodeadas en el front, pero la API aún no existe |
 | 8 | (no existen) | Faltan `forma_pago_id` (FK NOT NULL) y `calificacion` | Agregar al modelo | Sin `forma_pago_id` el alta falla; `calificacion numeric(3,1)` es del dict |
 
 ### Stock (`src/data/stock.ts`) — ✅ Alineado
@@ -62,16 +73,16 @@ Sin cambios.
 | # | Campo front (actual) | Inconsistencia | Corrección | Por qué |
 |---|---|---|---|---|
 | 10 | `empleadoId`/`empleado` | Esquema: `usuario_id` | Renombrar (join con usuario) | `movimiento_stock_cab.usuario_id int FK NOT NULL` |
-| 11 | `tipo` con 4 valores + catálogo `tiposMovimiento` | Enum BD = `ingreso/egreso` (2 valores) | `tipo` enum de 2; Transferencia/Ajuste son derivados de display (`movimiento_vinculado_id`, `origen_id=ajuste_manual`) | El dict define `tipo_movimiento_stock` con 2 valores; el front inventó 4 |
-| 12 | `origenId: null` en Transferencia/Ajuste | Contradice el dict: `origen_id int FK NOT NULL` | Resolver con DBA (D2): nullable o llenar siempre | El front y el dict dicen cosas distintas |
-| 13 | `origenesMovimiento` (2 valores) | Catálogo BD = 12 valores; nombres no mapean 1:1 | Poblar desde `GET /api/origenes-movimiento` | Catálogo real del dict (`venta, receta, internacion, urgencia, cirugia, practica, recepcion_compra, transferencia_sucursal, ajuste_manual, vacunacion, desparasitacion, merma`) |
+| 11 | `tipo` con 4 valores + catálogo `tiposMovimiento` | Enum BD = `ingreso/egreso` (2 valores) | ✅ Resuelto (C3): `tipo` = solo los 2 valores de la BD, sin traducción de texto, solo colores; quedan fuera Transferencia/Ajuste como valores | El dict define `tipo_movimiento_stock` con 2 valores; el front inventó 4 |
+| 12 | `origenId: null` en Transferencia/Ajuste | Contradice el dict: `origen_id int FK NOT NULL` | ✅ Resuelto (D2): `origen_id` siempre lleno (`transferencia_sucursal`/`ajuste_manual`); `origen_entidad_id` puede ser null | El front y el dict dicen cosas distintas |
+| 13 | `origenesMovimiento` (2 valores) | Catálogo BD = 12 valores; nombres no mapean 1:1 | ✅ Resuelto (C2+C3): placeholder en `src/data` con los 12 valores del dict + `// BACKEND: GET /api/origenes-movimiento`; texto sin traducción | Catálogo real del dict (`venta, receta, internacion, urgencia, cirugia, practica, recepcion_compra, transferencia_sucursal, ajuste_manual, vacunacion, desparasitacion, merma`) |
 
 ### Órdenes de compra (`src/data/ordenes-compra.ts`, `OrdenFormModal.tsx`) — Impacto: medio
 
 | # | Campo front (actual) | Inconsistencia | Corrección | Por qué |
 |---|---|---|---|---|
 | 14 | `estado` string (5 valores) | → `estado_id → estado_orden_compra` | Mandar `estado_id`; display por join; verificar los 5 en la tabla | El dict usa FK a tabla de estados |
-| 15 | `direccion_entrega` | No está en el dict | Resolver con DBA (D3): columna real o `deposito.ubicacion` | El modal afirma "la BD guarda el varchar" pero el dict no la tiene |
+| 15 | `direccion_entrega` | No está en el dict | ✅ Resuelto (D3): quitar el campo del formulario; mostrar `deposito.ubicacion` del depósito elegido | El modal afirma "la BD guarda el varchar" pero el dict no la tiene |
 | 16 | `OrdenCompraDetalle` sin `subtotal` | El esquema lo persiste | Agregar al contrato | `orden_compra_detalle.subtotal` |
 | 17 | `descuento` %, `total` recalculado | ✅ Alineado | Sin cambios | El dict: descuento en porcentaje, total lo recalcula el back |
 
@@ -79,7 +90,7 @@ Sin cambios.
 
 | # | Campo front (actual) | Inconsistencia | Corrección | Por qué |
 |---|---|---|---|---|
-| 18 | `cod_sol` | `solicitud_cotizacion` NO tiene columna de número (OC sí `cod_ord`) | Agregar columna al dict (D7) o derivar | Sin número visible no hay referencia para el usuario |
+| 18 | `cod_sol` | `solicitud_cotizacion` NO tiene columna de número (OC sí `cod_ord`) | ✅ Resuelto (D7): el front muestra el `id` directamente (sin prefijo ni columna nueva) | Sin número visible no hay referencia para el usuario |
 | 19 | resto | ✅ Alineado | Sin cambios | FKs y conceptos correctos |
 
 ---
@@ -105,7 +116,7 @@ Sin cambios.
 | # | Campo front (actual) | Inconsistencia | Corrección | Por qué |
 |---|---|---|---|---|
 | 24 | `Pago.numero` | → `numero_comprobante` (UNIQUE, externo, no autogenerado) | Renombrar | El dict: número de recibo/cheque/comprobante externo que trae el pago |
-| 25 | `formaPago` + `FORMAS_PAGO` | → `pago.forma_pago_id` (mismo catálogo que #7) | GET /api/formas-pago | Catálogo único; duplica la corrección de proveedores |
+| 25 | `formaPago` + `FORMAS_PAGO` | → `pago.forma_pago_id` (mismo catálogo que #7) | ✅ Resuelto (D4): usar el catálogo único del front + `// BACKEND: GET /api/formas-pago` | Catálogo único; duplica la corrección de proveedores |
 | 26 | `saldoPendiente` ("comprobante_proveedor.saldo_pendiente") | No es columna: se deriva de `monto_total` − imputaciones vigentes | Usar vista (`vista_cuenta_corriente_proveedor`) | El dict no tiene la columna |
 | 27 | `saldoActual` ("proveedor.saldo_actual") | `proveedor` NO tiene esa columna | Derivar de vista | No es campo del dict |
 | 28 | clientes / `cobranza_cliente` | `pago.proveedor_id` nullable es la única FK; no hay tabla `cliente` | Abrir con DBA (D5): ¿`cliente_id` en `pago`? ¿módulo comercial? | Bloquea el lado cliente de la cta. cte. global |

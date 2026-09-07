@@ -3,6 +3,7 @@
 import { Search, SlidersHorizontal, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { FORMAS_PAGO } from "@/data/formas-pago";
 
 export type FiltroEstado = "Todos" | "Activo" | "Inactivo";
 
@@ -12,13 +13,9 @@ const estadoOpts: { value: FiltroEstado; label: string }[] = [
   { value: "Inactivo", label: "Inactivos" },
 ];
 
-// BACKEND: poblar desde GET /api/formas-pago.
-const formasPagoOpts = [
-  "Cuenta Corriente",
-  "Transferencia",
-  "Contado",
-  "Cheque a 30 días",
-];
+// BACKEND: poblar desde GET /api/formas-pago (hoy es el placeholder
+// compartido FORMAS_PAGO, decisión D4).
+const formasPagoOpts = FORMAS_PAGO.map((f) => f.nombre);
 
 interface FiltrosProveedoresProps {
   busqueda: string;

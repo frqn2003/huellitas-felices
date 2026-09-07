@@ -344,8 +344,10 @@ export function SolicitudFormModal({
             Se asigna automáticamente
           </p>
           <p className="text-xs font-medium text-text-secondary">
-            {/* BACKEND: el número lo genera el back (secuencia SC-XXXX) al confirmar. */}
-            Al confirmar se genera el número SC-XXXX; no se puede modificar.
+            {/* BACKEND: el id (serial) lo genera la base al confirmar; el dict
+                no define número propio de solicitud (D7: el front la muestra
+                por su id). */}
+            Se asigna automáticamente al confirmar; no se puede modificar.
           </p>
         </div>
         <div

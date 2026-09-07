@@ -35,6 +35,7 @@ import { OrdenesTable } from "@/components/ordenes-compra/OrdenesTable";
 import { useCotizaciones, type AsignacionArticulo } from "@/context/CotizacionesContext";
 import type { CatalogosCotizacion, SolicitudCotizacion } from "@/data/cotizaciones";
 import type { OrdenCompra } from "@/data/ordenes-compra";
+import { FORMAS_PAGO } from "@/data/formas-pago";
 import { formatFecha, parseImporte } from "@/data/ordenes-compra";
 import type { CatalogosOrden } from "@/components/ordenes-compra/OrdenFormModal";
 import { apiGet, apiGetOpcional, apiSend, mensajeDeError } from "@/lib/api-client";
@@ -185,7 +186,7 @@ function ComprasScreen() {
     // con Promise.all, un solo catálogo caído tiraba abajo todo el listado.
     Promise.all([
       apiGet<OrdenCompra[]>("/api/ordenes-compra"),
-      apiGetOpcional<{ id: number; razonSocial: string }[]>(
+      apiGetOpcional<{ id: number; razon_social: string }[]>(
         "/api/proveedores?estado=activo",
         [],
       ),
@@ -193,26 +194,27 @@ function ComprasScreen() {
         "/api/articulos?estado=activo",
         [],
       ),
-      apiGetOpcional<{ id: number; nombre: string; sucursal: string }[]>(
+      apiGetOpcional<{ id: number; nombre: string; ubicacion: string }[]>(
         "/api/depositos",
         [],
       ),
-      apiGetOpcional<{ id: number; nombre: string }[]>("/api/condiciones-pago", []),
-      // Para resaltar los artículos con stock bajo en el selector de la solicitud.
+      // D4: condiciones de pago = placeholder compartido FORMAS_PAGO (misma
+      // tabla `forma_pago` que GET /api/condiciones-pago, ver src/data/formas-pago.ts),
+      // se asigna abajo en setCatalogos sin red.
       apiGetOpcional<
         { articuloId: number; stockActual: number; estadoCalculado: string }[]
       >("/api/fichas-stock", []),
     ])
-      .then(([lista, proveedores, articulos, depositos, condicionesPago, fichas]) => {
+      .then(([lista, proveedores, articulos, depositos, fichas]) => {
         if (cancelado) return;
         setOrdenes(lista);
         setCatalogos({
-          // La API de proveedores usa `razonSocial`; el catálogo del modal
-          // habla de `nombre`. Se adapta acá, en el borde.
-          proveedores: proveedores.map((p) => ({ id: p.id, nombre: p.razonSocial })),
+          // La API de proveedores usa `razon_social` (dict); el catálogo del
+          // modal habla de `nombre`. Se adapta acá, en el borde.
+          proveedores: proveedores.map((p) => ({ id: p.id, nombre: p.razon_social })),
           articulos,
           depositos,
-          condicionesPago,
+          condicionesPago: FORMAS_PAGO,
         });
         setFichas(fichas);
       })
@@ -399,9 +401,9 @@ function ComprasScreen() {
   const filtradasCot = useMemo(() => {
     const q = busquedaCot.trim().toLowerCase();
     const lista = solicitudesDemo.filter((s) => {
+      // D7: el dict no define número propio de solicitud; se busca por id.
       const matchBusqueda =
         !q ||
-        s.cod_sol.toLowerCase().includes(q) ||
         String(s.id).includes(q) ||
         s._articulos_solicitados.some((a) => {
           const nombre =
@@ -884,7 +886,8 @@ function ComprasScreen() {
           const solicitud = solicitudes.find((s) =>
             s._cotizaciones.some((c) => c.id === formOrden.cotizacion_id),
           );
-          return solicitud ? solicitud.cod_sol : null;
+          // D7: se muestra la solicitud por su id (el dict no tiene número propio).
+          return solicitud ? String(solicitud.id) : null;
         })()}
         onClose={() => setFormOpen(false)}
         onSave={handleSave}

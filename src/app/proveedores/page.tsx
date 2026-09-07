@@ -43,15 +43,15 @@ function exportarCSV(proveedores: Proveedor[]) {
   ];
   const filas = proveedores.map((p) =>
     [
-      `"${p.razonSocial.replace(/"/g, '""')}"`,
+      `"${p.razon_social.replace(/"/g, '""')}"`,
       p.cuit,
       `"${p.direccion.replace(/"/g, '""')}"`,
       p.telefono,
       p.email,
       `"${p.contacto.replace(/"/g, '""')}"`,
       `"${p.formasPago.join(" / ").replace(/"/g, '""')}"`,
-      String(p.plazoEntregaDias),
-      p.estado,
+      String(p.plazo_entrega_dias),
+      p.estado === "activo" ? "Activo" : "Inactivo",
     ].join(";"),
   );
   const csv = [cabeceras.join(";"), ...filas].join("\n");
@@ -113,12 +113,14 @@ function ProveedoresScreen() {
   const filtrados = useMemo(() => {
     const base = proveedores;
     return base.filter((prov) => {
-      if (estadoFiltro !== "Todos" && prov.estado !== estadoFiltro) return false;
+      // El estado existe en `estado` (valor crudo del enum, C3): el filtro de la
+      // pantalla es legible ("Activo"/"Inactivo") y se compara en minúscula.
+      if (estadoFiltro !== "Todos" && prov.estado !== estadoFiltro.toLowerCase()) return false;
       if (formaPagoFiltro && !prov.formasPago.includes(formaPagoFiltro)) return false;
       if (busqueda) {
         const query = busqueda.toLowerCase();
         return (
-          prov.razonSocial.toLowerCase().includes(query) ||
+          prov.razon_social.toLowerCase().includes(query) ||
           prov.cuit.toLowerCase().includes(query)
         );
       }
@@ -204,7 +206,7 @@ function ProveedoresScreen() {
       showToast("error", res.error);
       return;
     }
-    showToast("success", `${prov.razonSocial} fue dado de baja correctamente`);
+    showToast("success", `${prov.razon_social} fue dado de baja correctamente`);
   };
 
   const handleReintentar = () => recargar();

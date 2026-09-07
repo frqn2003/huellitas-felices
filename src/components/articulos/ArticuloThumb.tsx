@@ -5,19 +5,19 @@ const SIZES = {
 } as const;
 
 export function ArticuloThumb({
-  imagen,
+  imagen_url,
   nombre,
   size = "md",
 }: {
-  imagen: string;
+  imagen_url: string;
   nombre: string;
   size?: keyof typeof SIZES;
 }) {
   const dims = SIZES[size];
-  if (imagen) {
+  if (imagen_url) {
     return (
       <img
-        src={imagen}
+        src={imagen_url}
         alt={nombre}
         loading="lazy"
         className={`${dims.box} shrink-0 rounded-sm object-cover`}

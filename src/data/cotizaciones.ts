@@ -37,7 +37,9 @@ export interface Cotizacion {
 
 export interface SolicitudCotizacion {
   id: number;
-  /** "SC-000001". Lo genera la secuencia de la base. */
+  /** D7: el dict no define número propio; el front muestra la solicitud por
+      su `id`. `cod_sol` se conserva porque el mapper de la API aún lo emite
+      (SolicitudCotizacionApi). BACKEND: eliminarlo cuando se alinee. */
   cod_sol: string;
   usuario_id: number;
   fecha: string;

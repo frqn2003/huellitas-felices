@@ -6,18 +6,17 @@ import type { ProveedorRow } from "./proveedor.types";
  *
  * POR QUÉ EXISTE ESTA CAPA (tres traducciones que no son opcionales):
  *
- *  1. snake_case → camelCase.
- *     `razon_social` → `razonSocial`. Y ojo: esto NO es parejo en todo el
- *     proyecto. Proveedores, Stock, Artículos y Movimientos usan camelCase,
- *     pero Órdenes de Compra usa snake_case con relaciones prefijadas
- *     (`proveedor_id`, `_proveedor`, `_detalles`). Cada mapper copia el estilo
- *     de SU módulo. Unificarlo es trabajo del front, no del back.
+ *  1. Contrato directo (C1): el front declaró los nombres de la BD tal cual
+ *     (`razon_social`, `plazo_entrega_dias`), sin mapeo camelCase. Y ojo: esto
+ *     NO es parejo en todo el proyecto. Stock y Artículos conservan camelCase en
+ *     los catálogos (`categoriaId`, `unidadMedidaId`) y Órdenes de Compra usa
+ *     snake_case con relaciones prefijadas (`proveedor_id`, `_proveedor`,
+ *     `_detalles`). Cada mapper copia el estilo de SU módulo.
  *
- *  2. Casing del estado.
- *     El enum de la base es 'activo' | 'inactivo' (minúscula). El front
- *     declara `EstadoProveedor = "Activo" | "Inactivo"` (capitalizado) y lo
- *     muestra tal cual en EstadoProveedorBadge. Si no se traduce, el badge
- *     queda vacío.
+ *  2. Casing del estado (C3).
+ *     El enum de la base es 'activo' | 'inactivo' (minúscula) y es EL MISMO que
+ *     declara el front (`EstadoProveedor`) — se pasa tal cual, sin traducir. El
+ *     badge (EstadoProveedorBadge) es quien muestra "Activo"/"Inactivo".
  *
  *  3. decimal → number.
  *     El driver `pg` devuelve los decimal como STRING para no perder precisión.
@@ -32,15 +31,16 @@ import type { ProveedorRow } from "./proveedor.types";
 export function toApi(row: ProveedorRow, formasPago: string[]): Proveedor {
   return {
     id: row.id,
-    razonSocial: row.razon_social,
+    razon_social: row.razon_social,
     cuit: row.cuit,
     direccion: row.direccion ?? "",
     telefono: row.telefono ?? "",
     email: row.email ?? "",
     contacto: row.contacto ?? "",
     formasPago,
-    plazoEntregaDias: row.plazo_entrega_dias ?? 0,
-    estado: row.estado === "activo" ? "Activo" : "Inactivo",
+    plazo_entrega_dias: row.plazo_entrega_dias ?? 0,
+    // C3: valor crudo del enum de la base — minúscula ya, sin traducción.
+    estado: row.estado,
   };
 
   // NOTA: `calificacion` existe en la tabla pero NO se expone: es HU-PROV-02

@@ -6,12 +6,15 @@ import type { ArticuloRow } from "./articulo.types";
  *
  * Cuatro traducciones, ninguna cosmética:
  *
- *  1. snake_case → camelCase (`categoria_id` → `categoriaId`).
+ *  1. Contrato mixto (C1): los catálogos conservan el camelCase histórico del
+ *     front (`categoriaId`, `unidadMedidaId`) pero los campos nuevos siguen el
+ *     dict en snake_case directo: `fabricante_id`, `imagen_url`,
+ *     `created_at`/`updated_at`.
  *
- *  2. Estado: la base usa el enum 'activo'/'inactivo' en minúscula; el front
- *     declara `estado: "Activo" | "Inactivo"` y lo muestra tal cual en
- *     EstadoBadge. Además el front tiene un `activo: boolean` redundante que se
- *     deriva del mismo dato.
+ *  2. Estado (C3): la base usa el enum 'activo'/'inactivo' en minúscula y el
+ *     front declara exactamente eso — se pasa el valor crudo, sin traducir.
+ *     Badges, filtros y CSV muestran "Activo"/"Inactivo". El booleano `activo`
+ *     ya no existe en el contrato (era una segunda fuente de verdad).
  *
  *  3. `Date` → string ISO. El driver `pg` devuelve los timestamp como objetos
  *     Date de JS. Al serializarse a JSON quedarían bien igual, pero el tipo del
@@ -37,7 +40,11 @@ export function toApi(row: ArticuloRow): Articulo {
     unidadMedidaId: row.unidad_medida_id,
     unidadMedida: row.unidad_medida_nombre as UnidadMedida,
 
-    fabricanteId: row.fabricante_id,
+    // C1: snake_case directo como el dict. `presentacion_id`, `numero_lote`,
+    // `fecha_vencimiento` y `contenido_neto` son columnas nuevas que la API
+    // todavía no persiste (son opcionales en el contrato; ver BACKEND en
+    // src/data/articulos.ts) — por eso acá no se emiten todavía.
+    fabricante_id: row.fabricante_id,
     fabricante: row.fabricante_nombre,
 
     proveedorPreferido:
@@ -45,12 +52,13 @@ export function toApi(row: ArticuloRow): Articulo {
         ? { id: row.proveedor_preferido_id, nombre: row.proveedor_preferido_nombre }
         : null,
 
-    estado: row.estado === "activo" ? "Activo" : "Inactivo",
-    activo: row.estado === "activo",
+    // C3: valor crudo del enum (minúscula ya). El badge traduce a
+    // "Activo"/"Inactivo" en el display.
+    estado: row.estado,
 
-    imagen: row.imagen_url ?? "",
-    createdAt: row.created_at.toISOString(),
-    updatedAt: row.updated_at.toISOString(),
+    imagen_url: row.imagen_url ?? "",
+    created_at: row.created_at.toISOString(),
+    updated_at: row.updated_at.toISOString(),
   };
 }
 
