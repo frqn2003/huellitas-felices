@@ -112,7 +112,7 @@ function CuentasCorrientesScreen() {
   };
 
   const handleRegistrar = (pagoNuevo: PagoCtaCteNuevo) => {
-    // BACKEND: reemplazar por POST /api/pagos con { numero, tipo, formaPago, fecha, monto, imputaciones }
+    // BACKEND: reemplazar por POST /api/pagos con { numero_comprobante, tipo, forma_pago_id, fecha, monto, imputaciones }
     if (!modalEntidad) return;
     const entId = modalEntidad.id;
 
@@ -124,9 +124,9 @@ function CuentasCorrientesScreen() {
         {
           id: Math.max(0, ...(pagos[entId] ?? []).map((p) => p.id)) + 1,
           tipo: pagoNuevo.tipo,
-          numero: pagoNuevo.numero,
+          numero_comprobante: pagoNuevo.numero_comprobante,
           fecha: pagoNuevo.fecha,
-          formaPago: pagoNuevo.formaPago,
+          forma_pago_id: pagoNuevo.forma_pago_id,
           monto: pagoNuevo.monto,
           imputaciones: pagoNuevo.imputaciones.map((i) => ({
             comprobanteId: i.comprobanteId,

@@ -1,5 +1,11 @@
 // Datos hardcodeados de Recepciones de Mercadería (HU-COMP-03).
 // La estructura replica la tabla `recepcion_mercaderia` y `recepcion_mercaderia_detalle` de la BD.
+//
+// BLOQUEADO-DBA (D1): el front modela `recepcion_mercaderia*`, tablas que el diccionario
+// (docs/esquema-bd-front.md) ya no define; en su lugar está `notificacion_compra`
+// (FK orden_compra_detalle_id UNIQUE, cantidades, diferencia GENERATED, leida).
+// Pendiente de resolver con la DBA si el módulo se rediseña sobre OC + notificación
+// o si las tablas se agregan al diccionario. NO alinear hasta desbloquear.
 
 export type TipoRecepcion = "parcial" | "total";
 

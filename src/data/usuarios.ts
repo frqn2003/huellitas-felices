@@ -1,7 +1,7 @@
 // Datos placeholder del módulo Login (HU-SIS-04).
 // Cada `id` es la PK que mandará la base de datos (ver comentarios // BACKEND:).
 
-export type RolNombre = "Administrador" | "Gerente" | "Veterinario" | "Recepcionista" | "Personal de Depósito";
+export type RolNombre = "Administrador" | "Gerente" | "Veterinario" | "Recepcionista" | "Personal de depósito" | "Cajero";
 
 export interface Rol {
   id: number;
@@ -16,10 +16,15 @@ export interface Usuario {
   dni: string;
   email: string;
   telefono: string; // BACKEND: agregar campo a la tabla `usuario` (varchar, nullable)
+  // BLOQUEADO-DBA (D6): `telefono` no está en `usuario` del diccionario. Se mantiene
+  // porque el perfil ya lo usa, pero NO se alinea hasta que la DBA agrege la columna.
   auth_id: string | null; // Vínculo con Supabase Auth (auth.users)
   estado: "Activo" | "Inactivo";
   fecha_creacion: string;
   password: string; // Solo para demo
+  sucursal_id?: number | null; // FK → sucursal.id (nullable)
+  intentos_fallidos?: number; // default 0, CHECK 0–3 (lo persiste el back)
+  bloqueado_hasta?: string | null; // ISO timestamp; si es futuro, login se rechaza antes de Supabase Auth
 }
 
 // BACKEND: reemplazar por GET /api/roles
@@ -28,7 +33,8 @@ export const roles: Rol[] = [
   { id: 2, nombre: "Gerente" },
   { id: 3, nombre: "Veterinario" },
   { id: 4, nombre: "Recepcionista" },
-  { id: 5, nombre: "Personal de Depósito" },
+  { id: 5, nombre: "Personal de depósito" },
+  { id: 6, nombre: "Cajero" },
 ];
 
 // BACKEND: reemplazar por POST /api/auth/login
@@ -45,6 +51,9 @@ export const usuarios: Usuario[] = [
     estado: "Activo",
     fecha_creacion: "2024-01-15T10:00:00Z",
     password: "admin123",
+    sucursal_id: 1,
+    intentos_fallidos: 0,
+    bloqueado_hasta: null,
   },
   {
     id: 2,
@@ -58,6 +67,9 @@ export const usuarios: Usuario[] = [
     estado: "Activo",
     fecha_creacion: "2024-02-20T09:30:00Z",
     password: "gerente123",
+    sucursal_id: 1,
+    intentos_fallidos: 0,
+    bloqueado_hasta: null,
   },
   {
     id: 3,
@@ -71,6 +83,9 @@ export const usuarios: Usuario[] = [
     estado: "Activo",
     fecha_creacion: "2024-03-10T08:15:00Z",
     password: "vet123",
+    sucursal_id: 1,
+    intentos_fallidos: 0,
+    bloqueado_hasta: null,
   },
   {
     id: 4,
@@ -84,10 +99,20 @@ export const usuarios: Usuario[] = [
     estado: "Activo",
     fecha_creacion: "2024-04-05T11:00:00Z",
     password: "recepcion123",
+    sucursal_id: 1,
+    intentos_fallidos: 0,
+    bloqueado_hasta: null,
   },
 ];
 
 // Registro de auditoría (tabla: auditoria)
+// PENDIENTE-DISEÑO (#32): el diccionario separa `auditoria` (operacion
+// INSERT/UPDATE/DELETE, bitácora de negocio) de `auditoria_sesion` (evento
+// login/logout, ip_origen inet, detalle jsonb). Este modelo front usa valores
+// inventados ("login_exitoso" | "login_fallido" | "login_bloqueado" | "logout")
+// que NO existen en el esquema. Migrar a `auditoria_sesion` en un trabajo futuro:
+// los intentos fallidos/bloqueo van en `detalle` como payload jsonb. NO tocar
+// LoginForm ni AuthContext por esto hasta que se decida el rediseño.
 export interface AuditoriaLogin {
   id: number;
   tabla: "usuario";

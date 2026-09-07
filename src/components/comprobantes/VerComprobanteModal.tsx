@@ -85,6 +85,14 @@ export function VerComprobanteModal({ open, comprobante, onClose, onModificar }:
             <OcrFieldGroup label="Fecha de emisión">
               <Input id="ver-fecha" value={comprobante.fecha} readOnly className="bg-background" />
             </OcrFieldGroup>
+            {comprobante.fecha_vencimiento && (
+              <OcrFieldGroup label="Fecha de vencimiento">
+                <Input id="ver-fecha-vencimiento" value={comprobante.fecha_vencimiento} readOnly className="bg-background" />
+              </OcrFieldGroup>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 items-start gap-3">
             <OcrFieldGroup label="Monto total">
               <Input id="ver-monto" value={FORMATO_ARS(comprobante.monto)} readOnly className="bg-background" />
             </OcrFieldGroup>

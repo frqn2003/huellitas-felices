@@ -5,8 +5,9 @@ import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Pagination } from "@/components/ui/Pagination";
 import { EstadoCtaCteBadge } from "@/components/proveedores/EstadoCtaCteBadge";
-import type { ComprobantePendiente, CuentaCorriente, Pago } from "@/data/cuentas-corrientes";
+import type { ComprobantePendiente, CuentaCorriente, EstadoCtaCte, Pago } from "@/data/cuentas-corrientes";
 import { formatARS, formatFecha, infoSaldo } from "@/data/cuentas-corrientes";
+import { FORMAS_PAGO } from "@/data/formas-pago";
 
 interface CtaCorrienteDetalleGlobalProps {
   cuenta: CuentaCorriente;
@@ -100,16 +101,16 @@ function CtaMovimientosGlobal({
       concepto: c.tipo,
       importe: c.saldoPendiente,
       estado: c.estadoCta,
-      _isDebito: true,
+      _isDebito: true as const,
     })),
     ...pagos.map((p) => ({
       fecha: p.fecha,
       tipo: "Pago" as const,
-      numero: p.numero,
-      concepto: p.formaPago,
+      numero: p.numero_comprobante,
+      concepto: FORMAS_PAGO.find((f) => f.id === p.forma_pago_id)?.nombre ?? "—",
       importe: p.monto,
       estado: p.estado ?? "Vigente",
-      _isDebito: false,
+      _isDebito: false as const,
     })),
   ].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
 

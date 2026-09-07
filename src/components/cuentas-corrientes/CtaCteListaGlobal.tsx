@@ -51,7 +51,7 @@ export function CtaCteListaGlobal({ cuentas, onVerDetalle, onRegistrar }: CtaCte
               <th scope="col" className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wide text-text-secondary">
                 Próx. vencimiento
               </th>
-              <th scope="col" className="px-6 py-3 text-right text-xs font-extrabold uppercase tracking-wide text-text-secondary">
+              <th scope="col" className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wide text-text-secondary">
                 Acciones
               </th>
             </tr>
@@ -70,7 +70,7 @@ export function CtaCteListaGlobal({ cuentas, onVerDetalle, onRegistrar }: CtaCte
               const saldo = infoSaldo(c.saldoActual);
               return (
                 <tr key={`${c.tipo}-${c.id}`} className="transition-colors duration-fast ease-out hover:bg-cream-50/60">
-                  <td className="px-6 py-4">
+                  <td className="px-6 py-4 align-middle">
                     <div>
                       <button
                         type="button"
@@ -82,32 +82,32 @@ export function CtaCteListaGlobal({ cuentas, onVerDetalle, onRegistrar }: CtaCte
                       <p className="text-xs font-medium text-text-secondary">{c.documento}</p>
                     </div>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-6 py-4 align-middle">
                     <span className={`inline-flex items-center gap-1.5 rounded-pill px-2.5 py-1 text-xs font-bold ${meta.chip}`}>
                       <TipoIcon className="h-3.5 w-3.5" aria-hidden="true" />
                       {meta.label}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-right">
+                  <td className="px-6 py-4 text-right align-middle">
                     <span className={`text-base font-medium ${saldo.tone}`}>
                       {saldo.sign}{formatARS(Math.abs(c.saldoActual))}
                     </span>
                     <span className="sr-only">, {saldo.label}</span>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-6 py-4 align-middle">
                     <EstadoCtaCteBadge estado={c.estadoCta} />
                   </td>
-                  <td className="px-6 py-4 text-sm font-medium text-text-secondary">
+                  <td className="px-6 py-4 text-sm font-medium text-text-secondary align-middle">
                     {formatFecha(c.proximoVencimiento)}
                   </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center justify-end gap-2">
+                  <td className="px-6 py-4 align-middle">
+                    <div className="flex items-center gap-2">
+                      <Button variant="ghost" size="sm" onClick={() => onVerDetalle(c)} aria-label={`Ver detalle de ${c.nombre}`}>
+                        <Eye className="h-4 w-4" aria-hidden="true" />
+                      </Button>
                       <Button variant="outline" size="sm" onClick={() => onRegistrar(c)}>
                         <Plus className="h-4 w-4" aria-hidden="true" />
                         {c.tipo === "proveedor" ? "Pagar" : "Cobrar"}
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => onVerDetalle(c)} aria-label={`Ver detalle de ${c.nombre}`}>
-                        <Eye className="h-4 w-4" aria-hidden="true" />
                       </Button>
                     </div>
                   </td>

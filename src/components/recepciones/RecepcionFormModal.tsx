@@ -1,5 +1,9 @@
 "use client";
 
+// BLOQUEADO-DBA (D1): este módulo modela `recepcion_mercaderia*`, tablas que el
+// diccionario (docs/esquema-bd-front.md) ya no define (hoy es `notificacion_compra`).
+// Pendiente de resolver con la DBA. NO alinear campos hasta desbloquear.
+
 import { PackageOpen, AlertTriangle } from "lucide-react";
 import { useMemo, useState } from "react";
 import type {

@@ -13,6 +13,7 @@ export interface ComprobanteRow {
   /** Detalle de líneas del comprobante (para edición y detalle). */
   lineas?: LineaComprobante[];
   fecha: string;
+  fecha_vencimiento?: string;
   monto: number;
   estado: "Vigente" | "Anulado";
   comprobanteOriginal?: string;
@@ -21,6 +22,8 @@ export interface ComprobanteRow {
   ocId?: number;
   /** id de la factura original que corrige una NC/ND (para preseleccionar en edición). */
   facturaOriginalId?: string;
+  /** FK al usuario que registró el comprobante (lo manda la sesión, no el formulario). */
+  usuario_id?: number;
 }
 
 interface ComprobantesTableProps {
