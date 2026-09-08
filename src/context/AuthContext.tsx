@@ -11,6 +11,9 @@ import {
 } from "react";
 import { usuarios, roles, type Usuario, type Rol } from "@/data/usuarios";
 
+// SOLO preview de diseño: la fuente de verdad del bloqueo la define el diccionario
+// (`usuario.intentos_fallidos` CHECK 0–3 y `usuario.bloqueado_hasta`), que el back
+// expone y persiste. Cuando exista la API, el front no debe ser la fuente del bloqueo.
 const MAX_INTENTOS = 3;
 const BLOQUEO_MS = 15 * 60 * 1000; // 15 minutos
 const CODIGO_2FA = "123456"; // Código simulado

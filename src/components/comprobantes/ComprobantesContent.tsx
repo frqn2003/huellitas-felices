@@ -47,6 +47,7 @@ const DATOS_OCR = {
   puntoVentaDetectado: "0003",
   numeroDetectado: "00001278",
   fechaDetectada: "2026-08-25",
+  fechaVencimientoDetectada: "2026-09-24",
   cuitDetectado: "30-71234567-8",
   montoTotalDetectado: "321255.00",
   camposNoReconocidos: ["alicuotaIVA linea 2"],
@@ -56,18 +57,18 @@ const DATOS_OCR = {
 const formatNumeroMoneda = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
 
 const HISTORIAL_INICIAL: ComprobanteRow[] = [
-  { id: 101, proveedor: "Distribuidora Vet SA", cuit: "30-71234567-8", tipo: "Factura A", numero: "0003-00001278", oc: "OC-2026-0045", ocId: 1, fecha: "2026-08-25", monto: 321255.00, estado: "Vigente", lineas: [
+  { id: 101, proveedor: "Distribuidora Vet SA", cuit: "30-71234567-8", tipo: "Factura A", numero: "0003-00001278", oc: "OC-2026-0045", ocId: 1, fecha: "2026-08-25", fecha_vencimiento: "2026-09-24", monto: 321255.00, estado: "Vigente", lineas: [
     { id: 1, articuloCodigo: "VAC-001", descripcion: "Vacuna Quíntuple Canina", cantidad: 50, precioUnitario: 4200.00, alicuotaIVA: 21, subtotal: 210000.00 },
     { id: 2, articuloCodigo: "ANT-014", descripcion: "Antibiótico Amoxicilina 500mg", cantidad: 30, precioUnitario: 1850.00, alicuotaIVA: null, subtotal: 55500.00 },
   ] },
-  { id: 98, proveedor: "Insumos Veterinarios del Norte SRL", cuit: "30-70987654-3", tipo: "Factura B", numero: "0001-00000542", oc: "OC-2026-0031", fecha: "2026-08-12", monto: 87400.00, estado: "Vigente", lineas: [
+  { id: 98, proveedor: "Insumos Veterinarios del Norte SRL", cuit: "30-70987654-3", tipo: "Factura B", numero: "0001-00000542", oc: "OC-2026-0031", fecha: "2026-08-12", fecha_vencimiento: "2026-09-11", monto: 87400.00, estado: "Vigente", lineas: [
     { id: 1, articuloCodigo: "JER-020", descripcion: "Jeringas descartables 5ml", cantidad: 200, precioUnitario: 380.00, alicuotaIVA: 21, subtotal: 76000.00 },
     { id: 2, articuloCodigo: "AGU-011", descripcion: "Agujas hipodérmicas 21G", cantidad: 100, precioUnitario: 114.00, alicuotaIVA: 10.5, subtotal: 11400.00 },
   ] },
-  { id: 95, proveedor: "Distribuidora Vet SA", cuit: "30-71234567-8", tipo: "Nota de Crédito A", numero: "0003-00000034", oc: "OC-2026-0040", fecha: "2026-08-05", monto: -15000.00, estado: "Vigente", comprobanteOriginal: "0003-00001250", facturaOriginalId: "101", lineas: [
+  { id: 95, proveedor: "Distribuidora Vet SA", cuit: "30-71234567-8", tipo: "Nota de Crédito A", numero: "0003-00000034", oc: "OC-2026-0040", fecha: "2026-08-05", fecha_vencimiento: "2026-09-04", monto: -15000.00, estado: "Vigente", comprobanteOriginal: "0003-00001250", facturaOriginalId: "101", lineas: [
     { id: 1, articuloCodigo: "VAC-001", descripcion: "Devolución Vacuna Quíntuple Canina", cantidad: -5, precioUnitario: 3000.00, alicuotaIVA: 21, subtotal: -15000.00 },
   ] },
-  { id: 90, proveedor: "Juan Pérez Alimentos Balanceados", cuit: "20-25874196-5", tipo: "Factura C", numero: "0001-00000112", oc: "OC-2026-0028", fecha: "2026-07-30", monto: 42000.00, estado: "Anulado", comprobanteAnulador: "0001-00000113", lineas: [
+  { id: 90, proveedor: "Juan Pérez Alimentos Balanceados", cuit: "20-25874196-5", tipo: "Factura C", numero: "0001-00000112", oc: "OC-2026-0028", fecha: "2026-07-30", fecha_vencimiento: "2026-08-29", monto: 42000.00, estado: "Anulado", comprobanteAnulador: "0001-00000113", lineas: [
     { id: 1, articuloCodigo: "BAL-030", descripcion: "Alimento balanceado adulto 20kg", cantidad: 12, precioUnitario: 3500.00, alicuotaIVA: null, subtotal: 42000.00 },
   ] },
 ];
@@ -119,6 +120,7 @@ export const ComprobantesContent = forwardRef<ComprobantesContentHandle, Comprob
   const [puntoVenta, setPuntoVenta] = useState("");
   const [numero, setNumero] = useState("");
   const [fecha, setFecha] = useState("");
+  const [fechaVencimiento, setFechaVencimiento] = useState("");
   const [cuit, setCuit] = useState("");
   const [ocId, setOcId] = useState("");
   const [facturaOriginalId, setFacturaOriginalId] = useState("");
@@ -156,6 +158,7 @@ export const ComprobantesContent = forwardRef<ComprobantesContentHandle, Comprob
     setPuntoVenta(puntoVentaEdicion);
     setNumero(numeroEmisionEdicion);
     setFecha(comprobante.fecha);
+    setFechaVencimiento(comprobante.fecha_vencimiento ?? "");
     setCuit(comprobante.cuit ?? "");
     setOcId(comprobante.ocId?.toString() ?? "");
     setFacturaOriginalId(comprobante.facturaOriginalId ?? "");
@@ -204,6 +207,7 @@ export const ComprobantesContent = forwardRef<ComprobantesContentHandle, Comprob
       setPuntoVenta(DATOS_OCR.puntoVentaDetectado);
       setNumero(DATOS_OCR.numeroDetectado);
       setFecha(DATOS_OCR.fechaDetectada);
+      setFechaVencimiento(DATOS_OCR.fechaVencimientoDetectada);
       setCuit(DATOS_OCR.cuitDetectado);
       setMontoTotal(DATOS_OCR.montoTotalDetectado);
       setLineas(LINEAS_OCR_INICIAL);
@@ -221,6 +225,7 @@ export const ComprobantesContent = forwardRef<ComprobantesContentHandle, Comprob
     if (!puntoVenta) errs.puntoVenta = "Ingresá el punto de venta.";
     if (!numero) errs.numero = "Ingresá el número de comprobante.";
     if (!fecha) errs.fecha = "Ingresá la fecha de emisión.";
+    if (!fechaVencimiento) errs.fechaVencimiento = "Ingresá la fecha de vencimiento.";
     if (!cuit) errs.cuit = "Ingresá el CUIT del proveedor.";
     if (!ocId) errs.ocId = "Seleccioná la OC vinculada.";
     if (esNcNd && !facturaOriginalId) errs.facturaOriginalId = "Seleccioná la factura original que corrige.";
@@ -243,7 +248,7 @@ export const ComprobantesContent = forwardRef<ComprobantesContentHandle, Comprob
     setErrores(errs);
     if (Object.keys(errs).length > 0) return;
 
-    // BACKEND: reemplazar por POST /api/comprobantes con { tipo, puntoVenta, numero, fecha, cuit, ocId, facturaOriginalId, lineas }
+    // BACKEND: reemplazar por POST /api/comprobantes con { tipo, puntoVenta, numero, fecha, fecha_vencimiento, cuit, ocId, facturaOriginalId, usuario_id, lineas }
     // BACKEND: en modo edición reemplazar por PUT /api/comprobantes/{id} con el mismo payload.
     const proveedor = PROVEEDORES.find((p) => p.cuit === cuit)?.razonSocial ?? "Proveedor desconocido";
     const numeroCompleto = `${puntoVenta.padStart(4, "0")}-${numero.padStart(8, "0")}`;
@@ -265,7 +270,10 @@ export const ComprobantesContent = forwardRef<ComprobantesContentHandle, Comprob
                 lineas,
                 ocId: ocId ? Number(ocId) : undefined,
                 fecha,
+                fecha_vencimiento: fechaVencimiento,
                 monto,
+                // BACKEND: usuario_id de la sesión
+                usuario_id: 1,
                 estado: prev?.estado ?? f.estado,
               }
             : f,
@@ -283,7 +291,10 @@ export const ComprobantesContent = forwardRef<ComprobantesContentHandle, Comprob
         ocId: ocId ? Number(ocId) : undefined,
         lineas,
         fecha,
+        fecha_vencimiento: fechaVencimiento,
         monto,
+        // BACKEND: usuario_id de la sesión
+        usuario_id: 1,
         estado: "Vigente",
       };
       setHistorial((prev) => [nuevo, ...prev]);
@@ -294,7 +305,7 @@ export const ComprobantesContent = forwardRef<ComprobantesContentHandle, Comprob
     setPaso(1);
     setFormPaso(1);
     setArchivo(null);
-    setTipo(""); setPuntoVenta(""); setNumero(""); setFecha(""); setCuit("");
+    setTipo(""); setPuntoVenta(""); setNumero(""); setFecha(""); setFechaVencimiento(""); setCuit("");
     setOcId(""); setFacturaOriginalId(""); setMontoTotal("");
     setLineas([]);
     setErrores({});
@@ -443,6 +454,15 @@ export const ComprobantesContent = forwardRef<ComprobantesContentHandle, Comprob
                             value={fecha}
                             onChange={(e) => { setFecha(e.target.value); setErrores((p) => ({ ...p, fecha: "" })); }}
                             error={errores.fecha}
+                          />
+                        </OcrFieldGroup>
+                        <OcrFieldGroup label="Fecha de vencimiento" requiredMark>
+                          <Input
+                            id="fecha-vencimiento"
+                            type="date"
+                            value={fechaVencimiento}
+                            onChange={(e) => { setFechaVencimiento(e.target.value); setErrores((p) => ({ ...p, fechaVencimiento: "" })); }}
+                            error={errores.fechaVencimiento}
                           />
                         </OcrFieldGroup>
                       </div>

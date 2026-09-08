@@ -148,7 +148,7 @@ function CompararContenido({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <p className="font-mono text-base font-bold text-brand-900">
-              {solicitud.cod_sol}
+{solicitud.id}
             </p>
             <EstadoSolicitudBadge estado={solicitud.estado} />
           </div>
@@ -173,7 +173,7 @@ function CompararContenido({
         <div className="overflow-x-auto rounded-md border border-border bg-surface shadow-card">
           <table className="w-full min-w-[760px] border-collapse text-left text-sm">
             <caption className="sr-only">
-              Comparación de precios por artículo y proveedor para {solicitud.cod_sol}
+              Comparación de precios por artículo y proveedor para {solicitud.id}
             </caption>
             <thead>
               <tr className="border-b border-border bg-cream-50">

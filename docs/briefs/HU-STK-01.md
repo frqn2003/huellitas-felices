@@ -1,8 +1,6 @@
 
 # HU-STK-01: Como personal de depósito, quiero dar de alta, editar y consultar artículos con su clasificación y datos de proveedor mediante un formulario paramétrico único, para tener el catálogo de productos disponible para la venta y el uso interno
 
-> Copiar este archivo como `HU-STK-01.md` y completar. Referencia: `docs/COMO-USAR.md`.
-
 ## Contexto
 
 - **Ruta propuesta:** `/articulos`

@@ -29,6 +29,7 @@ import {
 } from "@/components/stock/FiltrosStock";
 import { StockTabs, type TabStock } from "@/components/stock/StockTabs";
 import {
+  origenesMovimiento,
   parseCantidad,
   tiposMovimiento,
   type MovimientoStock,
@@ -90,7 +91,7 @@ function exportarCSVMovimientos(movimientos: MovimientoStock[]) {
     "Cantidad",
     "Origen",
     "OrigenEntidadId",
-    "Empleado",
+    "Usuario",
     "Motivo",
   ];
   const filas = movimientos.map((m) =>
@@ -103,7 +104,7 @@ function exportarCSVMovimientos(movimientos: MovimientoStock[]) {
       m.cantidad.toFixed(2),
       `"${(m.origen?.nombre ?? m.tipo).replace(/"/g, '""')}"`,
       m.origenEntidadId !== null ? m.origenEntidadId : "",
-      `"${m.empleado.nombre.replace(/"/g, '""')}"`,
+      `"${m.usuario.nombre.replace(/"/g, '""')}"`,
       `"${m.motivo.replace(/"/g, '""')}"`,
     ].join(";"),
   );
@@ -444,8 +445,9 @@ function StockScreen() {
   };
 
   // Atajo "Transferir" desde una ficha: salta al tab Movimientos y abre el modal
-  // con tipo Transferencia, depósito origen y artículo precargados (si la ficha
-  // existe en el catálogo de fichas de movimientos; si no, abre el modal vacío).
+  // con tipo Egreso + origen transferencia_sucursal, depósito origen y artículo
+  // precargados (si la ficha existe en el catálogo de fichas de movimientos;
+  // si no, abre el modal vacío).
   const abrirTransferencia = (ficha: FichaStock) => {
     const fichaMov = fichasMov.find(
       (f) => f.articuloId === ficha.articuloId && f.depositoId === ficha.depositoId,
@@ -476,19 +478,28 @@ function StockScreen() {
   const handleConfirmMov = async (draft: MovimientoDraft) => {
     const tipo = tiposMovimiento.find((t) => t.id === Number(draft.tipoId));
     if (!tipo) return;
+    // El token de la API es el valor crudo del enum (dict: ingreso/egreso). Los
+    // catálogos `tiposMovimiento` manejan etiquetas legibles ("Ingreso"/
+    // "Egreso"); acá se baja a minúscula para el wire. Transferencia/Ajuste ya
+    // no se emiten como tipo: el front las resuelve por ORIGEN.
+    const origen = origenesMovimiento.find((o) => o.id === Number(draft.origenId));
+    const esTransferencia = origen?.nombre === "transferencia_sucursal";
+    const tipoApi = tipo.nombre.toLowerCase();
 
     const origenEntidadIdRaw = draft.origenEntidadId.trim();
 
     const body = {
       depositoId: Number(draft.depositoId),
-      tipo: tipo.nombre,
-      origenId: draft.origenId ? Number(draft.origenId) : undefined,
+      tipo: tipoApi,
+      // BACKEND: el dict exige origen_id NOT NULL; el formulario lo requiere.
+      origenId: Number(draft.origenId),
       origenEntidadId: origenEntidadIdRaw !== "" ? Number(origenEntidadIdRaw) : undefined,
       motivo: draft.motivo.trim() || undefined,
       fechaHora: draft.fechaHora ? new Date(draft.fechaHora).toISOString() : undefined,
-      depositoDestinoId: draft.depositoDestinoId
-        ? Number(draft.depositoDestinoId)
-        : undefined,
+      depositoDestinoId:
+        esTransferencia && draft.depositoDestinoId
+          ? Number(draft.depositoDestinoId)
+          : undefined,
       items: draft.items.map((i) => ({
         articuloId: Number(i.articuloId),
         cantidad: parseCantidad(i.cantidad),

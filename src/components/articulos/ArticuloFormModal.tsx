@@ -13,27 +13,36 @@ export type FormModo = "INSERCION" | "EDICION" | "LECTURA";
 /**
  * Lo que el formulario le manda al backend.
  *
- * DOS CAMBIOS respecto de cómo era con datos hardcodeados:
+ * CUATRO CAMBIOS respecto de cómo era con datos hardcodeados:
  *
  *  1. NO lleva `codigo`. Lo genera la base con un trigger, a partir del prefijo
  *     de la categoría (MED-000001). El front no puede ni debe inventarlo: si
  *     dos personas dieran de alta a la vez, generarían el mismo.
  *
- *  2. Categoría, unidad y fabricante viajan como **id**, no como texto. En la
- *     base son tablas con foreign key, no strings sueltos. Los ids salen de
- *     GET /api/articulos/catalogos.
+ *  2. Categoría, unidad, fabricante y presentación viajan como **id**, no como
+ *     texto. En la base son tablas con foreign key, no strings sueltos. Los
+ *     ids salen de GET /api/articulos/catalogos (la presentación cae al
+ *     placeholder PRESENTACIONES hasta que el back la exponga).
  *
  *  3. NO lleva `proveedorId`. El proveedor preferido lo deriva el back de la
  *     última orden de compra del artículo: se muestra, no se elige.
+ *
+ *  4. NO lleva `activo` (el dict no tiene esa columna; el estado vive en
+ *     `estado`). El alta arranca "Activo" y la baja se hace desde el listado
+ *     (DesactivarModal). Falta una acción "Activar" cuando el back se alinee
+ *     (sprint 2).
  */
 export interface ArticuloDraft {
   nombre: string;
   descripcion: string;
-  fabricanteId: string;
+  fabricante_id: string;
   unidadMedidaId: string;
   categoriaId: string;
-  activo: boolean;
-  imagen: string;
+  presentacion_id: string;
+  numero_lote: string;
+  fecha_vencimiento: string;
+  contenido_neto: string;
+  imagen_url: string;
 }
 
 interface ArticuloFormModalProps {
@@ -57,24 +66,33 @@ function initialDraft(
     return {
       nombre: articulo.nombre,
       descripcion: articulo.descripcion,
-      fabricanteId: String(articulo.fabricanteId),
+      fabricante_id: String(articulo.fabricante_id),
       unidadMedidaId: String(articulo.unidadMedidaId),
       categoriaId: String(articulo.categoriaId),
-      activo: articulo.activo,
-      imagen: articulo.imagen,
+      presentacion_id: articulo.presentacion_id
+        ? String(articulo.presentacion_id)
+        : String(catalogos.presentaciones?.[0]?.id ?? ""),
+      numero_lote: articulo.numero_lote ?? "",
+      fecha_vencimiento: articulo.fecha_vencimiento ?? "",
+      contenido_neto: articulo.contenido_neto ?? "",
+      imagen_url: articulo.imagen_url,
     };
   }
   // En alta se preselecciona la primera opción de cada catálogo: los tres son
   // obligatorios (NOT NULL en la base), así que un select vacío solo sirve para
-  // que el usuario descubra el error al guardar.
+  // que el usuario descubra el error al guardar. La presentación también es
+  // obligatoria en el dict (misma lógica de preselección).
   return {
     nombre: "",
     descripcion: "",
-    fabricanteId: String(catalogos.fabricantes[0]?.id ?? ""),
+    fabricante_id: String(catalogos.fabricantes[0]?.id ?? ""),
     unidadMedidaId: String(catalogos.unidadesMedida[0]?.id ?? ""),
     categoriaId: String(catalogos.categorias[0]?.id ?? ""),
-    activo: true,
-    imagen: "",
+    presentacion_id: String(catalogos.presentaciones?.[0]?.id ?? ""),
+    numero_lote: "",
+    fecha_vencimiento: "",
+    contenido_neto: "",
+    imagen_url: "",
   };
 }
 
@@ -89,14 +107,16 @@ function validateDraft(
     next.nombre = "El nombre es obligatorio.";
   } else if (
     articulos.some(
-      (a) => a.activo && a.nombre.toLowerCase() === d.nombre.trim().toLowerCase() && a.id !== propioId,
+      (a) => a.estado === "activo" && a.nombre.toLowerCase() === d.nombre.trim().toLowerCase() && a.id !== propioId,
     )
   ) {
     next.nombre = "Ya existe un artículo activo con ese nombre.";
   }
   if (!d.unidadMedidaId) next.unidadMedidaId = "Seleccioná una unidad de medida.";
   if (!d.categoriaId) next.categoriaId = "Seleccioná una categoría.";
-  if (!d.fabricanteId) next.fabricanteId = "Seleccioná un fabricante.";
+  if (!d.fabricante_id) next.fabricante_id = "Seleccioná un fabricante.";
+  // BACKEND: el dict pide presentacion_id NOT NULL.
+  if (!d.presentacion_id) next.presentacion_id = "Seleccioná una presentación.";
   return next;
 
   // NOTA: la validación de nombre duplicado también corre en el servidor
@@ -148,11 +168,11 @@ function ArticuloFormFields({
       return;
     }
     // Se manda como data URL base64 en el POST/PUT. El back la escribe en
-    // disco (src/lib/uploads.ts) y devuelve la ruta pública en `imagen`.
+    // disco (src/lib/uploads.ts) y devuelve la ruta pública en `imagen_url`.
     const reader = new FileReader();
     reader.onload = () => {
       setImagenError(null);
-      setField("imagen", String(reader.result ?? ""));
+      setField("imagen_url", String(reader.result ?? ""));
     };
     reader.readAsDataURL(file);
   };
@@ -173,7 +193,7 @@ function ArticuloFormFields({
     e.preventDefault();
     const nextErrors = validateDraft(draft, articulos, articulo?.id);
     setErrors(nextErrors);
-    setTouched({ nombre: true, unidadMedidaId: true, categoriaId: true, fabricanteId: true });
+    setTouched({ nombre: true, unidadMedidaId: true, categoriaId: true, fabricante_id: true, presentacion_id: true });
     if (Object.keys(nextErrors).length > 0) return;
     onSave(draft);
   };
@@ -224,9 +244,9 @@ function ArticuloFormFields({
         id="fabricante"
         label="Fabricante"
         requiredMark
-        value={draft.fabricanteId}
-        onChange={(e) => setField("fabricanteId", e.target.value)}
-        error={showError("fabricanteId")}
+        value={draft.fabricante_id}
+        onChange={(e) => setField("fabricante_id", e.target.value)}
+        error={showError("fabricante_id")}
         disabled={isLectura}
       >
         {catalogos.fabricantes.map((f) => (
@@ -235,13 +255,67 @@ function ArticuloFormFields({
           </option>
         ))}
       </Select>
+      <div className="flex flex-col gap-4 sm:flex-row">
+        <div className="flex-1">
+          {/* BACKEND: el dict pide presentacion_id NOT NULL; la API aún no
+              expone el catálogo (cae al placeholder PRESENTACIONES). */}
+          <Select
+            id="presentacion"
+            label="Presentación"
+            requiredMark
+            value={draft.presentacion_id}
+            onChange={(e) => setField("presentacion_id", e.target.value)}
+            error={showError("presentacion_id")}
+            disabled={isLectura}
+          >
+            {(catalogos.presentaciones ?? []).map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nombre}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div className="flex-1">
+          <Input
+            id="contenido-neto"
+            label="Contenido neto"
+            value={draft.contenido_neto}
+            onChange={(e) => setField("contenido_neto", e.target.value)}
+            hint="Opcional · ej: 500 (mg) o 15 (kg)"
+            readOnly={isLectura}
+          />
+        </div>
+      </div>
+      <div className="flex flex-col gap-4 sm:flex-row">
+        <div className="flex-1">
+          <Input
+            id="numero-lote"
+            label="Nro. de lote"
+            value={draft.numero_lote}
+            onChange={(e) => setField("numero_lote", e.target.value)}
+            hint="Opcional"
+            readOnly={isLectura}
+          />
+        </div>
+        <div className="flex-1">
+          <Input
+            id="fecha-vencimiento"
+            label="Fecha de vencimiento"
+            type="date"
+            value={draft.fecha_vencimiento}
+            onChange={(e) => setField("fecha_vencimiento", e.target.value)}
+            hint="Opcional (YYYY-MM-DD)"
+            readOnly={isLectura}
+          />
+        </div>
+      </div>
       <p className="text-sm font-bold text-text-primary">Imagen</p>
       {isLectura ? (
         <div className="flex flex-col gap-3 rounded-sm border border-border bg-surface p-4">
-          {draft.imagen ? (
+          {draft.imagen_url ? (
             <div className="flex items-center gap-4">
               <img
-                src={draft.imagen}
+                src={draft.imagen_url}
                 alt={draft.nombre || "Imagen del artículo"}
                 className="h-24 w-24 shrink-0 rounded-sm object-cover"
               />
@@ -276,10 +350,10 @@ function ArticuloFormFields({
                 : "border-border bg-cream-50 hover:border-brand-900/60"
             }`}
           >
-            {draft.imagen ? (
+            {draft.imagen_url ? (
               <div className="flex flex-col items-center gap-3 sm:flex-row">
                 <img
-                  src={draft.imagen}
+                  src={draft.imagen_url}
                   alt={draft.nombre || "Imagen del artículo"}
                   className="h-24 w-24 shrink-0 rounded-sm object-cover"
                 />
@@ -312,10 +386,10 @@ function ArticuloFormFields({
             <p className="text-xs text-text-secondary">
               La imagen se guarda al confirmar. Sin imagen, en el listado se muestra una huella.
             </p>
-            {draft.imagen && (
+            {draft.imagen_url && (
               <button
                 type="button"
-                onClick={() => setField("imagen", "")}
+                onClick={() => setField("imagen_url", "")}
                 className="h-11 cursor-pointer rounded-pill px-4 text-sm font-bold text-destructive transition-colors duration-fast ease-out hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
               >
                 Quitar imagen
@@ -385,27 +459,14 @@ function ArticuloFormFields({
       {isLectura && (
         <p className="rounded-sm bg-cream-50 px-4 py-3 text-sm text-text-secondary">
           {articulo
-            ? `Proveedor preferido: ${proveedorActual || "Sin proveedor"} · Estado: ${articulo.estado}`
+            ? `Proveedor preferido: ${proveedorActual || "Sin proveedor"} · Estado: ${articulo.estado === "activo" ? "Activo" : "Inactivo"}`
             : "Sin proveedor"}
         </p>
       )}
-      {!isLectura && (
-        <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-sm border border-border bg-surface px-4 text-sm font-bold text-text-primary">
-          Artículo activo
-          <input
-            type="checkbox"
-            checked={draft.activo}
-            onChange={(e) => setField("activo", e.target.checked)}
-            className="h-5 w-5 cursor-pointer accent-brand-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900"
-          />
-        </label>
-      )}
-      {!isLectura && !draft.activo && (
-        <p className="rounded-sm bg-accent-500/15 px-4 py-3 text-sm font-semibold text-brand-900" role="status">
-          Al guardar, el artículo quedará inactivo: no podrá usarse en nuevos movimientos, listas de precios ni
-          órdenes de compra.
-        </p>
-      )}
+      {/* El checkbox "Artículo activo" se eliminó: el dict no tiene la columna
+          `activo` (el estado vive en `estado`). La baja se hace desde el
+          listado (DesactivarModal); la re-activación queda para cuando el back
+          se alinee (sprint 2). */}
     </form>
   );
 }

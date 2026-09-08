@@ -12,16 +12,22 @@ Vas a diseñar, codear y verificar una pantalla de **Huellitas Felices** (sistem
 
 ---
 
-## Paso 1 — Leer contexto (obligatorio)
+## Paso 1 — Leer contexto (obligatorio, optimizado con Engram)
 
-1. `docs/briefs/$ARGUMENTS.md` — la HU, wireframe, datos y criterios de aceptación.
-2. `design-system/huellitas-felices/MASTER.md` — **tokens OBLIGATORIOS** (Pet Bliss). Sus reglas reemplazan al catálogo de cualquier skill.
-3. `design-system/huellitas-felices/componentes.md` — **inventario de componentes existentes** (para reusar antes de crear).
-4. `docs/errores-comunes.md` — log de errores del equipo. Leer las "Reglas activas" y tenerlas presentes durante todo el diseño.
-5. `AGENTS.md` — acuerdos del equipo y reglas técnicas.
-6. Si existe `design-system/huellitas-felices/pages/[pantalla].md`, tiene prioridad sobre el MASTER.
-7. Si NO existe el archivo de página en `design-system/huellitas-felices/pages/`, crearlo documentando los tokens/reglas específicos de esta pantalla.
-8. `docs/design-system-pet-bliss-style.md` (1951 líneas) **NO se lee de corrido**. El MASTER ya trae los tokens; si te falta el razonamiento de un token puntual, buscá la sección con `grep -n "<token>" docs/design-system-pet-bliss-style.md` y leé solo ese fragmento.
+**Objetivo:** obtener todo el contexto necesario sin leer archivos pesados cada vez. Usá `mem_search` por topic_keys para recuperar lo cacheado. **Delegá las búsquedas de contexto a sub-agentes en paralelo** para acelerar y no inflar tu contexto.
+
+1. **Brief (inline):** leé directamente `docs/briefs/$ARGUMENTS.md` — la HU, wireframe, datos y criterios de aceptación. Este es el **único archivo que lees inline tú** (es único por HU).
+
+2. **Lanzá los sub-agentes en paralelo** (delegate → `explore`):
+   - **Sub-agente A — tokens:** `mem_search(query: "disenar/design-system")` + si es necesario `grep` sobre `MASTER.md`. Devuelve: paleta, tipografía, radios, motion, composición.
+   - **Sub-agente B — componentes + HUs previas:** `mem_search(query: "disenar/componentes")` + `grep` sobre `src/components/**` + `mem_search(query: "hu/HU-XXX components-used")` del mismo módulo. Devuelve: inventario + decisiones previas.
+   - **Sub-agente C — reglas + esquema:** `mem_search(query: "disenar/reglas")` + `grep` de las tablas del brief sobre `docs/esquema-bd-front.md`. Devuelve: reglas activas + campos/tipos de las entidades.
+
+3. **Consolidá** los 3 resultados y seguí con el paso 2.
+
+4. **Override de página:** (directo, es rápido) si existe `design-system/huellitas-felices/pages/[pantalla].md`, leelo directamente (tiene prioridad sobre el MASTER para esa pantalla). Si NO existe, lo crea el paso 5.
+
+5. **Razonamiento de token puntual:** si te falta el "por qué" de un token, `grep -n "<token>" docs/design-system-pet-bliss-style.md` y leé solo ese fragmento. **NUNCA** leas el archivo completo (1951 líneas).
 
 ## Paso 2 — Audit UX (antes de codear)
 
@@ -53,38 +59,85 @@ Usá la skill `ui-ux-pro-max` como guía de composición, estados y anti-pattern
 
 **Regla dura: reusar antes de crear. Nada de duplicar componentes que ya existen.**
 
-1. **Consultá el inventario** `design-system/huellitas-felices/componentes.md` (leído en el paso 1) y armá la lista de piezas que va a necesitar la pantalla: tablas, filtros, modales, badges, forms, tabs, paginación, toasts.
-2. **Verificá contra el código real**: el inventario puede estar desactualizado; ante duda, buscá en `src/components/**` (glob/grep por nombre o propósito).
-3. **Clasificá cada pieza** en una de tres categorías y presentalo como lista explícita antes de codear:
-   - **Reusar tal cual:** existe en `ui/` y cubre la necesidad (Button, Modal, StatusBadge, Pagination, etc.).
+1. **Consultá el inventario de Engram** (recuperado en el paso 1, topic_key `disenar/componentes`) y armá la lista de piezas que va a necesitar la pantalla: tablas, filtros, modales, badges, forms, tabs, paginación, toasts.
+2. **Verificá contra el código real**: el inventario en Engram puede estar desactualizado; ante duda, hacé grep en `src/components/**` por nombre o propósito para confirmar que el componente existe y tiene las props que necesitás.
+3. **Buscá en Engram decisiones previas del mismo módulo:** `mem_search(query: "hu/HU-XXX components-used", project: "huellitas-felices")` para ver qué componentes se usaron en HUs anteriores del mismo módulo (ej: si estás haciendo HU-STK-04, buscá las decisiones de HU-STK-01 y HU-STK-02).
+4. **Clasificá cada pieza** en una de tres categorías y presentalo como lista explícita antes de codear:
+   - **Reusar tal cual:** existe en `ui/` o en el módulo y cubre la necesidad (Button, Modal, StatusBadge, Pagination, etc.).
    - **Extender:** existe algo similar pero le falta una prop/variante → extender el componente existente manteniendo retrocompatibilidad con quienes ya lo usan.
    - **Crear nuevo:** no hay equivalente razonable → justificar por qué no conviene reusar ni extender ninguno.
-4. Si un badge/estado de negocio es necesario (ej: estado de orden), construiló **sobre `StatusBadge`** (mapear estado → variante + label + icono), nunca con colores propios.
+5. Si un badge/estado de negocio es necesario (ej: estado de orden), construiló **sobre `StatusBadge`** (mapear estado → variante + label + icono), nunca con colores propios.
 
 Este listado (reusar/extender/crear) forma parte del plan que se muestra al usuario en el checkpoint final.
+
+### 4b. Sub-agente de viabilidad (pre-check antes de codear)
+
+Cuando la clasificación tenga algún **"Extender"** o **"Crear nuevo"**, delegá el chequeo de viabilidad a un sub-agente con contexto fresco (delegar el trabajo de análisis para no inflar tu contexto):
+
+- **Input al sub-agente:** la lista de piezas clasificadas (los "extender" y "crear").
+- **Lo que hace el sub-agente:**
+  - Para cada **"Extender"**: lee el componente existente en `src/components/**` y verifica que la prop/variante nueva **no rompa retrocompatibilidad** con quienes ya lo usan.
+  - Para cada **"Crear"**: hace una búsqueda real en `src/components/**` para confirmar que NO existe equivalente razonable.
+- **Output:** para cada pieza → `✅ viable` / `⚠️ ajustar` (con la prop que conflictúa) / `❌ no hacer` (por qué).
+
+Si el sub-agente marca algo como `❌`, ajustá la clasificación (reusar un equivalente en vez de crear, o posponer la extensión) antes de codear.
 
 ## Paso 5 — Codear (componentes reutilizables + página)
 
 - Componentes **reutilizables** en `src/components/` (pensados 1 a 1 para React), no pantallas sueltas.
 - Página en `src/app/<ruta>/page.tsx` con **datos hardcodeados** del brief (en español).
   - Ruta por defecto: derivar del nombre legible de la pantalla (ej: "Dashboard de turnos" → `/dashboard`). Si el brief aclara ruta, usar esa.
-- **Datos placeholder listos para backend**: cada registro lleva un `id` numérico (la PK que mandará la base de datos). En cada punto de integración (fetch inicial, POST/PUT/PATCH/DELETE, selects de catálogos) dejar un comentario con prefijo `// BACKEND:` indicando el endpoint y qué reemplazar, para que el equipo de back conecte sin reescribir el front (ej: `// BACKEND: reemplazar por GET /api/articulos`).
+- **Datos placeholder listos para backend**: cada registro lleva un `id` numérico (la PK que mandará la base de datos). Los campos y tipos deben **respetar el esquema** de `docs/esquema-bd-front.md` (consultado en el paso 1): no inventes campos que no existen, usá los tipos correctos (varchar, numeric, enum, date, timestamp), y respetá las constraints (CHECK ≥ 0, UNIQUE, etc.). En cada punto de integración (fetch inicial, POST/PUT/PATCH/DELETE, selects de catálogos) dejar un comentario con prefijo `// BACKEND:` indicando **la tabla y endpoint** exactos (ej: `// BACKEND: GET /api/articulos → tabla articulo, JOIN categoria/unidad_medida/fabricante`).
 - Tokens vía Tailwind (`src/app/globals.css`) — nada de colores hardcodeados.
 - Iconos **Lucide**, animaciones **Framer Motion** (respetando `prefers-reduced-motion`).
 - Estados: vacío, cargando, error, con datos — según corresponda a la pantalla.
 - Accesibilidad: contraste ≥4.5:1, focus visible, touch targets ≥44×44px, `alt` en imágenes.
 - **Al terminar:** actualizar `design-system/huellitas-felices/componentes.md` con los componentes nuevos creados (y ajustar filas de los que se extendieron).
 
-## Paso 6 — Verificación técnica (sin navegador)
+## Paso 6 — Verificación técnica
 
-Verificá el código sin levantar navegador:
+Verificá el código en dos fases: estática (6a) y de renderizado real (6b).
+
+### 6a. Verificación estática (sin navegador)
 
 1. `npm run lint` (cubre solo `src/`; `.opencode/skills/` y `.agents/skills/` quedan fuera de alcance).
 2. `npx tsc --noEmit`.
 3. Checklist de accesibilidad sobre el código: contraste de tokens usados, focus visible, touch targets ≥44px, `aria-label` en iconos-acción, `alt`/`aria` en imágenes, `prefers-reduced-motion` respetado.
-4. Repasá las **"Reglas activas"** del log `docs/errores-comunes.md` y verificá que ninguna se esté repitiendo.
+4. Repasá las **"Reglas activas"** del topic_key `disenar/reglas` en Engram (recuperado en el paso 1) y verificá que ninguna se esté repitiendo.
 
-Corregí todo lo que falle antes de pasar al checkpoint. **No se usan test de navegador ni screenshots automáticos.**
+### 6b. Prueba de renderizado real (headless browser, sin instalar nada)
+
+La pantalla puede compilar y pasar `tsc` pero **romper al renderizar** (acceso a `undefined`, hook mal llamado, SSR/client mismatch). Verificá que funcione de verdad con la skill **`browser-automation`** (resuelve `patchright`/Playwright de una carpeta ya instalada, sin agregar dependencias al proyecto):
+
+1. Levantá el dev server: `npm run dev` (en background) y esperá a que responda.
+2. Cargá la ruta de la pantalla en el headless browser:
+   ```
+   node <ruta-al-skill-browser-automation>/browser.mjs http://localhost:3000/<ruta>
+   ```
+   (La ruta del skill es la que aparece en tu entorno; por defecto `~/.claude/skills/browser-automation/browser.mjs` o `~/.codegpt/skills/browser-automation/browser.mjs`.)
+3. Revisá el reporte:
+   - **`title` vacío y `bodyChars` ≈ 0** → la app no montó. Revisá la sección console primero.
+   - **`console.error` / excepciones no capturadas** → casi siempre bug real. Corregilo.
+   - **`requests failed`** → 404 en un chunk JS suele indicar un build viejo; un 500 significa el server, no la página.
+4. Confirmá que los elementos principales están: usá `--snapshot` (lista de elementos interactivos) o `--snapshot --full` (árbol de accesibilidad) y verificá que los componentes clave de la pantalla (tabla, filtro, botones, badges) están en el DOM.
+5. Si la pantalla tiene **estados alternos** (vacío / error), cargalos y verificá que no rompan (navegá o pasá datos propios si es accesible).
+6. Corregí todo lo que falle y volvé a verificar hasta que renderice limpio.
+
+> **Si detectaste un error** (cualquiera de los anteriores, o un problema que notó el usuario), **registralo automáticamente** (ver "Registro automático de errores" más abajo). No esperes a que el usuario lo haga con `/error`.
+
+Cerrá el dev server al terminar (o dejalo si el usuario va a probar de inmediato en el checkpoint).
+
+### Registro automático de errores (reemplaza a `/error`)
+
+Cuando detectes un error (propio, del renderizado en 6b, o del feedback del usuario), **registralo vos automáticamente** — no esperes a que el usuario invoque ningún comando:
+
+1. **Escribí la entrada en `docs/errores-comunes.md`** arriba de las existentes (más reciente primero), con el formato del archivo:
+   - Título: `### YYYY-MM-DD · <pantalla o módulo> (HU si aplica)`.
+   - Campos: **Qué pasó**, **Cómo se detectó** (lint / tsc / renderizado / prueba del usuario), **Causa** (causa raíz; si no la sabés, proponé la más probable y marcala como hipótesis), **Regla para no repetirlo** (acción concreta y verificable).
+2. **Actualizá las "Reglas activas"** si la regla es aplicable a futuras pantallas: sumala al topic_key `disenar/reglas` en Engram con `mem_update` (máx ~15 reglas; si se pasa, consolidá las parecidas). Si es muy específica de una pantalla, dejala solo en el archivo.
+3. No inventes datos que no observaste: si falta la causa, registralo como hipótesis y avisá.
+
+> El log deja de alimentarse "a propósito" con un comando manual: ahora se llena solo, cada vez que aparece un error real.
 
 ## Paso 7 — CHECKPOINT: revisión del usuario (sin git)
 
@@ -94,10 +147,28 @@ Corregí todo lo que falle antes de pasar al checkpoint. **No se usan test de na
 2. Decile al usuario que pruebe la pantalla: `npm run dev` y abrir la ruta en el navegador.
 3. Si pidió ajustes, aplicálos y volvé a correr el paso 6.
 4. Recordale que cuando quiera publicar los cambios use **`/subir`** (revisa el diff, propone el mensaje de commit referenciando la HU y pushea a GitHub con su confirmación).
-5. Si durante la sesión apareció un error digno de registro (propio o del feedback del usuario), sugerile registrarlo con **`/error`**. No lo registres vos por tu cuenta.
+5. Si durante la sesión apareció un error digno de registro (propio o del feedback del usuario), registralo automáticamente en `docs/errores-comunes.md` + Engram (ver "Registro automático de errores"). No hace falta ningún comando manual.
+
+## Paso 8 — Guardar en Engram (post-checkpoint)
+
+Después de que el usuario apruebe el checkpoint, guardá las decisiones de esta HU en Engram para que la próxima HU del mismo módulo arranque con contexto:
+
+1. **Componentes usados:** `mem_save` con topic_key `huellitas-felices/hu/$ARGUMENTS/components-used`:
+   - Qué componentes se reusaron (nombre + archivo)
+   - Cuáles se extendieron (nombre + prop/variante agregada)
+   - Cuáles se crearon de nuevo (justificación)
+   - Ejemplo: `topic_key: "huellitas-felices/hu/HU-STK-04/components-used"`
+
+2. **Decisiones de diseño:** si hubo decisiones no obvias (ej: "los chips de stock bajo siempre van en warning con icono AlertTriangle"), `mem_save` con topic_key `huellitas-felices/hu/$ARGUMENTS/decisions`.
+
+3. **Actualizar inventario en Engram:** si se crearon o extendieron componentes, actualizar `disenar/componentes` con `mem_update` para que la próxima HU tenga el inventario actualizado.
+
+4. **Refrescar esquema si cambió:** si el usuario indica que el DBA entregó un nuevo script/DBML, re-leer `docs/esquema-bd-front.md` y actualizar `disenar/schema` en Engram con `mem_update`.
 
 ## Recordatorio de reglas
 
-- **Reusar antes de crear** — consultar el inventario `design-system/huellitas-felices/componentes.md` y mantenerlo actualizado con lo nuevo.
-- El log `docs/errores-comunes.md` solo se alimenta con `/error` (a propósito, decisión del usuario).
+- **Reusar antes de crear** — consultar el inventario en Engram (`disenar/componentes`) y verificar contra `src/components/**`. Mantenerlo actualizado con lo nuevo (paso 8).
+- El log `docs/errores-comunes.md` se alimenta **automáticamente** durante los pasos 6/7 (registro automático de errores). Las "Reglas activas" viven en Engram (`disenar/reglas`). Ya no existe el comando `/error`.
 - UI en español, tono amigable pero profesional (Pet Bliss: "playful, never childish").
+- **Cada HU exitosa deja contexto en Engram** (paso 8): componentes usados + decisiones de diseño. La próxima HU del mismo módulo arranca con ventaja.
+- **Esquema de BD:** los datos hardcodeados y los comentarios `// BACKEND:` deben respetar los campos, tipos y constraints de `docs/esquema-bd-front.md`. No inventar campos que no existen en la tabla.

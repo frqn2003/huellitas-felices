@@ -121,18 +121,17 @@ function FichaFormFields({
         codigo: ficha.articulo.codigo,
         nombre: ficha.articulo.nombre,
         descripcion: "",
-        fabricanteId: 0,
+        fabricante_id: 0,
         fabricante: "",
         unidadMedidaId: 0,
         unidadMedida: ficha.articulo.unidadMedida as Articulo["unidadMedida"],
         categoriaId: 0,
         categoria: "Medicamentos",
         proveedorPreferido: null,
-        estado: "Inactivo",
-        imagen: "",
-        createdAt: "",
-        updatedAt: "",
-        activo: false,
+        estado: "inactivo",
+        imagen_url: "",
+        created_at: "",
+        updated_at: "",
       });
     }
     return lista;

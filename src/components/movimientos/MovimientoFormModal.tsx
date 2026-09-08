@@ -43,6 +43,7 @@ export interface MovimientoDraft {
 interface MovimientoFormErrors {
   fechaHora?: string;
   tipoId?: string;
+  origenId?: string;
   origenEntidadId?: string;
   depositoId?: string;
   depositoDestinoId?: string;
@@ -101,12 +102,18 @@ function MovimientoFormFields({
   const [draft, setDraft] = useState<MovimientoDraft>(() => {
     const base = draftVacio(numeroSiguiente);
     if (!inicial) return base;
-    // Prefill desde el atajo "Transferir" de una ficha: tipo Transferencia,
-    // depósito origen y artículo ya cargados (el destino lo elige el usuario).
-    const tipoTransferencia = tiposMovimiento.find((t) => t.nombre === "Transferencia");
+    // Prefill desde el atajo "Transferir" de una ficha: tipo Egreso + origen
+    // transferencia_sucursal, depósito origen y artículo ya cargados (el
+    // destino lo elige el usuario). El tipo "Transferencia" ya no existe en el
+    // catálogo: la transferencia es un ORIGEN (dict) que deriva el token de API.
+    const tipoEgreso = tiposMovimiento.find((t) => t.nombre === "Egreso");
+    const origenTransferencia = origenesMovimiento.find(
+      (o) => o.nombre === "transferencia_sucursal",
+    );
     return {
       ...base,
-      tipoId: tipoTransferencia ? String(tipoTransferencia.id) : "",
+      tipoId: tipoEgreso ? String(tipoEgreso.id) : "",
+      origenId: origenTransferencia ? String(origenTransferencia.id) : "",
       depositoId: String(inicial.depositoId),
       items: [{ articuloId: String(inicial.articuloId), cantidad: "" }],
     };
@@ -114,12 +121,18 @@ function MovimientoFormFields({
   const [errors, setErrors] = useState<MovimientoFormErrors>(errorsVacios);
 
   const tipo = tiposMovimiento.find((t) => t.id === Number(draft.tipoId))?.nombre;
-  const esTransferencia = tipo === "Transferencia";
+  // El ORIGEN sale del catálogo (dict): la transferencia y el ajuste manual
+  // son orígenes, no tipos. `esTransferencia`/`esAjuste` derivan del origen.
+  const origen = origenesMovimiento.find((o) => o.id === Number(draft.origenId))?.nombre;
+  const esTransferencia = origen === "transferencia_sucursal";
+  const esAjuste = origen === "ajuste_manual";
+  // Solo venta y recepción de compra referencian un documento real con número.
+  const esDocumento = origen === "venta" || origen === "recepcion_compra";
+  const etiquetaDocumento = origen === "venta" ? "Nro. de venta" : "Nro. de OC";
 
   // Origen filtrado según el tipo (combos inválidos no se ofrecen).
   const origenesValidos = tipo ? origenesPorTipo[tipo] : origenesMovimiento.map((o) => o.id);
   const opcionesOrigen = origenesMovimiento.filter((o) => origenesValidos.includes(o.id));
-  const esNroOC = opcionesOrigen[0]?.nombre === "Orden de Compra";
 
   const depositoOrigenId = Number(draft.depositoId);
   const depositoDestinoId = Number(draft.depositoDestinoId);
@@ -144,8 +157,9 @@ function MovimientoFormFields({
   const setField = <K extends keyof MovimientoDraft>(field: K, value: MovimientoDraft[K]) => {
     const next = { ...draft, [field]: value };
     if (field === "tipoId") {
-      // Al cambiar el tipo se corrige el origen con el NUEVO tipo: fijado
-      // (Ingreso -> OC, Egreso -> Venta) o vacío (Transferencia / Ajuste).
+      // Al cambiar el tipo se corrige el origen con el NUEVO tipo: auto-fijado
+      // si queda UN solo origen válido (p.ej. Egreso + transferencia_sucursal
+      // en una traslación; Ingreso ofrece recepción de compra o ajuste manual).
       // Se calcula desde `value`, no desde el closure (tipo anterior).
       const nuevoTipo = tiposMovimiento.find((t) => t.id === Number(value))?.nombre;
       const validos = nuevoTipo ? origenesPorTipo[nuevoTipo] : [];
@@ -187,17 +201,17 @@ function MovimientoFormFields({
     const next: MovimientoFormErrors = {};
     if (!draft.fechaHora) next.fechaHora = "La fecha y hora son obligatorias.";
     if (!draft.tipoId) next.tipoId = "Seleccioná un tipo de movimiento.";
+    // BACKEND: `origen_id` es NOT NULL en el dict; el formulario lo exige.
+    if (!draft.origenId) next.origenId = "Seleccioná el origen del movimiento.";
 
     // El nro. de documento (OC/venta) es opcional, pero si se completa debe ser
     // un entero positivo (id de la entidad referenciada).
     if (
-      opcionesOrigen.length === 1 &&
+      esDocumento &&
       draft.origenEntidadId.trim() !== "" &&
       (!Number.isInteger(Number(draft.origenEntidadId)) || Number(draft.origenEntidadId) < 1)
     ) {
-      next.origenEntidadId = esNroOC
-        ? "El nro. de OC debe ser un entero positivo."
-        : "El nro. de venta debe ser un entero positivo.";
+      next.origenEntidadId = `${etiquetaDocumento} debe ser un entero positivo.`;
     }
     if (esTransferencia) {
       if (!draft.depositoId) next.depositoId = "Seleccioná el depósito de origen.";
@@ -233,18 +247,16 @@ function MovimientoFormFields({
       if (item.cantidad.trim() === "") {
         err.cantidad = "Cantidad obligatoria.";
       } else if (Number.isNaN(cant) || cant === 0) {
-        err.cantidad =
-          tipo === "Ajuste"
-            ? "Debe ser distinto de 0 (positivo suma, negativo resta)."
-            : "Debe ser mayor a 0.";
+        // El dict: la cantidad es SIEMPRE positiva; el signo lo define el tipo
+        // (Ingreso suma / Egreso resta). Un ajuste manual es un Ingreso o un
+        // Egreso con origen `ajuste_manual`.
+        err.cantidad = "Debe ser mayor a 0.";
       } else if (ficha) {
-        if (tipo === "Egreso" || tipo === "Transferencia") {
+        if (esTransferencia || tipo === "Egreso") {
           const disponible = ficha.stockActual;
-          if (cant < 0 || disponible - cant < 0) {
+          if (disponible - cant < 0) {
             err.cantidad = `Stock insuficiente: hay ${disponible.toFixed(2)} ${ficha.articulo.unidadMedida}.`;
           }
-        } else if (tipo === "Ajuste" && cant < 0 && ficha.stockActual + cant < 0) {
-          err.cantidad = `Stock insuficiente: hay ${ficha.stockActual.toFixed(2)} ${ficha.articulo.unidadMedida}.`;
         }
       }
 
@@ -361,23 +373,39 @@ function MovimientoFormFields({
             ))}
           </Select>
         )}
-        {/* El origen queda auto-fijado según el tipo (Ingreso -> Orden de
-        Compra, Egreso -> Venta); acá va el nro. del documento.
-        BACKEND: poblar el catálogo desde GET /api/origenes-movimiento. */}
-        {opcionesOrigen.length === 1 && (
+        {/* BACKEND: poblar el catálogo desde GET /api/origenes-movimiento. */}
+        <Select
+          id="mov-origen"
+          label="Origen"
+          requiredMark
+          value={draft.origenId}
+          onChange={(e) => setField("origenId", e.target.value)}
+          error={errors.origenId}
+          hint={
+            esTransferencia
+              ? "Transferencia entre depósitos"
+              : esAjuste
+                ? "Corrección manual de stock"
+                : undefined
+          }
+        >
+          <option value="">Seleccionar...</option>
+          {opcionesOrigen.map((origenOp) => (
+            <option key={origenOp.id} value={origenOp.id}>
+              {origenOp.nombre}
+            </option>
+          ))}
+        </Select>
+        {esDocumento && (
           <Input
             id="mov-origen-entidad"
-            label={esNroOC ? "Nro. de OC" : "Nro. de venta"}
+            label={etiquetaDocumento}
             type="number"
             min={1}
             value={draft.origenEntidadId}
             onChange={(e) => setField("origenEntidadId", e.target.value)}
             error={errors.origenEntidadId}
-            hint={
-              esNroOC
-                ? "Opcional: nro. de la orden de compra"
-                : "Opcional: nro. de la venta"
-            }
+            hint={`Opcional: nro. del ${origen === "venta" ? "comprobante de venta" : "documento de compra"}`}
           />
         )}
         </div>
@@ -429,7 +457,7 @@ function MovimientoFormFields({
                   label="Cantidad"
                   requiredMark
                   type="number"
-                  min={tipo === "Ajuste" ? undefined : 0.01}
+                  min={0.01}
                   step={0.01}
                   value={item.cantidad}
                   onChange={(e) => setItem(index, "cantidad", e.target.value)}
@@ -475,8 +503,9 @@ function MovimientoFormFields({
       <div className="flex flex-col gap-2 rounded-sm border border-border/60 bg-cream-50 px-4 py-3" role="note">
         <p className="text-xs font-extrabold uppercase tracking-wide text-text-secondary">Validaciones</p>
         <ul className="flex flex-col gap-1 text-sm font-medium text-text-secondary">
+          <li>La cantidad es siempre positiva; el signo lo define el tipo (Ingreso suma, Egreso resta).</li>
           <li>Si es Egreso o Transferencia: el stock resultante no puede ser negativo.</li>
-          <li>En Ajuste la cantidad puede ser negativa (resta) o positiva (suma).</li>
+          <li>Un ajuste manual es un Ingreso o un Egreso con origen &quot;ajuste_manual&quot;.</li>
           <li>Cada artículo necesita una ficha de stock activa en el depósito (y en el destino, para transferencias).</li>
           <li>Al confirmar se genera un registro por artículo; las transferencias se vinculan (egreso + ingreso).</li>
         </ul>

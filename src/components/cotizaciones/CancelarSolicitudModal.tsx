@@ -39,7 +39,7 @@ export function CancelarSolicitudModal({
       <div className="flex flex-col gap-4">
         <p className="text-base text-text-primary">
           ¿Seguro que querés cancelar la solicitud{" "}
-          <strong className="font-mono">{solicitud.cod_sol}</strong>?
+          <strong className="font-mono">{solicitud.id}</strong>?
         </p>
         <div className="flex flex-col gap-2 rounded-sm border border-border/60 bg-cream-50 px-4 py-3" role="note">
           <p className="text-xs font-extrabold uppercase tracking-wide text-text-secondary">

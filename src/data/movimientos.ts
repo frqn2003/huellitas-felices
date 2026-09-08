@@ -16,9 +16,11 @@ import { fichasStockIniciales, type FichaStock } from "./stock";
 // `numero` es UNIQUE.
 // El agrupador de la transferencia es `movimiento_vinculado_id`, que enlaza el
 // egreso del depósito de origen con el ingreso del de destino.
-// REGLA DE ORIGEN: `origen_id` solo referencia documentos reales (Orden de
-// Compra, Venta). En Transferencia y Ajuste el origen es implícito
-// (el par vinculado / el ajuste mismo) y `origen_id` queda NULL.
+// REGLA DE ORIGEN (dict DBA): `origen_id` es NOT NULL y categoriza TODO
+// movimiento: venta, receta, internacion, urgencia, cirugia, practica,
+// recepcion_compra, transferencia_sucursal, ajuste_manual, vacunacion,
+// desparasitacion, merma. La transferencia y el ajuste manual usan SU origen
+// del catálogo (no quedan NULL).
 export type TipoMovimiento = "Ingreso" | "Egreso" | "Transferencia" | "Ajuste";
 
 export interface MovimientoStock {
@@ -32,15 +34,17 @@ export interface MovimientoStock {
   tipo: TipoMovimiento;
   cantidad: number;
   fechaHora: string;
-  empleadoId: number;
-  empleado: { nombre: string };
+  /** dict: movimiento_stock_cab.usuario_id FK NOT NULL (quién registró el
+      movimiento). La vista plana de la API lo expone como `usuario`. */
+  usuario_id: number;
+  usuario: { nombre: string };
   motivo: string;
   movimientoVinculadoId: number | null;
-  createdAt: string;
 }
 
 // BACKEND: reemplazar por la respuesta de GET /api/movimientos-stock
-// (joins con ficha_stock, deposito, articulo, origen_movimiento y empleado).
+// (joins con ficha_stock, deposito, articulo, origen_movimiento y usuario;
+// la vista plana de la API lo expone como `usuario`).
 // Los nombres de depósito se alinean con el catálogo existente
 // (`depositosIniciales` de src/data/stock.ts): "Depósito Central" -> "Dep. Central",
 // "Sucursal A" -> "Dep. Norte".
@@ -50,112 +54,122 @@ export const movimientosIniciales: MovimientoStock[] = [
     numero: "MOV-0001",
     fichaStockId: 1,
     fichaStock: { articuloNombre: "Amoxicilina 500mg", articuloUnidad: "Unidad", depositoNombre: "Dep. Central" },
-    origenId: 1,
-    origen: { nombre: "Orden de Compra" },
+    origenId: 7,
+    origen: { nombre: "recepcion_compra" },
     origenEntidadId: 12,
     tipo: "Ingreso",
     cantidad: 20,
     fechaHora: "2026-08-15T09:30:00Z",
-    empleadoId: 3,
-    empleado: { nombre: "Carlos López" },
+    usuario_id: 3,
+    usuario: { nombre: "Carlos López" },
     motivo: "Recepción de orden de compra OC-0012",
     movimientoVinculadoId: null,
-    createdAt: "2026-08-15T09:30:00Z",
   },
   {
     id: 2,
     numero: "MOV-0002",
     fichaStockId: 2,
     fichaStock: { articuloNombre: "Jeringa 5ml", articuloUnidad: "Unidad", depositoNombre: "Dep. Central" },
-    origenId: 2,
-    origen: { nombre: "Venta" },
+    origenId: 1,
+    origen: { nombre: "venta" },
     origenEntidadId: 45,
     tipo: "Egreso",
     cantidad: 50,
     fechaHora: "2026-08-15T11:15:00Z",
-    empleadoId: 5,
-    empleado: { nombre: "María García" },
+    usuario_id: 5,
+    usuario: { nombre: "María García" },
     motivo: "Venta a cliente #45",
     movimientoVinculadoId: null,
-    createdAt: "2026-08-15T11:15:00Z",
   },
   {
     id: 3,
     numero: "MOV-0003",
     fichaStockId: 5,
     fichaStock: { articuloNombre: "Alimento Premium", articuloUnidad: "Kg", depositoNombre: "Dep. Norte" },
-    origenId: null,
-    origen: null,
+    origenId: 8,
+    origen: { nombre: "transferencia_sucursal" },
     origenEntidadId: null,
     tipo: "Ingreso",
     cantidad: 10,
     fechaHora: "2026-08-16T10:00:00Z",
-    empleadoId: 3,
-    empleado: { nombre: "Carlos López" },
+    usuario_id: 3,
+    usuario: { nombre: "Carlos López" },
     motivo: "Transferencia desde Dep. Central",
     movimientoVinculadoId: 4,
-    createdAt: "2026-08-16T10:00:00Z",
   },
   {
     id: 4,
     numero: "MOV-0004",
     fichaStockId: 3,
     fichaStock: { articuloNombre: "Alimento Premium", articuloUnidad: "Kg", depositoNombre: "Dep. Central" },
-    origenId: null,
-    origen: null,
+    origenId: 8,
+    origen: { nombre: "transferencia_sucursal" },
     origenEntidadId: null,
     tipo: "Egreso",
     cantidad: 10,
     fechaHora: "2026-08-16T10:00:00Z",
-    empleadoId: 3,
-    empleado: { nombre: "Carlos López" },
+    usuario_id: 3,
+    usuario: { nombre: "Carlos López" },
     motivo: "Transferencia a Dep. Norte",
     movimientoVinculadoId: 3,
-    createdAt: "2026-08-16T10:00:00Z",
   },
 ];
 
-// Catálogo `tipo_movimiento` (tabla de referencia).
+// Catálogo `tipo_movimiento` — el dict define el enum ingreso/egreso.
+// Transferencia/Ajuste se conservan SOLO como tipo del contrato HTTP actual
+// (normalizarTipo de la API); el front ya no los crea: se deriva del ORIGEN
+// (ver origenesPorTipo y el POST de stock/page.tsx).
 // BACKEND: poblar desde GET /api/tipos-movimiento.
 export const tiposMovimiento: { id: number; nombre: TipoMovimiento }[] = [
   { id: 1, nombre: "Ingreso" },
   { id: 2, nombre: "Egreso" },
-  { id: 3, nombre: "Transferencia" },
-  { id: 4, nombre: "Ajuste" },
 ];
 
-// Catálogo `origen_movimiento` (tabla de referencia): SOLO documentos reales.
-// Transferencia y Ajuste NO tienen origen documental (ver REGLA DE ORIGEN).
+// Catálogo `origen_movimiento` (dict DBA): `origen_id` es NOT NULL, todo
+// movimiento lleva un origen. TRANSFERENCIA y AJUSTE MANUAL usan su origen
+// propio (transferencia_sucursal / ajuste_manual) — no son "sin documento".
 // BACKEND: poblar desde GET /api/origenes-movimiento.
 export const origenesMovimiento: { id: number; nombre: string }[] = [
-  { id: 1, nombre: "Orden de Compra" },
-  { id: 2, nombre: "Venta" },
+  { id: 1, nombre: "venta" },
+  { id: 2, nombre: "receta" },
+  { id: 3, nombre: "internacion" },
+  { id: 4, nombre: "urgencia" },
+  { id: 5, nombre: "cirugia" },
+  { id: 6, nombre: "practica" },
+  { id: 7, nombre: "recepcion_compra" },
+  { id: 8, nombre: "transferencia_sucursal" },
+  { id: 9, nombre: "ajuste_manual" },
+  { id: 10, nombre: "vacunacion" },
+  { id: 11, nombre: "desparasitacion" },
+  { id: 12, nombre: "merma" },
 ];
 
 // Orígenes válidos según el tipo de movimiento (combos inválidos no se ofrecen).
-// - Ingreso: llega stock por una Orden de Compra.
-// - Egreso: sale stock por una Venta.
-// - Transferencia: sin origen documental (el par vinculado egreso/ingreso hace
-//   de origen y destino; `origen_id` queda NULL).
-// - Ajuste: sin origen documental (corrección manual; `origen_id` queda NULL).
+// Los ids referencian `origenesMovimiento`:
+// - Ingreso: recepción de compra o ajuste manual que SUMA stock.
+// - Egreso: venta, recetas, internación, cirugías, prácticas, vacunación,
+//   desparasitación, merma, transferencia y ajuste manual que RESTA.
+// - Transferencia/Ajuste: entradas de compatibilidad con el contrato HTTP
+//   (el front las resuelve como ORIGEN, no como tipo).
 export const origenesPorTipo: Record<TipoMovimiento, number[]> = {
-  Ingreso: [1],
-  Egreso: [2],
-  Transferencia: [],
-  Ajuste: [],
+  Ingreso: [7, 9],
+  Egreso: [1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12],
+  Transferencia: [8],
+  Ajuste: [9],
 };
 
-// Empleados que aparecen en los movimientos de ejemplo + el usuario logueado.
-// BACKEND: poblar desde GET /api/empleados.
-export const EMPLEADOS: { id: number; nombre: string }[] = [
+// Usuarios que aparecen en los movimientos de ejemplo + el usuario logueado.
+// BACKEND: poblar desde GET /api/usuarios.
+export const USUARIOS: { id: number; nombre: string }[] = [
   { id: 1, nombre: "Ana Martínez" },
   { id: 3, nombre: "Carlos López" },
   { id: 5, nombre: "María García" },
 ];
 
-// Empleado asignado automáticamente a los movimientos nuevos (usuario logueado).
-// BACKEND: reemplazar por el empleado de la sesión (GET /api/auth/sesion -> empleado_id).
-export const EMPLEADO_ACTUAL = { id: 1, nombre: "Ana Martínez" };
+// Usuario asignado automáticamente a los movimientos nuevos (usuario logueado).
+// BACKEND: reemplazar por el usuario de la sesión
+// (GET /api/auth/sesion -> usuario_id).
+export const USUARIO_ACTUAL = { id: 1, nombre: "Ana Martínez" };
 
 // Fichas de stock usadas por el formulario "Nuevo movimiento": solo fichas con
 // artículo activo. El código de ficha `FIC-XXX` se deriva del id (no se persiste).
@@ -176,15 +190,9 @@ export function parseCantidad(raw: string): number {
   return Number.isNaN(n) ? NaN : Math.round(n * 100) / 100;
 }
 
-// Próximo número de movimiento: MOV-XXXX (agrupador de los N registros generados).
-// BACKEND: el back genera `numero` en el POST /api/movimientos-stock (secuencia MOV-XXXX).
-export function proximoNumeroMovimiento(movimientos: MovimientoStock[]): string {
-  const max = movimientos.reduce((acc, m) => {
-    const n = Number.parseInt(m.numero.replace(/\D/g, ""), 10);
-    return Number.isNaN(n) ? acc : Math.max(acc, n);
-  }, 0);
-  return `MOV-${String(max + 1).padStart(4, "0")}`;
-}
+// `proximoNumeroMovimiento` se eliminó (PENDIENTE-FRONT): el `numero` lo
+// genera la secuencia del back en POST /api/movimientos-stock. La página /stock
+// solo deriva el "siguiente" para la demo del modal (GET /api/movimientos-stock).
 
 export const SIMULAR_VACIO = false;
 export const SIMULAR_ERROR = false;

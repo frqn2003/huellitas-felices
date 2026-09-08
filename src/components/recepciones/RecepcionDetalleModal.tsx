@@ -77,6 +77,14 @@ export function RecepcionDetalleModal({
           </div>
           <div className="flex flex-col gap-0.5">
             <span className="text-xs font-bold uppercase tracking-wide text-text-secondary">
+              Sucursal
+            </span>
+            <span className="text-sm font-medium text-text-primary">
+              {recepcion.sucursal}
+            </span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs font-bold uppercase tracking-wide text-text-secondary">
               Tipo
             </span>
             <EstadoRecepcionBadge tipo={recepcion.tipo_recepcion} />

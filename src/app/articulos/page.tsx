@@ -10,14 +10,15 @@ import { ArticulosTable } from "@/components/articulos/ArticulosTable";
 import { ArticuloFormModal, type ArticuloDraft, type FormModo } from "@/components/articulos/ArticuloFormModal";
 import { DesactivarModal } from "@/components/articulos/DesactivarModal";
 import { FiltrosArticulos, FiltrosChips, type Filtros } from "@/components/articulos/FiltrosArticulos";
-import type { Articulo, CatalogosArticulo } from "@/data/articulos";
-import { apiGet, apiSend, mensajeDeError } from "@/lib/api-client";
+import { FABRICANTES, PRESENTACIONES, type Articulo, type CatalogosArticulo } from "@/data/articulos";
+import { apiGet, apiGetOpcional, apiSend, mensajeDeError } from "@/lib/api-client";
 
 const CATALOGOS_VACIOS: CatalogosArticulo = {
   categorias: [],
   unidadesMedida: [],
   fabricantes: [],
   proveedores: [],
+  presentaciones: [],
 };
 
 const TITULO_ACCIONES: Record<FormModo, string> = {
@@ -36,7 +37,7 @@ function exportarCSV(articulos: Articulo[]) {
       a.categoria,
       a.unidadMedida,
       a.proveedorPreferido ? `"${a.proveedorPreferido.nombre.replace(/"/g, '""')}"` : "",
-      a.estado,
+      a.estado === "activo" ? "Activo" : "Inactivo",
     ].join(";"),
   );
   const csv = [cabeceras.join(";"), ...filas].join("\n");
@@ -84,16 +85,34 @@ function ArticulosScreen() {
     // Sin setState síncrono acá: `loading` ya arranca en true, y el botón
     // "Reintentar" resetea el estado antes de subir el contador. Llamar a
     // setState directo en el cuerpo de un efecto dispara renders en cascada.
+    // El LISTADO va con apiGet (sin datos la pantalla no muestra nada y
+    // corresponde el estado de error); los CATÁLOGOS con apiGetOpcional, para
+    // que un catálogo caído no tire abajo el listado.
     Promise.all([
       apiGet<Articulo[]>("/api/articulos"),
-      apiGet<CatalogosArticulo>("/api/articulos/catalogos"),
+      apiGetOpcional<CatalogosArticulo>("/api/articulos/catalogos", CATALOGOS_VACIOS),
     ])
       .then(([lista, cat]) => {
         // Si el componente se desmontó mientras esperábamos, no tocamos estado:
         // React avisaría por actualizar algo que ya no existe.
         if (cancelado) return;
         setArticulos(lista);
-        setCatalogos(cat);
+        // Merge defensivo: si la API todavía no expone algún catálogo (p.ej.
+        // `presentaciones` o `fabricantes`), se cae a los placeholders de
+        // src/data/articulos.ts en vez de dejar el select vacío.
+        // BACKEND: cuando GET /api/articulos/catalogos devuelva presentaciones
+        // y fabricantes, los placeholders dejan de usarse solos.
+        setCatalogos((prev) => ({
+          ...CATALOGOS_VACIOS,
+          ...prev,
+          ...cat,
+          presentaciones:
+            cat.presentaciones && cat.presentaciones.length > 0
+              ? cat.presentaciones
+              : PRESENTACIONES,
+          fabricantes:
+            cat.fabricantes && cat.fabricantes.length > 0 ? cat.fabricantes : FABRICANTES,
+        }));
       })
       .catch(() => {
         if (!cancelado) setError(true);
@@ -116,9 +135,11 @@ function ArticulosScreen() {
       const matchUnidad = !filtros.unidadMedida || a.unidadMedida === filtros.unidadMedida;
       const matchProveedor =
         !filtros.proveedorId || a.proveedorPreferido?.id === Number(filtros.proveedorId);
+      // El estado vive en `estado` (valor crudo del enum, C3): el filtro de la
+      // pantalla es legible ("Activo"/"Inactivo") y se compara en minúscula.
       let matchEstado = true;
-      if (filtros.estado === "Activo") matchEstado = a.activo;
-      else if (filtros.estado === "Inactivo") matchEstado = !a.activo;
+      if (filtros.estado === "Activo") matchEstado = a.estado === "activo";
+      else if (filtros.estado === "Inactivo") matchEstado = a.estado === "inactivo";
       return matchBusqueda && matchCategoria && matchUnidad && matchProveedor && matchEstado;
     });
   }, [articulos, busqueda, filtros]);
@@ -167,13 +188,15 @@ function ArticulosScreen() {
    * Alta y edición contra la API.
    *
    * El draft del formulario se traduce al cuerpo que espera el backend:
-   * los ids de catálogo viajan como number, y `proveedorId` vacío se manda
-   * como null (el campo es opcional).
+   * los ids de catálogo viajan como number, y los campos opcionales vacíos se
+   * mandan como undefined (los descarta JSON).
    *
-   * Ojo con lo que NO se manda: `codigo` (lo genera un trigger de la base) ni
-   * `createdAt`/`updatedAt` (los pone la base). El artículo que se agrega a la
-   * lista es EL QUE DEVUELVE LA API, no uno armado acá — así el código
-   * generado y las fechas reales aparecen en pantalla sin recargar.
+   * Ojo con lo que NO se manda: `codigo` (lo genera un trigger de la base),
+   * `created_at`/`updated_at` (los pone la base) ni un booleano `activo` (el
+   * dict no tiene esa columna; el estado vive en `estado`, y la alta arranca
+   * "activo"). El artículo que se agrega a la lista es EL QUE DEVUELVE LA API,
+   * no uno armado acá — así el código generado y las fechas reales aparecen en
+   * pantalla sin recargar.
    */
   const handleSave = async (draft: ArticuloDraft) => {
     const body = {
@@ -181,11 +204,18 @@ function ArticulosScreen() {
       descripcion: draft.descripcion.trim(),
       categoriaId: Number(draft.categoriaId),
       unidadMedidaId: Number(draft.unidadMedidaId),
-      fabricanteId: Number(draft.fabricanteId),
+      fabricante_id: Number(draft.fabricante_id),
+      // BACKEND: el dict pide presentacion_id NOT NULL, numero_lote,
+      // fecha_vencimiento y contenido_neto. La API todavía no los persiste
+      // (schemas no estrictos: se ignoran hasta que el back los implemente).
+      presentacion_id: Number(draft.presentacion_id),
+      numero_lote: draft.numero_lote.trim() || undefined,
+      fecha_vencimiento: draft.fecha_vencimiento || undefined,
+      contenido_neto:
+        draft.contenido_neto.trim() !== "" ? Number(draft.contenido_neto) : undefined,
       // `proveedorPreferidoId` NO se manda: lo deriva el back de la última orden
       // de compra del artículo (decisión D2).
-      imagen: draft.imagen || null,
-      activo: draft.activo,
+      imagen_url: draft.imagen_url || null,
     };
 
     try {

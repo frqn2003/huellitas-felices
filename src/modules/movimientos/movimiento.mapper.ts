@@ -33,13 +33,14 @@ export function toApi(row: MovimientoStockRow): MovimientoStock {
         tipo: normalizarTipo(row.tipo, row.origen_nombre),
         cantidad: Number(row.cantidad),
         fechaHora: new Date(row.fecha_hora).toISOString(),
-        empleadoId: row.usuario_id,
-        empleado: {
+        // Contrato directo (C1): `usuario_id`/`usuario` como en el dict; la
+        // vista plana de la API resuelve nombre+apellido en `usuario.nombre`.
+        usuario_id: row.usuario_id,
+        usuario: {
             nombre: `${row.usuario_nombre} ${row.usuario_apellido}`.trim(),
         },
         motivo: row.motivo ?? "",
         movimientoVinculadoId: row.movimiento_vinculado_id,
-        createdAt: new Date(row.created_at).toISOString(),
     };
 }
 

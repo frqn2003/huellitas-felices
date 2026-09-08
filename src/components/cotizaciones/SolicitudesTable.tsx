@@ -128,7 +128,7 @@ export function SolicitudesTable({
                 >
                   <td className="px-4 py-3">
                     <span className="rounded bg-brand-900/10 px-2 py-0.5 font-mono text-xs font-bold text-brand-900">
-                      {solicitud.cod_sol}
+{solicitud.id}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-sm font-medium text-text-primary">
@@ -151,7 +151,7 @@ export function SolicitudesTable({
                         type="button"
                         onClick={() => onComparar(solicitud)}
                         disabled={!comparables}
-                        aria-label={`Comparar cotizaciones de ${solicitud.cod_sol}`}
+                        aria-label={`Comparar cotizaciones de ${solicitud.id}`}
                         aria-disabled={!comparables}
                         title={
                           comparables
@@ -167,7 +167,7 @@ export function SolicitudesTable({
                           <button
                             type="button"
                             onClick={() => onRegistrarCotizacion(solicitud)}
-                            aria-label={`Registrar cotización para ${solicitud.cod_sol}`}
+                            aria-label={`Registrar cotización para ${solicitud.id}`}
                             title="Registrar cotización recibida"
                             className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-pill text-text-secondary transition-colors duration-fast ease-out hover:bg-brand-900/10 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900"
                           >
@@ -176,7 +176,7 @@ export function SolicitudesTable({
                           <button
                             type="button"
                             onClick={() => onCancelar(solicitud)}
-                            aria-label={`Cancelar ${solicitud.cod_sol}`}
+                            aria-label={`Cancelar ${solicitud.id}`}
                             title="Cancelar solicitud"
                             className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-pill text-text-secondary transition-colors duration-fast ease-out hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
                           >

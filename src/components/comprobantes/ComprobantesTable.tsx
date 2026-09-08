@@ -1,4 +1,4 @@
-import { Eye, SearchX, Trash2, Wallet } from "lucide-react";
+import { Eye, Landmark, SearchX, Trash2 } from "lucide-react";
 import { EstadoComprobanteBadge } from "./EstadoComprobanteBadge";
 import type { LineaComprobante } from "./DetalleLineasTable";
 
@@ -13,6 +13,7 @@ export interface ComprobanteRow {
   /** Detalle de líneas del comprobante (para edición y detalle). */
   lineas?: LineaComprobante[];
   fecha: string;
+  fecha_vencimiento?: string;
   monto: number;
   estado: "Vigente" | "Anulado";
   comprobanteOriginal?: string;
@@ -21,6 +22,8 @@ export interface ComprobanteRow {
   ocId?: number;
   /** id de la factura original que corrige una NC/ND (para preseleccionar en edición). */
   facturaOriginalId?: string;
+  /** FK al usuario que registró el comprobante (lo manda la sesión, no el formulario). */
+  usuario_id?: number;
 }
 
 interface ComprobantesTableProps {
@@ -141,7 +144,7 @@ export function ComprobantesTable({
                         title="Ver en Cta. Cte."
                         className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-pill text-text-secondary transition-colors duration-fast ease-out hover:bg-brand-900/10 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900"
                       >
-                        <Wallet className="h-5 w-5" aria-hidden="true" />
+                        <Landmark className="h-5 w-5" aria-hidden="true" />
                       </button>
                     )}
                     {f.estado === "Vigente" && (

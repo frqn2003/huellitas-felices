@@ -20,7 +20,7 @@ const HEADERS = [
   "Artículo",
   "Cantidad",
   "Origen",
-  "Empleado",
+  "Usuario",
 ];
 
 // Las fechas ISO del backend vienen en UTC (sufijo Z): se muestran tal cual en la demo.
@@ -122,7 +122,7 @@ export function MovimientosTable({
       <div className="overflow-x-auto">
         <table className="w-full min-w-[900px] border-collapse text-left">
           <caption className="sr-only">
-            Movimientos de stock: número, fecha, tipo, depósito, artículo, cantidad, origen y empleado
+            Movimientos de stock: número, fecha, tipo, depósito, artículo, cantidad, origen y usuario
           </caption>
           <thead>
             <tr className="border-b border-border bg-cream-50">
@@ -176,7 +176,7 @@ export function MovimientosTable({
                   </div>
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-text-secondary">
-                  {mov.empleado.nombre}
+                  {mov.usuario.nombre}
                 </td>
               </tr>
             ))}

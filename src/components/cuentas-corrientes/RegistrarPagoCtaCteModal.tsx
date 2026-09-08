@@ -7,31 +7,34 @@ import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { ConfirmarDialog } from "@/components/ui/ConfirmarDialog";
 import {
-  FORMAS_PAGO,
   formatARS,
   formatFecha,
   type ComprobantePendiente,
-  type FormaPago,
-  type PagoProveedor,
-  type ProveedorCtaCte,
+  type EntidadCtaCte,
 } from "@/data/cuentas-corrientes";
+import { FORMAS_PAGO } from "@/data/formas-pago";
 
-export interface PagoNuevo {
-  numero: string;
-  formaPago: FormaPago;
-  fecha: string;
+export interface PagoImputacionInput {
+  comprobanteId: number;
   monto: number;
-  imputaciones: { comprobanteId: number; monto: number }[];
 }
 
+export interface PagoCtaCteNuevo {
+  numero_comprobante: string;
+  forma_pago_id: number;
+  fecha: string;
+  monto: number;
+  tipo: "pago_proveedor" | "cobranza_cliente";
+  imputaciones: PagoImputacionInput[];
+}
 
-interface RegistrarPagoModalProps {
+interface RegistrarPagoCtaCteModalProps {
   open: boolean;
-  proveedor: ProveedorCtaCte | null;
+  entidad: { id: number; nombre: string; tipo: EntidadCtaCte } | null;
   comprobantes: ComprobantePendiente[];
-  pagosExistentes: PagoProveedor[];
+  pagosExistentes: { numero_comprobante: string }[];
   onClose: () => void;
-  onConfirm: (pago: PagoNuevo) => void;
+  onConfirm: (pago: PagoCtaCteNuevo) => void;
 }
 
 function hoyISO() {
@@ -41,23 +44,29 @@ function hoyISO() {
   return `${d.getFullYear()}-${mes}-${dia}`;
 }
 
-export function RegistrarPagoModal({
+export function RegistrarPagoCtaCteModal({
   open,
-  proveedor,
+  entidad,
   comprobantes,
   pagosExistentes,
   onClose,
   onConfirm,
-}: RegistrarPagoModalProps) {
-  // Solo se imputan comprobantes con saldo pendiente positivo (deuda a cubrir). Las
-  // Notas de Crédito (crédito a favor) se aplican en un flujo aparte.
+}: RegistrarPagoCtaCteModalProps) {
+  const esProveedor = entidad?.tipo === "proveedor";
+  // El verbo y sustantivos cambian según el tipo de entidad: pagar proveedor / cobrar cliente.
+  const verbo = esProveedor ? "pago" : "cobranza";
+  const verboCTA = esProveedor ? "Registrar pago" : "Registrar cobranza";
+  const titulo = `Registrar ${verbo} — ${entidad?.nombre ?? ""}`;
+
+  // Solo se imputan comprobantes con saldo pendiente positivo (deuda a cubrir).
+  // Las Notas de Crédito (crédito a favor) se aplican en un flujo aparte.
   const imputables = useMemo(
     () => comprobantes.filter((c) => c.saldoPendiente > 0),
     [comprobantes],
   );
 
   const [numero, setNumero] = useState("");
-  const [formaPago, setFormaPago] = useState<FormaPago | "">("");
+  const [formaPagoId, setFormaPagoId] = useState<string>("");
   const [fecha, setFecha] = useState(hoyISO());
   const [montoTotal, setMontoTotal] = useState("");
   const [seleccionados, setSeleccionados] = useState<
@@ -83,7 +92,7 @@ export function RegistrarPagoModal({
 
   const reset = () => {
     setNumero("");
-    setFormaPago("");
+    setFormaPagoId("");
     setFecha(hoyISO());
     setMontoTotal("");
     setSeleccionados({});
@@ -126,12 +135,12 @@ export function RegistrarPagoModal({
     const errs: Record<string, string> = {};
     const numeroLimpio = numero.trim();
 
-    if (!numeroLimpio) errs.numero = "Ingresá el número del comprobante de pago.";
-    else if (pagosExistentes.some((p) => p.numero === numeroLimpio))
-      errs.numero = "Ese número de comprobante de pago ya fue registrado.";
+    if (!numeroLimpio) errs.numero = `Ingresá el número del comprobante de ${verbo}.`;
+    else if (pagosExistentes.some((p) => p.numero_comprobante === numeroLimpio))
+      errs.numero = "Ese número de comprobante ya fue registrado.";
 
-    if (!formaPago) errs.formaPago = "Seleccioná la forma de pago.";
-    if (!fecha) errs.fecha = "Ingresá la fecha del pago.";
+    if (!formaPagoId) errs.formaPago = "Seleccioná la forma de pago.";
+    if (!fecha) errs.fecha = `Ingresá la fecha del ${verbo}.`;
     else if (fecha > hoyISO()) errs.fecha = "La fecha no puede ser futura.";
 
     if (!montoTotal || montoTotalNum <= 0) errs.montoTotal = "Ingresá un monto total mayor a cero.";
@@ -153,7 +162,7 @@ export function RegistrarPagoModal({
     if (totalIngresado <= 0)
       errs.totalIngresado = "El total ingresado debe ser mayor a cero.";
     else if (montoTotalNum > 0 && totalIngresado > montoTotalNum)
-      errs.totalIngresado = "El total ingresado supera el monto total del pago.";
+      errs.totalIngresado = "El total ingresado supera el monto total.";
 
     return { errs, erroresImputacion };
   };
@@ -163,11 +172,12 @@ export function RegistrarPagoModal({
     setErrores({ ...errs, ...erroresImputacion });
     if (Object.keys(errs).length > 0 || Object.keys(erroresImputacion).length > 0) return;
 
-    const pago: PagoNuevo = {
-      numero: numero.trim(),
-      formaPago: formaPago as FormaPago,
+    const pago: PagoCtaCteNuevo = {
+      numero_comprobante: numero.trim(),
+      forma_pago_id: Number(formaPagoId),
       fecha,
       monto: montoTotalNum,
+      tipo: esProveedor ? "pago_proveedor" : "cobranza_cliente",
       imputaciones: imputaciones
         .filter((i) => i.seleccionado)
         .map((i) => ({ comprobanteId: i.comprobanteId, monto: Number(i.monto) })),
@@ -181,7 +191,7 @@ export function RegistrarPagoModal({
       <Modal
         open={open}
         onClose={() => setConfirmarCancelar(true)}
-        title={`Registrar pago — ${proveedor?.razonSocial ?? ""}`}
+        title={titulo}
         icon={<Landmark className="h-5 w-5 text-brand-900" aria-hidden="true" />}
         maxWidth="max-w-2xl"
         footer={
@@ -190,7 +200,7 @@ export function RegistrarPagoModal({
               Cancelar
             </Button>
             <Button type="button" variant="primary" onClick={handleGuardar}>
-              Registrar pago
+              {verboCTA}
             </Button>
           </>
         }
@@ -199,7 +209,7 @@ export function RegistrarPagoModal({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Input
               id="pago-numero"
-              label="N° comprobante de pago"
+              label={`N° comprobante de ${verbo}`}
               requiredMark
               value={numero}
               onChange={(e) => { setNumero(e.target.value); setErrores((p) => ({ ...p, numero: "" })); }}
@@ -212,14 +222,14 @@ export function RegistrarPagoModal({
               </label>
               <select
                 id="pago-forma"
-                value={formaPago}
-                onChange={(e) => { setFormaPago(e.target.value as FormaPago); setErrores((p) => ({ ...p, formaPago: "" })); }}
+                value={formaPagoId}
+                onChange={(e) => { setFormaPagoId(e.target.value); setErrores((p) => ({ ...p, formaPago: "" })); }}
                 aria-invalid={errores.formaPago ? true : undefined}
                 className={`h-11 cursor-pointer rounded-sm border bg-surface px-4 text-base text-text-primary transition-colors duration-fast ease-out focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20 ${errores.formaPago ? "border-destructive" : "border-border"}`}
               >
                 <option value="">Seleccioná la forma…</option>
                 {FORMAS_PAGO.map((f) => (
-                  <option key={f} value={f}>{f}</option>
+                  <option key={f.id} value={f.id}>{f.nombre}</option>
                 ))}
               </select>
               {errores.formaPago && (
@@ -237,7 +247,7 @@ export function RegistrarPagoModal({
             />
             <Input
               id="pago-monto"
-              label="Monto total del pago"
+              label="Monto total"
               requiredMark
               type="number"
               min="0"
@@ -320,7 +330,7 @@ export function RegistrarPagoModal({
             </p>
           )}
           <p className="text-xs font-medium text-text-secondary">
-            Si el total ingresado es menor al monto total, el pago queda imputado parcialmente.
+            Si el total ingresado es menor al monto total, el {verbo} queda imputado parcialmente.
           </p>
         </div>
       </Modal>
@@ -328,9 +338,9 @@ export function RegistrarPagoModal({
       <ConfirmarDialog
         open={confirmarCancelar}
         onClose={() => setConfirmarCancelar(false)}
-        title="Cancelar registro de pago"
+        title={`Cancelar registro de ${verbo}`}
         description="Se descartarán los datos imputados y el monto cargado. Esta acción no se puede deshacer."
-        confirmLabel="Descartar pago"
+        confirmLabel="Descartar"
         cancelLabel="Continuar editando"
         onConfirm={() => {
           setConfirmarCancelar(false);
