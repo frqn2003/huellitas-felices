@@ -179,6 +179,7 @@ function ProveedoresScreen() {
 
   // ── Cuenta corriente (tab "Cta. Cte.") ──────────────────────────────────────
   const [ctaCteBusqueda, setCtaCteBusqueda] = useState("");
+  const [ctaCteEstado, setCtaCteEstado] = useState<EstadoCtaCte | "Todos">("Todos");
   const [filtrosCtaCteLista, setFiltrosCtaCteLista] =
     useState<FiltrosCtaCorrienteListValues>(FILTROS_CTA_LISTA_VACIOS);
   const [ctaCteLoading, setCtaCteLoading] = useState(false);
