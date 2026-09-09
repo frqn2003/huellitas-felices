@@ -18,36 +18,32 @@ y commitear el `db/schema.sql` actualizado.
 
 | # | Archivo | Qué arregla | Urgencia |
 |---|---|---|---|
-| 01 | `auditoria.sql` | crea `auditoria` + trigger genérico | 🔴 criterio de aceptación de **las 5 HU** del sprint |
-| 12 | `faltantes.sql` | lo que se salteó el script del 26/8 | 🔴 incluye `uq_articulo_nombre_activo`, criterio de HU-STK-01 |
-| 06 | `proveedor_formas_pago.sql` | N:M proveedor ↔ forma de pago | 🔴 sin esto `/api/proveedores` devuelve 500 |
-| 09 | `cotizaciones.sql` | las 4 tablas de cotizaciones + FK de `orden_compra.cotizacion_id` | 🔴 sin esto **no funciona ningún endpoint de HU-COMP-02** |
-| 10 | `catalogo_condiciones_pago.sql` | deja UNA sola lista de condiciones de pago | 🔴 va **junto con la 09**: sin esto no se puede guardar una orden |
-| 13 | `sucursal.sql` | crea `sucursal` y convierte `deposito.sucursal_id` en FK real | 🟠 hoy es una FK huérfana (decisión D3) |
+| 16 | `fix_pagos_cliente.sql` | 2 funciones que nombran `cliente_id` / `comprobante_cliente`, columnas y tablas ya borradas | 🔴 **anular un pago devuelve 500 hoy** |
+| 15 | `login.sql` | conecta la secuencia de `auditoria_sesion`, parte el trigger de auditoría de `usuario`, corrige COMMENT | 🔴 sin esto **ningún login funciona** (HU-SIS-04) |
 
-**El 12 depende del 01** (sus triggers de auditoría necesitan `fn_auditar`).
-**El 13 también.** Los demás son independientes entre sí.
+Son independientes entre sí y de todo lo demás. Los dos son idempotentes.
 
-Las correcciones **02, 04, 05 y 07 ya están aplicadas** (total o parcialmente)
-por el script del 26/8. Lo que les faltó está en la 12.
+## Ya aplicadas — no están más en esta carpeta
+
+Las correcciones **01 a 13** se aplicaron y se borraron: el estado que dejaron
+está en `db/schema.sql`, que es la fuente de verdad. Si buscás qué hizo alguna,
+está en el historial de git.
 
 ## Descartadas — NO aplicar
 
-Se conservan con sufijo en el nombre para que nadie las pegue por error, y
-porque documentan una decisión que se revirtió.
-
 | Archivo | Por qué |
 |---|---|
-| `03_deposito_sucursal.DESCARTADA.sql` | eliminaba `deposito.sucursal_id` bajo D-B ("depósito = sucursal"). **El equipo decidió lo contrario:** varios depósitos por sucursal. Lo reemplaza la 13 |
-| `08_articulo_proveedor_preferido.DESCARTADA.sql` | agregaba `articulo.proveedor_preferido_id`. **El proveedor preferido se calcula**, no se guarda: sale de la última orden de compra vía `LEFT JOIN LATERAL` en `articulo.repo.ts` |
-| `11_numero_movimiento.DESCARTADA.sql` | **inaplicable**: hace `ALTER TABLE movimiento_stock`, y esa tabla ya no existe. El problema que resolvía lo resuelve el modelo cabecera-detalle |
-| `07_movimiento_cabecera.APLICADA-PARCIAL.sql` | ya corrió el 26/8, pero se cortó antes de los triggers de inmutabilidad y auditoría. Esos están en la 12 |
+| `14_recepcion_mercaderia.DESCARTADA.sql` | crea `recepcion_mercaderia` + `_detalle`, y el **PO decidió lo contrario**: la recepción es un movimiento de stock más, en un único lugar. La base ya está así (origen `recepcion_compra` + 4 triggers). Aplicarlo implantaría dos verdades sobre lo mismo. Ver `docs/backend/REVISION-PO-SPRINT2.md` §A.2.1 |
+
+⚠️ **El módulo de Recepciones del backend sigue escrito contra esas tablas**, así
+que `/api/recepciones` devuelve 500. **No se arregla aplicando el 14**: se
+arregla reescribiendo `recepcion.repo.ts` contra `movimiento_stock_cab` / `_det`.
 
 ## Decisiones vigentes
 
 - **D1** Lotes y vencimientos **fuera del Sprint 1** — ningún criterio los
-  menciona (es HU-STK-05). La 12 elimina `articulo.numero_lote` y
-  `fecha_vencimiento`, que hoy están sin usar.
+  menciona (es HU-STK-05). Las columnas `articulo.numero_lote` y
+  `fecha_vencimiento` ya se eliminaron (corrección 12, aplicada).
 - **D2** Proveedor preferido **derivado**, no almacenado.
 - **D3** **Varios depósitos por sucursal** (revierte D-B).
 - **D4** Cotizaciones **dentro del sprint** (revierte D-C): el criterio de
@@ -58,11 +54,10 @@ porque documentan una decisión que se revirtió.
 Antes de pegar cualquiera, mirá el bloque de comentarios de arriba: varios
 avisan de un **impacto en el front** que hay que acompañar.
 
-⚠️ **El módulo de Artículos** ya está escrito contra la base con la 12 aplicada
-(necesita `uq_articulo_nombre_activo` para la validación bajo concurrencia).
+⚠️ **La 15 hay que aplicarla antes de probar el login.** Sin ella,
+`auditoria_sesion.id` no tiene `DEFAULT nextval()` y todo intento de inicio de
+sesión falla al escribir la bitácora.
 
-⚠️ **El módulo de Proveedores** necesita la 06, y el de **Compras** la 09 + 10.
-
-⚠️ **El módulo de Movimientos** está escrito contra la tabla plana
-`movimiento_stock`, que **ya no existe**. No hay corrección que lo arregle: hay
-que reescribir `movimiento.repo.ts` contra `movimiento_stock_cab` / `_det`.
+⚠️ **La 16 arregla algo que está roto ahora**, no algo que falta: `fn_bloquea_update_pago`
+evalúa `NEW.cliente_id`, y `pago` no tiene esa columna. Anular un pago revienta
+la transacción completa.

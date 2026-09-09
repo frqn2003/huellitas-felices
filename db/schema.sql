@@ -601,6 +601,34 @@ SELECT d.id,
    FROM (movimiento_stock_det d
      JOIN movimiento_stock_cab c ON ((c.id = d.movimiento_id)));
 
+CREATE OR REPLACE VIEW vista_cuenta_corriente_proveedor AS
+SELECT cp.id AS comprobante_id,
+    cp.proveedor_id,
+    cp.letra,
+    cp.punto_venta,
+    cp.numero_comprobante,
+    (((((cp.letra)::text || ' '::text) || (cp.punto_venta)::text) || '-'::text) || (cp.numero_comprobante)::text) AS numero_completo,
+    tc.nombre AS tipo_comprobante,
+    cp.fecha_emision,
+    cp.fecha_vencimiento,
+    (cp.monto_total * (tc.afecta_saldo)::numeric) AS monto_signado,
+    COALESCE(pi.monto_pagado, (0)::numeric) AS monto_pagado,
+    ((cp.monto_total * (tc.afecta_saldo)::numeric) - COALESCE(pi.monto_pagado, (0)::numeric)) AS saldo_pendiente,
+        CASE
+            WHEN (cp.fecha_vencimiento < CURRENT_DATE) THEN 'vencido'::text
+            WHEN (cp.fecha_vencimiento <= (CURRENT_DATE + '7 days'::interval)) THEN 'por_vencer'::text
+            ELSE 'vigente'::text
+        END AS estado_vencimiento
+   FROM ((comprobante_proveedor cp
+     JOIN tipo_comprobante tc ON ((tc.id = cp.tipo_comprobante_id)))
+     LEFT JOIN ( SELECT pi_1.comprobante_proveedor_id,
+            sum(pi_1.monto_imputado) AS monto_pagado
+           FROM (pago_imputacion pi_1
+             JOIN pago p ON ((p.id = pi_1.pago_id)))
+          WHERE ((p.estado = 'vigente'::estado_documento) AND (pi_1.comprobante_proveedor_id IS NOT NULL))
+          GROUP BY pi_1.comprobante_proveedor_id) pi ON ((pi.comprobante_proveedor_id = cp.id)))
+  WHERE (cp.estado = 'vigente'::estado_documento);
+
 
 -- =========================================================
 -- FUNCIONES
@@ -1020,27 +1048,16 @@ CREATE OR REPLACE FUNCTION public.fn_ck_pi_mismo_tercero()
 AS $function$
 DECLARE
   v_pago_proveedor_id  int;
-  v_pago_cliente_id    int;
   v_cp_proveedor_id    int;
-  v_cc_cliente_id      int;
 BEGIN
-  SELECT proveedor_id, cliente_id INTO v_pago_proveedor_id, v_pago_cliente_id
+  SELECT proveedor_id INTO v_pago_proveedor_id
   FROM pago WHERE id = NEW.pago_id;
 
-  IF NEW.comprobante_proveedor_id IS NOT NULL THEN
-    SELECT proveedor_id INTO v_cp_proveedor_id
-    FROM comprobante_proveedor WHERE id = NEW.comprobante_proveedor_id;
+  SELECT proveedor_id INTO v_cp_proveedor_id
+  FROM comprobante_proveedor WHERE id = NEW.comprobante_proveedor_id;
 
-    IF v_cp_proveedor_id IS DISTINCT FROM v_pago_proveedor_id THEN
-      RAISE EXCEPTION 'El comprobante_proveedor imputado no pertenece al proveedor del pago';
-    END IF;
-  ELSE
-    SELECT cliente_id INTO v_cc_cliente_id
-    FROM comprobante_cliente WHERE id = NEW.comprobante_cliente_id;
-
-    IF v_cc_cliente_id IS DISTINCT FROM v_pago_cliente_id THEN
-      RAISE EXCEPTION 'El comprobante_cliente imputado no pertenece al cliente del pago';
-    END IF;
+  IF v_cp_proveedor_id IS DISTINCT FROM v_pago_proveedor_id THEN
+    RAISE EXCEPTION 'El comprobante_proveedor imputado no pertenece al proveedor del pago';
   END IF;
 
   RETURN NEW;
@@ -1224,32 +1241,19 @@ AS $function$
 DECLARE
   v_existing_id int;
 BEGIN
-  -- Advisory lock por (pago_id, comprobante_id): serializa dos
+  -- Advisory lock por (pago_id, comprobante_proveedor_id): serializa dos
   -- INSERT concurrentes sobre el MISMO par para que no pasen los dos
-  -- el "todavía no existe" al mismo tiempo (mismo criterio de
-  -- concurrencia que ya usan fn_ck_suma_imputada / fn_ck_comprobante_no_excede
-  -- con FOR UPDATE, ver comentarios en triggers_sprint_2.sql). Se
-  -- libera solo al terminar la transacción.
+  -- el "todavía no existe" al mismo tiempo.
   PERFORM pg_advisory_xact_lock(
     hashtext('pago_imputacion'),
-    hashtext(
-      NEW.pago_id::text || ':' ||
-      COALESCE(NEW.comprobante_proveedor_id, NEW.comprobante_cliente_id)::text
-    )
+    hashtext(NEW.pago_id::text || ':' || NEW.comprobante_proveedor_id::text)
   );
- 
-  IF NEW.comprobante_proveedor_id IS NOT NULL THEN
-    SELECT id INTO v_existing_id
-    FROM pago_imputacion
-    WHERE pago_id = NEW.pago_id
-      AND comprobante_proveedor_id = NEW.comprobante_proveedor_id;
-  ELSE
-    SELECT id INTO v_existing_id
-    FROM pago_imputacion
-    WHERE pago_id = NEW.pago_id
-      AND comprobante_cliente_id = NEW.comprobante_cliente_id;
-  END IF;
- 
+
+  SELECT id INTO v_existing_id
+  FROM pago_imputacion
+  WHERE pago_id = NEW.pago_id
+    AND comprobante_proveedor_id = NEW.comprobante_proveedor_id;
+
   IF v_existing_id IS NOT NULL THEN
     -- Ya existe una imputación de este pago contra este comprobante:
     -- se suma el nuevo monto sobre la fila existente en vez de crear
@@ -1257,10 +1261,10 @@ BEGIN
     UPDATE pago_imputacion
     SET monto_imputado = monto_imputado + NEW.monto_imputado
     WHERE id = v_existing_id;
- 
+
     RETURN NULL; -- cancela el INSERT original: ya se aplicó como UPDATE
   END IF;
- 
+
   RETURN NEW; -- primera vez que se imputa este pago contra este comprobante
 END;
 $function$
