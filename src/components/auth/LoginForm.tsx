@@ -53,7 +53,7 @@ export function LoginForm() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
-    login(email, password);
+    void login(email, password);
   };
 
   const handleVerificar2FA = (codigo: string): boolean => {
@@ -260,12 +260,15 @@ export function LoginForm() {
 
               {isError && (
                 <div className="rounded-md bg-destructive/5 px-3 py-2" role="alert">
-                  <p className="text-sm font-semibold text-destructive">
-                    Email o contraseña incorrectos
-                  </p>
-                  <p className="mt-1 text-xs text-text-secondary">
-                    Intentos restantes: {state.intentosRestantes}
-                  </p>
+                  {/*
+                    El mensaje lo escribe el BACKEND y se muestra tal cual. Ya no
+                    se muestra "Intentos restantes: N": el backend no informa ese
+                    número a propósito, porque decir "te queda 1 intento" ya
+                    confirma que el email existe — y el criterio de aceptación
+                    pide un mensaje que no revele cuál de los dos datos falló.
+                    El conteo queda en auditoria_sesion.detalle.
+                  */}
+                  <p className="text-sm font-semibold text-destructive">{state.mensaje}</p>
                 </div>
               )}
 

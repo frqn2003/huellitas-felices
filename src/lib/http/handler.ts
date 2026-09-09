@@ -43,6 +43,29 @@ export function withRoute<P = Record<string, never>>(
 }
 
 /**
+ * Wrapper para los endpoints que NO pueden exigir sesión: el login.
+ *
+ * `withRoute` llama a `requireSession()` antes que nada, así que envolver
+ * POST /api/auth/login con él sería pedir estar logueado para poder loguearse.
+ *
+ * Hace lo demás igual: captura errores y los mapea a HTTP. Y nada más — no hay
+ * un tercer wrapper "a veces con sesión": /api/auth/sesion llama a
+ * `getSession()` a mano, que es una línea y deja explícito que ahí el 401 no
+ * es un error sino una respuesta válida ("no hay nadie logueado").
+ */
+export function withPublicRoute<P = Record<string, never>>(
+  fn: (ctx: Omit<Ctx<P>, "session">) => Promise<Response>,
+) {
+  return async (req: Request, ctx: { params: Promise<P> }): Promise<Response> => {
+    try {
+      return await fn({ req, params: ctx.params });
+    } catch (e) {
+      return errorResponse(traducirErrorPostgres(e) ?? e);
+    }
+  };
+}
+
+/**
  * Valida el body con un schema de zod y lo devuelve tipado.
  * Un error de zod se convierte en ValidationError, que señala el primer campo
  * que falló — el front lo usa para marcar el input en rojo.

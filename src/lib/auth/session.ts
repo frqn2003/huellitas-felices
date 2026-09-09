@@ -1,24 +1,34 @@
-import { cookies } from "next/headers";
 import { query } from "@/lib/db/client";
 import { UnauthorizedError } from "@/lib/http/errors";
+import { leerCookie, borrarCookie } from "./cookie";
+import { invalidarToken } from "./gotrue";
 
 /**
- * Sesión — STUB del Sprint 1.
+ * Sesión — HU-SIS-04 (login real).
  *
- * HU-SIS-04 (Inicio y Cierre de Sesión) NO está en el Sprint 1, pero sin
- * `usuario_id` no se puede auditar nada, y la auditoría es criterio de
- * aceptación de las 5 HU del sprint. Así que hace falta algo.
+ * Reemplaza al stub del Sprint 1, que resolvía el usuario sin verificar nada.
+ * La firma de `requireSession()` no cambió, así que los ~30 endpoints y sus
+ * services siguen igual: el único archivo que sabe cómo se autentica alguien es
+ * este.
  *
- * Este stub resuelve el usuario en tres pasos, del más específico al más
- * tolerante. NO valida contraseña.
+ * ORDEN DE RESOLUCIÓN
+ *   1. Cookie firmada, escrita por POST /api/auth/login. Es el camino real.
+ *   2. Fallback de desarrollo, SOLO si `SESSION_USUARIO_DNI` está en el .env.
  *
- * QUÉ CAMBIA EN SPRINT 2 (HU-SIS-04): solo el cuerpo de estas funciones. La
- * firma de requireSession() se mantiene, así que ningún endpoint ni service se
- * toca. Lo que falta para el login real:
- *   · usuario.password_hash y debe_cambiar_password
- *   · POST /api/auth/login que verifique el hash y firme la cookie
- *   · firma real de la cookie con SESSION_SECRET (acá va el id en texto plano:
- *     alcanza para desarrollo, NO para producción)
+ * SOBRE EL FALLBACK (leer antes de borrarlo o antes de dejarlo)
+ *   Existe para que el resto del sistema se pueda probar sin pasar por el
+ *   login, y porque quitarlo de golpe rompía las 8 pantallas ya conectadas.
+ *   Está atado a que la variable esté presente: es una decisión explícita de
+ *   quien configura el entorno, no un comportamiento por defecto.
+ *
+ *   ⚠️ EL DÍA QUE EL LOGIN SE PRUEBE DE VERDAD, HAY QUE SACAR ESA LÍNEA DEL
+ *      .env.local. Mientras esté, `requireSession()` nunca devuelve 401 y por
+ *      lo tanto el front nunca redirige a /login: parece que el login "no hace
+ *      nada". No es un bug, es esta variable.
+ *
+ *   El paso 3 del stub anterior —"el primer usuario activo que haya"— se
+ *   eliminó. Con un login real, adivinar el usuario no es tolerancia: es un
+ *   agujero que hace que cualquier request sin cookie opere como alguien.
  */
 
 export type Session = {
@@ -27,13 +37,10 @@ export type Session = {
   apellido: string;
   email: string;
   rol: string;
+  /** Access token de Supabase. Solo lo usa el logout, para invalidarlo. */
+  accessToken?: string;
 };
 
-const COOKIE = "huellitas_sesion";
-
-// El aviso del fallback se imprime UNA vez por proceso, no en cada request: es
-// información de configuración, no un evento que valga la pena repetir 40 veces
-// por carga de pantalla.
 let avisoFallbackImpreso = false;
 
 type UsuarioSesionRow = {
@@ -51,43 +58,39 @@ const SQL_USUARIO = `
   WHERE u.estado = 'activo'
 `;
 
-/** Devuelve la sesión, o null si la base no tiene ningún usuario activo. */
+/** Devuelve la sesión, o null si no hay ninguna válida. */
 export async function getSession(): Promise<Session | null> {
-  const store = await cookies();
-  const valor = store.get(COOKIE)?.value;
+  // 1. Cookie firmada.
+  const payload = await leerCookie();
+  if (payload) {
+    const [u] = await query<UsuarioSesionRow>(`${SQL_USUARIO} AND u.id = $1`, [payload.uid]);
 
-  // 1. Cookie de sesión, si alguien ya "inició sesión".
-  if (valor && Number.isInteger(Number(valor))) {
-    const [u] = await query<UsuarioSesionRow>(`${SQL_USUARIO} AND u.id = $1`, [
-      Number(valor),
-    ]);
-    if (u) return aSession(u);
+    // La cookie es válida pero el usuario ya no: lo inactivaron o lo borraron
+    // mientras tenía la sesión abierta. Se cae la sesión, que es lo correcto:
+    // dar de baja a alguien tiene que echarlo, no esperar a que venza su cookie.
+    if (u) return { ...aSession(u), accessToken: payload.at };
   }
 
-  // 2. El usuario semilla de .env.local, si está configurado y existe.
+  // 2. Fallback de desarrollo, solo si está declarado.
   const dni = process.env.SESSION_USUARIO_DNI;
   if (dni) {
     const [u] = await query<UsuarioSesionRow>(`${SQL_USUARIO} AND u.dni = $1`, [dni]);
-    if (u) return aSession(u);
 
     if (!avisoFallbackImpreso) {
       avisoFallbackImpreso = true;
       console.warn(
-        `[sesion] SESSION_USUARIO_DNI="${dni}" no coincide con ningún usuario activo. ` +
-          `Usando el primer usuario activo de la base. ` +
-          `(Este aviso se muestra una sola vez.)`,
+        u
+          ? `[sesion] SESSION_USUARIO_DNI está puesto: TODAS las requests operan como ` +
+              `${u.nombre} ${u.apellido} sin pasar por el login. Para probar HU-SIS-04, ` +
+              `saca esa línea del .env.local. (Este aviso se muestra una sola vez.)`
+          : `[sesion] SESSION_USUARIO_DNI="${dni}" no coincide con ningún usuario activo. ` +
+              `El fallback queda sin efecto: hace falta iniciar sesión. ` +
+              `(Este aviso se muestra una sola vez.)`,
       );
     }
-  }
 
-  // 3. Fallback: el primer usuario activo que haya.
-  //
-  // Sin esto, el stub obliga a que el DNI del .env.local coincida exactamente
-  // con un registro de la base — y como cada uno puede tener datos distintos,
-  // el resultado era un 401 que parecía un problema de permisos cuando en
-  // realidad era de configuración.
-  const [u] = await query<UsuarioSesionRow>(`${SQL_USUARIO} ORDER BY u.id LIMIT 1`);
-  if (u) return aSession(u);
+    if (u) return aSession(u);
+  }
 
   return null;
 }
@@ -105,29 +108,27 @@ function aSession(u: UsuarioSesionRow): Session {
 /**
  * Igual que getSession() pero tira 401 si no hay sesión.
  *
- * No recibe el `Request` porque el stub lee la cookie del store de Next. Si en
- * Sprint 2 el login real necesita headers (Authorization, X-Forwarded-For para
- * el log de accesos), se agrega el parámetro acá y en withRoute() — dos lugares.
+ * El 401 ya no es "algo está mal configurado" como en el Sprint 1: ahora es la
+ * respuesta normal para alguien que no inició sesión, y el front la usa para
+ * redirigir a /login.
  */
 export async function requireSession(): Promise<Session> {
   const session = await getSession();
-
-  if (!session) {
-    // Llegar acá con el fallback puesto significa una sola cosa: la tabla
-    // `usuario` no tiene ni un registro activo. El mensaje lo dice, en vez de
-    // dejar un 401 pelado que parece un problema de permisos.
-    console.error(
-      "[sesion] No hay ningún usuario activo en la base. " +
-        "Corré `npm run db:seed` para cargar los usuarios de demo.",
-    );
-    throw new UnauthorizedError();
-  }
-
+  if (!session) throw new UnauthorizedError();
   return session;
 }
 
-/** Cierra la sesión borrando la cookie (POST /api/auth/logout). */
+/**
+ * Cierra la sesión: invalida el token en Supabase y borra la cookie.
+ *
+ * Los dos pasos importan y en ese orden. El criterio dice "invalidando el token
+ * de acceso activo": borrar solo la cookie deja el token vivo hasta que expire.
+ *
+ * Si Supabase no contesta, la cookie se borra igual — que el usuario no pueda
+ * salir del sistema es peor que un token que sobrevive una hora.
+ */
 export async function destroySession(): Promise<void> {
-  const store = await cookies();
-  store.delete(COOKIE);
+  const payload = await leerCookie();
+  if (payload?.at) await invalidarToken(payload.at);
+  await borrarCookie();
 }

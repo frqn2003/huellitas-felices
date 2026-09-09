@@ -13,6 +13,17 @@
 export abstract class AppError extends Error {
   abstract readonly status: number;
 
+  /**
+   * Datos extra para el cuerpo de la respuesta, además de codigo/mensaje/campo.
+   *
+   * Las subclases lo sobrescriben cuando el front necesita un valor y no un
+   * texto. `CuentaBloqueadaError` manda la fecha de desbloqueo para que la
+   * pantalla arme el contador sin tener que leer el mensaje.
+   */
+  get datos(): Record<string, unknown> | undefined {
+    return undefined;
+  }
+
   constructor(
     readonly codigo: string,
     mensaje: string,
@@ -62,17 +73,85 @@ export class BusinessRuleError extends AppError {
 /**
  * 401 — sin sesión válida.
  *
- * En el Sprint 1 no hay login (HU-SIS-04 es Sprint 2), así que la sesión sale
- * del stub de lib/auth/session.ts. Si aparece este error, casi siempre es que
- * la tabla `usuario` está vacía — no un problema de permisos.
+ * Desde HU-SIS-04 esta es la respuesta normal para alguien que no inició
+ * sesión, y el front la usa para redirigir a /login. Ya no significa "algo está
+ * mal configurado" como en el Sprint 1.
  */
 export class UnauthorizedError extends AppError {
   readonly status = 401;
 
-  constructor(
-    mensaje = "No hay una sesión activa. Si es la primera vez, corré `npm run db:seed` para cargar los usuarios.",
-  ) {
+  constructor(mensaje = "Tu sesión no está activa o venció. Volvé a iniciar sesión.") {
     super("SIN_SESION", mensaje);
+  }
+}
+
+/**
+ * 401 — credenciales inválidas (HU-SIS-04).
+ *
+ * ⚠️ EL MENSAJE ES GENÉRICO A PROPÓSITO. El criterio de aceptación lo pide
+ *    textual: "si las credenciales son inválidas, muestra un mensaje de error
+ *    genérico (sin indicar cuál de los dos datos falló)".
+ *
+ *    No es una formalidad. Si el sistema contesta "ese email no existe",
+ *    cualquiera puede averiguar quién trabaja en la veterinaria probando
+ *    direcciones, y ya tiene la mitad de la credencial. Distinguir los dos
+ *    casos convierte el login en un buscador de usuarios válidos.
+ *
+ *    Por eso este error NO lleva `campo`: marcar el input de la contraseña en
+ *    rojo diría, de hecho, que el email estaba bien.
+ */
+export class CredencialesInvalidasError extends AppError {
+  readonly status = 401;
+
+  constructor() {
+    super("CREDENCIALES_INVALIDAS", "Email o contraseña incorrectos.");
+  }
+}
+
+/**
+ * 423 Locked — la cuenta está bloqueada por intentos fallidos (HU-SIS-04).
+ *
+ * 423 y no 401: el 401 significa "probá de nuevo con las credenciales
+ * correctas", y acá probar de nuevo no sirve hasta que pase el tiempo. El front
+ * necesita poder distinguirlos para mostrar el contador en vez del formulario.
+ *
+ * `minutosRestantes` viaja en el mensaje porque el criterio pide "se informa al
+ * usuario el tiempo restante", y también aparte para que el front lo use sin
+ * parsear texto.
+ */
+export class CuentaBloqueadaError extends AppError {
+  readonly status = 423;
+
+  get datos(): Record<string, unknown> {
+    return { bloqueadoHasta: this.bloqueadoHasta.toISOString() };
+  }
+
+  constructor(readonly bloqueadoHasta: Date) {
+    const minutos = Math.max(1, Math.ceil((bloqueadoHasta.getTime() - Date.now()) / 60_000));
+    super(
+      "CUENTA_BLOQUEADA",
+      `La cuenta está bloqueada por intentos fallidos. Volvé a intentar en ${minutos} ` +
+        `${minutos === 1 ? "minuto" : "minutos"}.`,
+    );
+  }
+}
+
+/**
+ * 503 — el servicio de autenticación no responde.
+ *
+ * Separado de las credenciales inválidas por una razón concreta: un intento que
+ * falla porque Supabase Auth está caído NO cuenta como intento fallido del
+ * usuario. Si contara, una caída del servicio bloquearía a todo el mundo por 15
+ * minutos.
+ */
+export class ServicioAuthNoDisponibleError extends AppError {
+  readonly status = 503;
+
+  constructor() {
+    super(
+      "AUTH_NO_DISPONIBLE",
+      "No se pudo validar el inicio de sesión en este momento. Intentá de nuevo en unos segundos.",
+    );
   }
 }
 

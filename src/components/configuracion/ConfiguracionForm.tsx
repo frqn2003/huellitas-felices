@@ -37,6 +37,25 @@ interface Errores {
 
 type ModalTipo = "guardar" | "contrasena" | null;
 
+/**
+ * Re-verificación de identidad: pendiente de HU-SIS-05.
+ *
+ * Esta pantalla confirmaba los cambios comparando lo tecleado contra
+ * `usuario.password`, un campo que salía del array de demo de `src/data`. Con el
+ * login real (HU-SIS-04) ese campo llega vacío: la contraseña la tiene Supabase
+ * Auth y NUNCA baja al navegador — que es justamente el punto de esa HU.
+ *
+ * Verificar la contraseña actual es ahora una llamada al backend, y eso es
+ * alcance de HU-SIS-05. Hasta que exista, la confirmación no puede pasar; el
+ * mensaje lo dice en vez de mentir con "la contraseña es incorrecta", que
+ * mandaría al usuario a probar contraseñas para siempre.
+ *
+ * No se borró nada de la pantalla: cuando exista el endpoint, se reemplaza esta
+ * comparación por la llamada y el resto del flujo ya está escrito.
+ */
+const VERIFICACION_PENDIENTE =
+  "Confirmar con tu contraseña todavía no está disponible: falta el endpoint de HU-SIS-05.";
+
 export function ConfiguracionForm() {
   const { state, actualizarUsuario } = useAuth();
   const { showToast } = useToast();
@@ -122,7 +141,7 @@ export function ConfiguracionForm() {
   const confirmarGuardado = () => {
     if (!sesion) return;
     if (contraGuardar !== sesion.usuario.password) {
-      setErrorContraGuardar("La contraseña es incorrecta.");
+      setErrorContraGuardar(VERIFICACION_PENDIENTE);
       return;
     }
     setVerificando(true);
@@ -153,7 +172,7 @@ export function ConfiguracionForm() {
   const confirmarCambioContrasena = () => {
     if (!sesion) return;
     if (contraActual !== sesion.usuario.password) {
-      setErroresContrasena({ actual: "La contraseña actual es incorrecta." });
+      setErroresContrasena({ actual: VERIFICACION_PENDIENTE });
       return;
     }
     const e = validarCambioContrasena();
