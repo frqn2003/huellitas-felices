@@ -110,27 +110,6 @@ function ProveedoresScreen() {
   const comprobantesRef = useRef<ComprobantesContentHandle>(null);
   const [vistaComprobantes, setVistaComprobantes] = useState<TabView>("historial");
 
-<<<<<<< HEAD
-  // ── Cuenta corriente (tab "Cta. Cte.") ──────────────────────────────────────
-  const [ctaCteBusqueda, setCtaCteBusqueda] = useState("");
-  const [ctaCteEstado, setCtaCteEstado] = useState<EstadoCtaCte | "Todos">("Todos");
-  const [filtrosCtaCteLista, setFiltrosCtaCteLista] =
-    useState<FiltrosCtaCorrienteListValues>(FILTROS_CTA_LISTA_VACIOS);
-  const [ctaCteLoading, setCtaCteLoading] = useState(false);
-  const [ctaCteError, setCtaCteError] = useState(false);
-  // Listado y detalle viven en estado local para poder reflejar los pagos en tiempo real.
-  const [ctaCteListado, setCtaCteListado] = useState<ProveedorCtaCte[]>(PROVEEDORES_CTA_CTE);
-  const [ctaCteComprobantes, setCtaCteComprobantes] =
-    useState<Record<number, ComprobantePendiente[]>>(COMPROBANTES_POR_PROVEEDOR);
-  const [ctaCtePagos, setCtaCtePagos] =
-    useState<Record<number, PagoProveedor[]>>(PAGOS_POR_PROVEEDOR);
-  const [vistaCtaCte, setVistaCtaCte] = useState<"lista" | "detalle">("lista");
-  const [proveedorCtaCte, setProveedorCtaCte] = useState<ProveedorCtaCte | null>(null);
-  const [comprobanteResaltado, setComprobanteResaltado] = useState<number | null>(null);
-  const [registrarPagoOpen, setRegistrarPagoOpen] = useState(false);
-
-=======
->>>>>>> b776d771a864f8270a8a46e40756be8922c094a6
   const filtrados = useMemo(() => {
     const base = proveedores;
     return base.filter((prov) => {
