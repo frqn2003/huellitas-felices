@@ -2,7 +2,7 @@
 
 import { Eye, SearchX } from "lucide-react";
 import type { Recepcion } from "@/data/recepciones";
-import { formatFecha, numeroRecepcion } from "@/data/recepciones";
+import { formatFecha } from "@/data/recepciones";
 import { EstadoRecepcionBadge } from "./EstadoRecepcionBadge";
 
 interface RecepcionesTableProps {
@@ -132,7 +132,7 @@ export function RecepcionesTable({
               >
                 <td className="px-4 py-3">
                   <span className="rounded bg-brand-900/10 px-2 py-0.5 font-mono text-xs font-bold text-brand-900">
-                    {numeroRecepcion(recepcion.id)}
+                    {recepcion.numero}
                   </span>
                 </td>
                 <td className="px-4 py-3">
@@ -161,7 +161,7 @@ export function RecepcionesTable({
                     <button
                       type="button"
                       onClick={() => onView(recepcion)}
-                      aria-label={`Ver ${numeroRecepcion(recepcion.id)}`}
+                      aria-label={`Ver ${recepcion.numero}`}
                       title="Ver detalle"
                       className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-pill text-text-secondary transition-colors duration-fast ease-out hover:bg-brand-900/10 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900"
                     >

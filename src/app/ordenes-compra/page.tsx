@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, Download, FilePlus2, PackagePlus, RotateCcw, Search } from "lucide-react";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Button } from "@/components/ui/Button";
@@ -46,11 +46,7 @@ const CATALOGOS_VACIOS: CatalogosOrden = {
   depositos: [],
   condicionesPago: [],
 };
-import {
-  recepcionesIniciales,
-  ordenesDisponibles,
-  type Recepcion,
-} from "@/data/recepciones";
+import type { OrdenDisponible, Recepcion } from "@/data/recepciones";
 import {
   FILTROS_RECEPCION_VACIOS,
   FiltrosChipsRecepciones,
@@ -58,7 +54,12 @@ import {
   type FiltrosRecepcion,
 } from "@/components/recepciones/FiltrosRecepciones";
 import { RecepcionesTable } from "@/components/recepciones/RecepcionesTable";
-import { RecepcionFormModal } from "@/components/recepciones/RecepcionFormModal";
+import {
+  RecepcionFormModal,
+  type CrearRecepcionPayload,
+  type DepositoOpcion,
+  type LineaPendiente,
+} from "@/components/recepciones/RecepcionFormModal";
 import { RecepcionDetalleModal } from "@/components/recepciones/RecepcionDetalleModal";
 
 function round2(n: number): number {
@@ -168,6 +169,8 @@ function ComprasScreen() {
   const [pageRec, setPageRec] = useState(1);
   const [formRecepcionOpen, setFormRecepcionOpen] = useState(false);
   const [aVerDetalleRec, setAVerDetalleRec] = useState<Recepcion | null>(null);
+  /** Depósitos reales (con su sucursal), para el formulario de recepción. */
+  const [depositos, setDepositos] = useState<DepositoOpcion[]>([]);
 
   const [catalogos, setCatalogos] = useState<CatalogosOrden>(CATALOGOS_VACIOS);
   const [fichas, setFichas] = useState<
@@ -194,10 +197,11 @@ function ComprasScreen() {
         "/api/articulos?estado=activo",
         [],
       ),
-      apiGetOpcional<{ id: number; nombre: string; ubicacion: string }[]>(
-        "/api/depositos",
-        [],
-      ),
+      apiGetOpcional<DepositoOpcion[]>("/api/depositos", []),
+      // El historial de recepciones. Va con apiGetOpcional y no con apiGet
+      // porque vive en un TAB: si falla, la pantalla de órdenes —que es la
+      // principal— tiene que seguir funcionando igual.
+      apiGetOpcional<{ items: Recepcion[] }>("/api/recepciones", { items: [] }),
       // D4: condiciones de pago = placeholder compartido FORMAS_PAGO (misma
       // tabla `forma_pago` que GET /api/condiciones-pago, ver src/data/formas-pago.ts),
       // se asigna abajo en setCatalogos sin red.
@@ -205,18 +209,22 @@ function ComprasScreen() {
         { articuloId: number; stockActual: number; estadoCalculado: string }[]
       >("/api/fichas-stock", []),
     ])
-      .then(([lista, proveedores, articulos, depositos, fichas]) => {
+      .then(([lista, proveedores, articulos, depositos, recepcionesApi, fichasStock]) => {
         if (cancelado) return;
         setOrdenes(lista);
+        setDepositos(depositos);
+        setRecepciones(recepcionesApi.items);
         setCatalogos({
           // La API de proveedores usa `razon_social` (dict); el catálogo del
           // modal habla de `nombre`. Se adapta acá, en el borde.
           proveedores: proveedores.map((p) => ({ id: p.id, nombre: p.razon_social })),
           articulos,
-          depositos,
+          // El catálogo del modal de órdenes tipa `ubicacion` como string; la
+          // columna es nullable. Se normaliza acá, en el borde.
+          depositos: depositos.map((d) => ({ ...d, ubicacion: d.ubicacion ?? "" })),
           condicionesPago: FORMAS_PAGO,
         });
-        setFichas(fichas);
+        setFichas(fichasStock);
       })
       .catch(() => {
         if (!cancelado) setError(true);
@@ -498,16 +506,91 @@ function ComprasScreen() {
     setFiltrosRec(FILTROS_RECEPCION_VACIOS);
   };
 
-  const handleSaveRecepcion = (recepcion: Recepcion) => {
-    setRecepciones((prev) => [recepcion, ...prev]);
-    setFormRecepcionOpen(false);
-    showToast("success", "Recepción registrada correctamente");
+  /**
+   * Registra la recepción contra la API.
+   *
+   * Devuelve el mensaje de error en vez de lanzarlo: el modal lo muestra sin
+   * cerrarse, así no se pierde lo cargado.
+   *
+   * Cuando sale bien se recarga TODA la pantalla (`setRecarga`) y no solo la
+   * lista de recepciones. Es a propósito: una recepción también mueve el estado
+   * de la orden de compra (a "Recibida Parcial" o "Recibida Total") y el stock.
+   * Insertar la fila nueva en el array local dejaría el tab de órdenes
+   * mostrando el estado viejo hasta que alguien recargue.
+   */
+  const handleSaveRecepcion = async (
+    payload: CrearRecepcionPayload,
+  ): Promise<string | null> => {
+    try {
+      const res = await apiSend<{ estadoOrdenResultante: string; fichasCreadas: unknown[] }>(
+        "POST",
+        "/api/recepciones",
+        payload,
+      );
+
+      setFormRecepcionOpen(false);
+      setRecarga((n) => n + 1);
+      showToast(
+        "success",
+        `Recepción registrada. La orden quedó ${res.estadoOrdenResultante.replace(/_/g, " ")}.`,
+      );
+
+      // Aviso aparte: una ficha creada al vuelo nace con stock mínimo 0, así
+      // que nunca va a avisar cuando haya que reponer hasta que alguien
+      // configure los umbrales.
+      if (res.fichasCreadas.length > 0) {
+        // No hay un toast "info" en el sistema de diseño; va como success
+        // porque no es una falla: la recepción se registró bien, esto es un
+        // pendiente de configuración.
+        showToast(
+          "success",
+          `Se crearon ${res.fichasCreadas.length} fichas de stock nuevas: configurá sus umbrales en Stock.`,
+        );
+      }
+
+      return null;
+    } catch (e) {
+      return mensajeDeError(e);
+    }
   };
 
-  const ordenesPendientes = useMemo(() => {
-    const ocIds = new Set(recepciones.map((r) => r.orden_compra_id));
-    return ordenesDisponibles.filter((oc) => !ocIds.has(oc.id));
-  }, [recepciones]);
+  /** Qué falta recibir de una OC. Lo pide el modal al elegir la orden. */
+  const cargarPendienteRecepcion = useCallback(
+    (ordenCompraId: number) =>
+      apiGet<LineaPendiente[]>(`/api/ordenes-compra/${ordenCompraId}/pendiente-recepcion`),
+    [],
+  );
+
+  /**
+   * Órdenes que admiten recepción.
+   *
+   * El filtro correcto es "la orden no está cerrada", no "no tiene recepciones
+   * previas" como antes: con el filtro viejo, una OC recibida parcialmente
+   * desaparecía del select y la segunda entrega era imposible de cargar — que
+   * es justo el caso de uso central de la HU.
+   *
+   * También se recibe contra una orden "pendiente": un proveedor que entrega
+   * antes de que alguien la marque como enviada es lo normal.
+   */
+  const ordenesPendientes = useMemo<OrdenDisponible[]>(
+    () =>
+      ordenes
+        .filter((o) => o.estado !== "recibida_total" && o.estado !== "cancelada")
+        .map((o) => ({
+          id: o.id,
+          numero: o.cod_ord,
+          proveedor: { id: o._proveedor.id, razonSocial: o._proveedor.razon_social },
+          estado: o.estado,
+          // Solo para preseleccionar el depósito pactado. El nombre lo resuelve
+          // el modal contra el catálogo real de depósitos.
+          deposito: { id: o.deposito_id ?? 0, nombre: "" },
+          // Las líneas ya no viajan acá: el modal las pide con
+          // `cargarPendienteRecepcion`, que devuelve el PENDIENTE y no lo
+          // pedido originalmente.
+          articulos: [],
+        })),
+    [ordenes],
+  );
 
   const handleCrearSolicitud = async (input: Parameters<typeof crearSolicitud>[0]) => {
     const res = await crearSolicitud(input);
@@ -730,12 +813,17 @@ function ComprasScreen() {
                   <FiltrosRecepciones
                     filtros={filtrosRec}
                     onChange={handleFiltrosRec}
+                    proveedores={catalogos.proveedores}
                     disabled={loading || error}
                     hideChips
                   />
                 </div>
                 <div className="flex flex-wrap items-center">
-                  <FiltrosChipsRecepciones filtros={filtrosRec} onChange={handleFiltrosRec} />
+                  <FiltrosChipsRecepciones
+                    filtros={filtrosRec}
+                    onChange={handleFiltrosRec}
+                    proveedores={catalogos.proveedores}
+                  />
                 </div>
               </div>
             )}
@@ -935,7 +1023,8 @@ function ComprasScreen() {
         onClose={() => setFormRecepcionOpen(false)}
         onConfirm={handleSaveRecepcion}
         ordenes={ordenesPendientes}
-        numeroSiguiente={recepciones.length + 1}
+        depositos={depositos}
+        cargarPendiente={cargarPendienteRecepcion}
       />
       <RecepcionDetalleModal
         recepcion={aVerDetalleRec}

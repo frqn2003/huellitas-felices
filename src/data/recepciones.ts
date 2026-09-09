@@ -1,11 +1,25 @@
-// Datos hardcodeados de Recepciones de Mercadería (HU-COMP-03).
-// La estructura replica la tabla `recepcion_mercaderia` y `recepcion_mercaderia_detalle` de la BD.
+// Contrato de Recepciones de Mercadería (HU-COMP-03).
 //
-// BLOQUEADO-DBA (D1): el front modela `recepcion_mercaderia*`, tablas que el diccionario
-// (docs/esquema-bd-front.md) ya no define; en su lugar está `notificacion_compra`
-// (FK orden_compra_detalle_id UNIQUE, cantidades, diferencia GENERATED, leida).
-// Pendiente de resolver con la DBA si el módulo se rediseña sobre OC + notificación
-// o si las tablas se agregan al diccionario. NO alinear hasta desbloquear.
+// DESBLOQUEADO (2026-09-08). Antes decía "BLOQUEADO-DBA (D1)" porque estos
+// tipos replicaban `recepcion_mercaderia` y `recepcion_mercaderia_detalle`,
+// tablas que la base ya no define.
+//
+// Se resolvió como pidió el Product Owner: **una recepción es un movimiento de
+// stock** (`movimiento_stock_cab` con origen `recepcion_compra`, más sus
+// `movimiento_stock_det`). El shape de estos tipos casi no cambió —la pantalla
+// sigue viendo "una recepción con sus líneas"— pero ahora lo llena la API.
+//
+// Tres cosas que cambiaron de significado y conviene saber:
+//
+//  · `numero` ahora es "MOV-000123", no "REC-0001". Lo emite la secuencia de
+//    movimientos de stock, que es lo que la recepción es.
+//  · `tipo_recepcion` es DERIVADO: el backend responde "¿quedó algo pendiente
+//    después de esta entrega?". Ya no es un campo que el usuario elija.
+//  · `observacion` / `observacionDetalle` de cada línea llegan SIEMPRE en null:
+//    `movimiento_stock_det` no tiene dónde guardarlas. El texto que se carga en
+//    el formulario se conserva en `observacion_general` de la cabecera.
+//
+// Ver docs/backend/HU-COMP-03.md.
 
 export type TipoRecepcion = "parcial" | "total";
 
@@ -70,10 +84,11 @@ export interface NotificacionCompra {
 
 // Formateadores
 
-// BACKEND: generar en server-side con secuencia o UUID; front usa REC-XXXX como preview
-export function numeroRecepcion(id: number): string {
-  return `REC-${String(id).padStart(4, "0")}`;
-}
+// Acá había un `numeroRecepcion(id)` que armaba "REC-0004" a partir del id.
+// Se eliminó: el número real lo genera un trigger de la base al insertar, viene
+// en `Recepcion.numero`, y tiene otro formato. Derivarlo del id mostraba un
+// número que no existía en ninguna parte.
+
 
 export function formatFecha(iso: string | null): string {
   if (!iso) return "—";
@@ -82,215 +97,22 @@ export function formatFecha(iso: string | null): string {
   return `${d}/${m}/${y}`;
 }
 
-// BACKEND: reemplazar por GET /api/recepciones
-export const recepcionesIniciales: Recepcion[] = [
-  {
-    id: 1,
-    numero: "REC-0001",
-    orden_compra_id: 5,
-    ordenCompra: {
-      numero: "OC-0005",
-      proveedor: { id: 1, razonSocial: "Nutrición Animal SRL" },
-    },
-    sucursal: "Centro",
-    deposito_id: 1,
-    deposito: { id: 1, nombre: "Depósito Central" },
-    tipo_recepcion: "total",
-    usuario_id: 3,
-    usuario: { nombre: "Carlos López" },
-    fecha_hora: "2026-08-20T10:15:00Z",
-    observacion_general: null,
-    _detalles: [
-      {
-        id: 1,
-        recepcion_id: 1,
-        orden_compra_detalle_id: 1,
-        articulo_id: 1,
-        articuloNombre: "Amoxicilina 500mg",
-        cantidadSolicitada: 50,
-        cantidadRecibida: 50,
-        observacion: null,
-        observacionDetalle: null,
-      },
-      {
-        id: 2,
-        recepcion_id: 1,
-        orden_compra_detalle_id: 2,
-        articulo_id: 2,
-        articuloNombre: "Jeringa 5ml",
-        cantidadSolicitada: 100,
-        cantidadRecibida: 100,
-        observacion: null,
-        observacionDetalle: null,
-      },
-    ],
-  },
-  {
-    id: 2,
-    numero: "REC-0002",
-    orden_compra_id: 6,
-    ordenCompra: {
-      numero: "OC-0006",
-      proveedor: { id: 2, razonSocial: "VetInsumos Norte SA" },
-    },
-    sucursal: "Centro",
-    deposito_id: 1,
-    deposito: { id: 1, nombre: "Depósito Central" },
-    tipo_recepcion: "parcial",
-    usuario_id: 3,
-    usuario: { nombre: "Carlos López" },
-    fecha_hora: "2026-08-22T14:30:00Z",
-    observacion_general: "Entrega con demora de 2 horas",
-    _detalles: [
-      {
-        id: 3,
-        recepcion_id: 2,
-        orden_compra_detalle_id: 3,
-        articulo_id: 1,
-        articuloNombre: "Amoxicilina 500mg",
-        cantidadSolicitada: 50,
-        cantidadRecibida: 50,
-        observacion: null,
-        observacionDetalle: null,
-      },
-      {
-        id: 4,
-        recepcion_id: 2,
-        orden_compra_detalle_id: 4,
-        articulo_id: 2,
-        articuloNombre: "Jeringa 5ml",
-        cantidadSolicitada: 100,
-        cantidadRecibida: 85,
-        observacion: "faltante",
-        observacionDetalle: "Faltan 15 unidades",
-      },
-      {
-        id: 5,
-        recepcion_id: 2,
-        orden_compra_detalle_id: 5,
-        articulo_id: 3,
-        articuloNombre: "Alimento Premium",
-        cantidadSolicitada: 20,
-        cantidadRecibida: 20,
-        observacion: null,
-        observacionDetalle: null,
-      },
-    ],
-  },
-  {
-    id: 3,
-    numero: "REC-0003",
-    orden_compra_id: 7,
-    ordenCompra: {
-      numero: "OC-0007",
-      proveedor: { id: 3, razonSocial: "Farmavet Distribuidora" },
-    },
-    sucursal: "Norte",
-    deposito_id: 2,
-    deposito: { id: 2, nombre: "Sucursal A" },
-    tipo_recepcion: "total",
-    usuario_id: 5,
-    usuario: { nombre: "María García" },
-    fecha_hora: "2026-08-25T09:00:00Z",
-    observacion_general: null,
-    _detalles: [
-      {
-        id: 6,
-        recepcion_id: 3,
-        orden_compra_detalle_id: 6,
-        articulo_id: 4,
-        articuloNombre: "Guantes descartables",
-        cantidadSolicitada: 200,
-        cantidadRecibida: 200,
-        observacion: null,
-        observacionDetalle: null,
-      },
-      {
-        id: 7,
-        recepcion_id: 3,
-        orden_compra_detalle_id: 7,
-        articulo_id: 5,
-        articuloNombre: "Alcohol gel 500ml",
-        cantidadSolicitada: 30,
-        cantidadRecibida: 28,
-        observacion: "danado",
-        observacionDetalle: "2 envases rotos",
-      },
-    ],
-  },
-];
 
-// BACKEND: reemplazar por GET /api/ordenes-compra?estado=pendiente,enviada
-export const ordenesDisponibles: OrdenDisponible[] = [
-  {
-    id: 8,
-    numero: "OC-0008",
-    proveedor: { id: 1, razonSocial: "Nutrición Animal SRL" },
-    estado: "Enviada",
-    deposito: { id: 1, nombre: "Depósito Central" },
-    articulos: [
-      {
-        articuloId: 1,
-        articuloNombre: "Amoxicilina 500mg",
-        cantidad: 100,
-        ordenCompraDetalleId: 8,
-      },
-      {
-        articuloId: 6,
-        articuloNombre: "Spray antiséptico",
-        cantidad: 25,
-        ordenCompraDetalleId: 9,
-      },
-    ],
-  },
-  {
-    id: 9,
-    numero: "OC-0009",
-    proveedor: { id: 2, razonSocial: "VetInsumos Norte SA" },
-    estado: "Pendiente",
-    deposito: { id: 1, nombre: "Depósito Central" },
-    articulos: [
-      {
-        articuloId: 2,
-        articuloNombre: "Jeringa 5ml",
-        cantidad: 200,
-        ordenCompraDetalleId: 10,
-      },
-      {
-        articuloId: 3,
-        articuloNombre: "Alimento Premium",
-        cantidad: 50,
-        ordenCompraDetalleId: 11,
-      },
-    ],
-  },
-];
 
-// BACKEND: reemplazar por GET /api/notificaciones-compra
-export const notificacionesIniciales: NotificacionCompra[] = [
-  {
-    id: 1,
-    recepcionDetalleId: 4,
-    usuarioResponsableId: 4,
-    usuarioResponsable: { nombre: "Roberto Díaz" },
-    mensaje:
-      "Diferencia en Jeringa 5ml (OC-0006): solicitado 100, recibido 85. Faltante de 15 unidades.",
-    fecha_hora: "2026-08-22T14:30:00Z",
-    leida: false,
-  },
-  {
-    id: 2,
-    recepcionDetalleId: 7,
-    usuarioResponsableId: 4,
-    usuarioResponsable: { nombre: "Roberto Díaz" },
-    mensaje:
-      "Diferencia en Alcohol gel 500ml (OC-0007): solicitado 30, recibido 28. 2 envases dañados.",
-    fecha_hora: "2026-08-25T09:00:00Z",
-    leida: true,
-  },
-];
 
 // Catálogos
+//
+// Se fueron PROVEEDORES_RECEPCIONES, DEPOSITOS y SUCURSALES: eran listas
+// hardcodeadas que la pantalla ahora pide a /api/proveedores y /api/depositos.
+// La de sucursales se arma con los depósitos que devuelve la API, así el select
+// no puede ofrecer una sucursal sin depósitos donde descargar.
+/**
+ * Solo para MOSTRAR el tipo en el listado y el filtro.
+ *
+ * Ya no alimenta ningún select de alta: el tipo lo deriva el backend (D-1). Si
+ * el usuario pudiera marcar "Completa" a mano, la orden de compra se cerraría
+ * aunque falten artículos.
+ */
 export const TIPOS_RECEPCION: { value: TipoRecepcion; label: string }[] = [
   { value: "total", label: "Completa" },
   { value: "parcial", label: "Parcial" },
@@ -305,27 +127,8 @@ export const OBSERVACIONES_RECEPCION: {
   { value: "error", label: "Error" },
 ];
 
-// BACKEND: reemplazar por GET /api/proveedores
-export const PROVEEDORES_RECEPCIONES = [
-  { id: 1, nombre: "Nutrición Animal SRL" },
-  { id: 2, nombre: "VetInsumos Norte SA" },
-  { id: 3, nombre: "Farmavet Distribuidora" },
-];
 
-// BACKEND: reemplazar por GET /api/depositos
-export const DEPOSITOS = [
-  { id: 1, sucursalId: 1, sucursal: "Centro", nombre: "Depósito Central", ubicacion: "Av. Principal 123" },
-  { id: 2, sucursalId: 2, sucursal: "Norte", nombre: "Depósito Norte", ubicacion: "Calle Norte 456" },
-  { id: 3, sucursalId: 3, sucursal: "Sur", nombre: "Depósito Sur", ubicacion: "Av. Sur 789" },
-  { id: 4, sucursalId: 1, sucursal: "Centro", nombre: "Depósito Auxiliar", ubicacion: "Av. Principal 123 - Subsuelo" },
-  { id: 5, sucursalId: 3, sucursal: "Sur", nombre: "Depósito Vacunas", ubicacion: "Av. Sur 789 - Ala este" },
-];
 
-export const SUCURSALES: SucursalOpcion[] = [
-  { id: 1, nombre: "Centro" },
-  { id: 2, nombre: "Norte" },
-  { id: 3, nombre: "Sur" },
-];
 
 export const SIMULAR_VACIO = false;
 export const SIMULAR_ERROR = false;

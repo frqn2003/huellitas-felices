@@ -1,21 +1,18 @@
-import {
-  SUCURSALES,
-  calcularEstadoStock,
-  type Deposito,
-  type FichaStock,
-} from "@/data/stock";
+import { calcularEstadoStock, type Deposito, type FichaStock } from "@/data/stock";
 import type { DepositoRow, FichaStockRow } from "./stock.types";
 
-function nombreSucursal(id: number, depositoNombre: string): string {
-  // Mientras no exista tabla sucursal, se conserva el catálogo temporal del front.
-  return SUCURSALES.find((s) => s.id === id)?.nombre ?? depositoNombre;
-}
+// Aca habia un `nombreSucursal()` que resolvia el nombre contra el array
+// SUCURSALES de src/data/stock.ts -- o sea, el backend leyendo un catalogo del
+// FRONT. Una sucursal creada en la base y no agregada a ese array caia en el
+// fallback y se mostraba con el nombre del deposito.
+//
+// Ahora el nombre viene por JOIN con la tabla `sucursal`.
 
 export function depositoToApi(row: DepositoRow): Deposito {
   return {
     id: row.id,
     sucursalId: row.sucursal_id,
-    sucursal: nombreSucursal(row.sucursal_id, row.nombre),
+    sucursal: row.sucursal_nombre,
     nombre: row.nombre,
     ubicacion: row.ubicacion ?? "",
   };
@@ -33,7 +30,7 @@ export function fichaToApi(row: FichaStockRow): FichaStock {
     deposito: {
       id: row.deposito_id,
       nombre: row.deposito_nombre,
-      sucursal: nombreSucursal(row.sucursal_id, row.deposito_nombre),
+      sucursal: row.sucursal_nombre,
     },
     articulo: {
       id: row.articulo_id,

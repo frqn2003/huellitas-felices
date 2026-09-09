@@ -1,5 +1,67 @@
 # HU-COMP-03 — Recepción de Mercadería contra Orden de Compra
 
+> ## ⚠️ REESCRITO EL 2026-09-08 — leer esto antes que el resto
+>
+> Este documento se escribió asumiendo **tres tablas nuevas**
+> (`recepcion_mercaderia`, `recepcion_mercaderia_detalle`, `notificacion_compra`)
+> que iban a crearse con `db/correcciones/14_recepcion_mercaderia.sql`.
+>
+> **Ese archivo nunca se aplicó y ya no se va a aplicar.** El Product Owner pidió
+> lo contrario: *"tratar la recepción como un tipo de movimiento de stock general
+> en un único lugar/tabla"*. La DBA ya lo implementó así, y el módulo se reescribió
+> contra ese modelo.
+>
+> ### Qué es una recepción hoy
+>
+> ```
+> movimiento_stock_cab
+>   tipo              = 'ingreso'
+>   origen_id         = origen_movimiento 'recepcion_compra'
+>   origen_entidad_id = orden_compra.id
+>   deposito_id       = dónde entra
+>   motivo            = las observaciones
+>
+> movimiento_stock_det   ← uno por artículo recibido
+> ```
+>
+> No hay entidad "recepción" separada: **la recepción ES el movimiento**.
+>
+> ### Qué sigue valiendo de este documento
+>
+> Casi todo lo conceptual. Las cinco decisiones de §3 se mantienen, y §7 (reglas
+> de negocio) y §8 (los cuatro conflictos con el brief del front) también.
+>
+> ### Qué quedó obsoleto
+>
+> - **§4 entero** (Cambios en la base). Las tablas no se crean; lo que sí existe
+>   es `notificacion_compra`, ya aplicada por la DBA.
+> - **§6** (el algoritmo del service): se acortó mucho, ver abajo.
+> - **§10 Plan de trabajo**: ejecutado, ver el registro al final.
+>
+> ### Lo que cambió de las decisiones cerradas
+>
+> | Decisión | Antes | Ahora |
+> |---|---|---|
+> | **D-1** `tipo_recepcion` derivado | columna, escrita por el service | **derivado en el SELECT**: no hay columna donde guardarlo, y guardarlo sería cachear la misma pregunta |
+> | **D-4** `cantidad_solicitada` = pendiente al momento | columna | **derivado**: lo pedido en la línea de la OC menos lo recibido en movimientos anteriores. Mismo número, sin copia que se desincronice |
+> | **D-5** el movimiento lo genera el service | recepción **y** movimiento | ya no hay dos cosas que generar: son la misma fila |
+>
+> ### Lo único que se perdió
+>
+> **La observación por línea** (`faltante` / `danado` / `error` + su detalle).
+> `movimiento_stock_det` tiene tres columnas —movimiento, ficha, cantidad— y
+> ninguna donde guardarla.
+>
+> No se tira: el service la concatena en `movimiento_stock_cab.motivo`
+> (`armarMotivo()`), así que el texto se conserva. Lo que se pierde es la
+> **atribución por línea**: queda el nombre del artículo dentro del texto, no un
+> FK. La API devuelve `observacion: null` en cada detalle.
+>
+> Recuperarla necesita una columna nueva en `movimiento_stock_det`. Es una
+> decisión de modelo, no algo que el backend pueda resolver solo → ver §9.
+
+---
+
 > Documento de **implementación backend**. El brief de diseño (pantallas,
 > wireframes, componentes) es [`docs/briefs/HU-COMP-03.md`](../briefs/HU-COMP-03.md).
 > Este archivo define qué se construye del lado de la base y de la API, y por qué.
@@ -119,13 +181,32 @@ transacción. Es además el patrón que ya usa el módulo de Movimientos.
 
 ---
 
-## 4. Cambios en la base
+## 4. Cambios en la base — ⛔ OBSOLETA
 
-Todo va en un archivo nuevo: **`db/correcciones/14_recepcion_mercaderia.sql`**,
-para pegar en el SQL Editor de Supabase y después correr `npm run db:dump`.
+> **Nada de esta sección se aplicó.** Describe las tres tablas de
+> `db/correcciones/14_recepcion_mercaderia.sql`, que se renombró a
+> `.DESCARTADA.sql` justamente para que nadie lo pegue: crearía el modelo que el
+> PO pidió NO tener, y quedarían dos verdades sobre la misma entrega.
+>
+> Lo que sí existe en la base, aplicado por la DBA:
+>
+> | Objeto | Qué hace |
+> |---|---|
+> | `notificacion_compra` | la alerta de diferencia, con `UNIQUE (orden_compra_detalle_id)` |
+> | `fn_valida_mov_recepcion_compra` | la cabecera: exige `origen_entidad_id`, tipo `ingreso`, y OC no final |
+> | `fn_valida_mov_det_recepcion_compra` | cada línea: el artículo tiene que estar en la OC |
+> | `fn_actualiza_oc_por_recepcion` | mueve la OC a `recibida_parcial` / `recibida_total` |
+> | `fn_notificar_diferencia_compra` | escribe la notificación, y la **borra** cuando una entrega posterior completa la línea |
+> | `fn_actualizar_stock_det` | suma el stock |
+> | `fn_generar_numero_movimiento` | el número, `MOV-000123` |
+>
+> Se deja el texto original abajo porque explica el razonamiento de cada campo,
+> y varias de esas razones siguen valiendo en el modelo nuevo.
 
-No toca ninguna tabla existente: son tablas nuevas más un seed. **Cero riesgo
-para lo del Sprint 1.**
+<details>
+<summary>Texto original (no aplicar)</summary>
+
+Todo iba en un archivo nuevo: **`db/correcciones/14_recepcion_mercaderia.sql`**.
 
 ### 4.1 Enums
 
@@ -220,6 +301,10 @@ trigger que rechace `SUM(recibido) > pedido` sería la protección para alguien
 escribiendo desde el SQL Editor — que es exactamente el criterio con el que este
 proyecto ya puso `ck_ficha_stock_no_negativo` sobre el stock. Coherente, pero no
 imprescindible para cerrar la HU.
+
+---
+
+</details>
 
 ---
 
@@ -413,18 +498,71 @@ coinciden; en la segunda parcial, no.
 
 ## 9. Decisiones abiertas
 
+- 🔴 **Observación por línea** — la más importante, y nueva. Al unificar la
+  recepción con los movimientos de stock, `faltante` / `danado` / `error` se
+  quedaron sin columna. Hoy el texto va concatenado en
+  `movimiento_stock_cab.motivo`. Tres opciones:
+  1. **Dejarlo así.** La diferencia en cantidades ya la registra
+     `notificacion_compra` sola, con números. El motivo es contexto para el
+     humano que reclame, y ahí el texto libre alcanza.
+  2. **Agregar `movimiento_stock_det.observacion`** (enum, nullable) **+
+     `observacion_detalle`** (varchar). Recupera la atribución por línea.
+     Es una corrección chica y no rompe nada, pero agrega dos columnas a la
+     tabla que el PO acaba de pedir mantener simple.
+  3. **Tabla aparte** `observacion_movimiento_det`. Más limpia
+     conceptualmente, y probablemente sobredimensionada para dos campos.
+
+  Mi recomendación es la **2** si el reclamo al proveedor se hace desde el
+  sistema, y la **1** si se hace por teléfono mirando la pantalla. Es una
+  pregunta para el PO, no técnica.
+
 - **`POST /api/ordenes-compra/[id]/cerrar`** — la acción que usa el estado
   `Cerrada con Faltante` (§4.5). El estado se crea ahora; la acción, ¿entra en este
   sprint o se difiere?
-- **Trigger de sobre-recepción** (§4.6) — ¿se agrega la red de seguridad a nivel
-  motor o alcanza con el lock del service?
+- **Trigger de sobre-recepción** (§4.6) — ✅ **decidido, y la respuesta cambió**.
+  La base **acepta** recibir de más: `fn_notificar_diferencia_compra` lo trata
+  como una diferencia positiva y deja una notificación. El service **lo rechaza**
+  con `SOBRE_RECEPCION`.
+
+  O sea que hoy la regla vive SOLO en la aplicación. Quien cargue una recepción
+  desde el SQL Editor la saltea. Es aceptable —el SQL Editor lo usan tres
+  personas del equipo— pero conviene saberlo: el argumento de "que lo garantice
+  el motor" que se usó para el stock negativo (`HF001`) no aplica acá todavía.
 - **Exportar CSV** del listado — está en el brief. ¿Backend (endpoint que devuelve
   `text/csv`) o front sobre los datos ya paginados? El resto del sistema todavía no
   exporta nada, así que no hay precedente.
 
 ---
 
-## 10. Plan de trabajo
+## 10. Plan de trabajo — ✅ ejecutado el 2026-09-08
+
+Se hizo, pero contra el modelo nuevo. La fase 1 (crear tablas) no corrió: no
+hacía falta, la base ya estaba lista.
+
+| Archivo | Qué quedó |
+|---|---|
+| `recepcion.types.ts` | filas de `movimiento_stock_cab` / `_det` con los JOIN resueltos |
+| `recepcion.repo.ts` | todo el SQL, con `tipo_recepcion` y `cantidad_solicitada` derivados |
+| `recepcion.service.ts` | **de 609 a ~350 líneas**: se fueron cinco bloques que duplicaban triggers |
+| `recepcion.mapper.ts` | mismo contrato de front que antes |
+| `RecepcionFormModal.tsx` | conectado a la API; se cayó el select "Tipo de recepción" (§8.1) |
+| `ordenes-compra/page.tsx` | el tab lee `/api/recepciones` y postea de verdad |
+
+**Los cinco bloques que se borraron del service**, cada uno duplicaba un trigger:
+actualizar el stock, mover el estado de la OC, escribir `notificacion_compra`,
+generar el número, y escribir la auditoría. Un cálculo duplicado no es
+redundancia inofensiva: son dos respuestas que tarde o temprano difieren.
+
+**Lo que se arregló de paso**, que no era de esta HU pero la bloqueaba:
+`stock.repo.ts` resolvía el nombre de la sucursal contra un array del FRONT
+(`SUCURSALES` de `src/data/stock.ts`) y consultaba `information_schema` en cada
+escritura de depósito para preguntar si existía una columna. Los dos shims
+sobraban desde que la tabla `sucursal` existe. El primero era un bug real: una
+sucursal creada en la base y no agregada a ese array se mostraba con el nombre
+del depósito.
+
+<details>
+<summary>Plan original</summary>
 
 | Fase | Qué | Verificación |
 |---|---|---|
@@ -435,7 +573,11 @@ coinciden; en la segunda parcial, no.
 | 5 | `recepcion.mapper.ts` + rutas `/api/recepciones` y `/api/ordenes-compra/[id]/pendiente-recepcion` | curl de los 4 endpoints |
 | 6 | Seed de demo: una OC enviada con 2 líneas, para poder probar parcial → total | `npm run db:seed` |
 
+</details>
+
 ### Definition of Done
+
+Sin cambios: los seis siguen siendo los casos a probar.
 
 - [ ] Recepción parcial: la OC queda en `Recibida Parcial` y el stock sube solo por lo recibido.
 - [ ] Segunda recepción que completa la orden: pasa a `Recibida Total` **sin que nadie elija "total"**.
@@ -443,5 +585,37 @@ coinciden; en la segunda parcial, no.
 - [ ] Recibir contra una OC ya en estado final rechazado con `OC_ESTADO_FINAL`.
 - [ ] Artículo sin ficha en el depósito: la recepción funciona y `fichasCreadas` lo reporta.
 - [ ] Cada línea con diferencia genera una fila en `notificacion_compra` para el usuario de la OC.
+- [ ] **Nuevo**: una segunda entrega que completa una línea **borra** su notificación
+      (lo hace `fn_notificar_diferencia_compra`, no el service).
+- [ ] **Nuevo**: el listado de recepciones no muestra egresos por venta ni ajustes
+      — solo movimientos con origen `recepcion_compra`.
+
+### Cómo probarlo a mano
+
+```sql
+-- 1. La recepción quedó como movimiento, no como tabla aparte
+SELECT c.id, c.numero, c.tipo, om.nombre AS origen, c.origen_entidad_id AS oc, c.motivo
+FROM movimiento_stock_cab c
+JOIN origen_movimiento om ON om.id = c.origen_id
+WHERE om.nombre = 'recepcion_compra'
+ORDER BY c.id DESC LIMIT 5;
+
+-- 2. La OC se movió sola
+SELECT oc.cod_ord, e.nombre AS estado
+FROM orden_compra oc JOIN estado_orden_compra e ON e.id = oc.estado_id
+WHERE oc.id = <la OC>;
+
+-- 3. El stock subió UNA sola vez por artículo
+--    (si subió el doble, quedó lógica duplicada en el service)
+SELECT a.nombre, fs.stock_actual
+FROM ficha_stock fs JOIN articulo a ON a.id = fs.articulo_id
+WHERE fs.deposito_id = <el depósito>;
+
+-- 4. La diferencia se notificó sola
+SELECT * FROM notificacion_compra ORDER BY id DESC LIMIT 5;
+
+-- 5. La auditoría tiene responsable (si usuario_id viene NULL, falta withAuditUser)
+SELECT * FROM auditoria WHERE tabla = 'movimiento_stock_cab' ORDER BY id DESC LIMIT 3;
+```
 - [ ] Cada recepción deja una fila en `auditoria` con `usuario_id` **no nulo**.
 - [ ] `npm run lint` y `npm run typecheck` limpios.

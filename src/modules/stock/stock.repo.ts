@@ -11,14 +11,27 @@ import type {
 
 type Ejecutor = Pool | PoolClient;
 
-// DEV aún tiene sucursal_id; la corrección 03 propone quitarlo. to_jsonb hace
-// que las lecturas funcionen en ambos modelos mientras el equipo termina de decidir.
-const SUCURSAL_ID = "COALESCE((to_jsonb(d)->>'sucursal_id')::int, d.id)";
-
+// Aca habia dos shims que sostenian dos modelos de datos a la vez:
+//
+//   const SUCURSAL_ID = "COALESCE((to_jsonb(d)->>'sucursal_id')::int, d.id)"
+//   async function tieneSucursalId()  <- consultaba information_schema
+//
+// Existian mientras el equipo decidia si `deposito` iba a tener `sucursal_id`.
+// Ya esta decidido y aplicado: la tabla `sucursal` existe, `deposito.sucursal_id`
+// es NOT NULL con FK, y hay `uq_sucursal_nombre_activa`.
+//
+// El de `tieneSucursalId` ademas pegaba una consulta a `information_schema`
+// EN CADA ESCRITURA de deposito, solo para preguntar si una columna existia.
+//
+// Y el nombre de la sucursal ahora sale de la TABLA por JOIN, no de un array
+// del front. Eso arregla un bug real: `stock.mapper.ts` lo resolvia contra
+// SUCURSALES de src/data/stock.ts, asi que una sucursal creada en la base y no
+// agregada a ese array se mostraba con el nombre del DEPOSITO.
 const SELECT_FICHA = `
   SELECT fs.id, fs.articulo_id, fs.deposito_id,
          d.nombre AS deposito_nombre,
-         ${SUCURSAL_ID} AS sucursal_id,
+         d.sucursal_id,
+         s.nombre AS sucursal_nombre,
          a.codigo AS articulo_codigo,
          a.nombre AS articulo_nombre,
          um.nombre AS unidad_medida,
@@ -28,19 +41,14 @@ const SELECT_FICHA = `
   JOIN articulo a ON a.id = fs.articulo_id
   JOIN unidad_medida um ON um.id = a.unidad_medida_id
   JOIN deposito d ON d.id = fs.deposito_id
+  JOIN sucursal s ON s.id = d.sucursal_id
 `;
 
-async function tieneSucursalId(ejecutor: Ejecutor): Promise<boolean> {
-  const { rows } = await ejecutor.query<{ existe: boolean }>(
-    `SELECT EXISTS (
-       SELECT 1 FROM information_schema.columns
-       WHERE table_schema = 'public'
-         AND table_name = 'deposito'
-         AND column_name = 'sucursal_id'
-     ) AS existe`,
-  );
-  return rows[0]?.existe ?? false;
-}
+const SELECT_DEPOSITO = `
+  SELECT d.id, d.sucursal_id, s.nombre AS sucursal_nombre, d.nombre, d.ubicacion
+  FROM deposito d
+  JOIN sucursal s ON s.id = d.sucursal_id
+`;
 
 export async function findDepositos(
   filtros: FiltrosDeposito = {},
@@ -55,14 +63,13 @@ export async function findDepositos(
   }
   if (filtros.sucursalId) {
     params.push(filtros.sucursalId);
-    condiciones.push(`${SUCURSAL_ID} = $${params.length}`);
+    condiciones.push(`d.sucursal_id = $${params.length}`);
   }
 
   const where = condiciones.length ? `WHERE ${condiciones.join(" AND ")}` : "";
   const { rows } = await ejecutor.query<DepositoRow>(
-    `SELECT d.id, ${SUCURSAL_ID} AS sucursal_id, d.nombre, d.ubicacion
-     FROM deposito d ${where}
-     ORDER BY ${SUCURSAL_ID}, d.nombre`,
+    `${SELECT_DEPOSITO} ${where}
+     ORDER BY s.nombre, d.nombre`,
     params,
   );
   return rows;
@@ -73,8 +80,7 @@ export async function findDepositoById(
   ejecutor: Ejecutor = pool,
 ): Promise<DepositoRow | null> {
   const { rows } = await ejecutor.query<DepositoRow>(
-    `SELECT d.id, ${SUCURSAL_ID} AS sucursal_id, d.nombre, d.ubicacion
-     FROM deposito d WHERE d.id = $1`,
+    `${SELECT_DEPOSITO} WHERE d.id = $1`,
     [id],
   );
   return rows[0] ?? null;
@@ -85,39 +91,24 @@ export async function findDepositoDuplicado(
   excluirId?: number,
   ejecutor: Ejecutor = pool,
 ): Promise<DepositoRow | null> {
-  const conSucursal = await tieneSucursalId(ejecutor);
-  const { rows } = conSucursal
-    ? await ejecutor.query<DepositoRow>(
-        `SELECT d.id, ${SUCURSAL_ID} AS sucursal_id, d.nombre, d.ubicacion
-         FROM deposito d
-         WHERE ${SUCURSAL_ID} = $1
-           AND lower(d.nombre) = lower($2)
-           AND ($3::int IS NULL OR d.id <> $3)
-         LIMIT 1`,
-        [data.sucursalId, data.nombre, excluirId ?? null],
-      )
-    : await ejecutor.query<DepositoRow>(
-        `SELECT d.id, ${SUCURSAL_ID} AS sucursal_id, d.nombre, d.ubicacion
-         FROM deposito d
-         WHERE lower(d.nombre) = lower($1)
-           AND ($2::int IS NULL OR d.id <> $2)
-         LIMIT 1`,
-        [data.nombre, excluirId ?? null],
-      );
+  // El duplicado se busca DENTRO de la sucursal: dos sucursales pueden tener
+  // cada una su "Deposito Central".
+  const { rows } = await ejecutor.query<DepositoRow>(
+    `${SELECT_DEPOSITO}
+     WHERE d.sucursal_id = $1
+       AND lower(d.nombre) = lower($2)
+       AND ($3::int IS NULL OR d.id <> $3)
+     LIMIT 1`,
+    [data.sucursalId, data.nombre, excluirId ?? null],
+  );
   return rows[0] ?? null;
 }
 
 export async function insertDeposito(data: DepositoInput, client: PoolClient): Promise<number> {
-  const conSucursal = await tieneSucursalId(client);
-  const { rows } = conSucursal
-    ? await client.query<{ id: number }>(
-        `INSERT INTO deposito (sucursal_id, nombre, ubicacion) VALUES ($1, $2, $3) RETURNING id`,
-        [data.sucursalId, data.nombre, data.ubicacion],
-      )
-    : await client.query<{ id: number }>(
-        `INSERT INTO deposito (nombre, ubicacion) VALUES ($1, $2) RETURNING id`,
-        [data.nombre, data.ubicacion],
-      );
+  const { rows } = await client.query<{ id: number }>(
+    `INSERT INTO deposito (sucursal_id, nombre, ubicacion) VALUES ($1, $2, $3) RETURNING id`,
+    [data.sucursalId, data.nombre, data.ubicacion],
+  );
   return rows[0].id;
 }
 
@@ -126,11 +117,10 @@ export async function updateDeposito(
   data: DepositoInput,
   client: PoolClient,
 ): Promise<boolean> {
-  const conSucursal = await tieneSucursalId(client);
-  const sql = conSucursal
-    ? `UPDATE deposito SET sucursal_id = $2, nombre = $3, ubicacion = $4 WHERE id = $1`
-    : `UPDATE deposito SET nombre = $3, ubicacion = $4 WHERE id = $1`;
-  const { rowCount } = await client.query(sql, [id, data.sucursalId, data.nombre, data.ubicacion]);
+  const { rowCount } = await client.query(
+    `UPDATE deposito SET sucursal_id = $2, nombre = $3, ubicacion = $4 WHERE id = $1`,
+    [id, data.sucursalId, data.nombre, data.ubicacion],
+  );
   return (rowCount ?? 0) > 0;
 }
 
@@ -148,7 +138,7 @@ export async function findFichas(
   }
   if (filtros.sucursalId) {
     params.push(filtros.sucursalId);
-    condiciones.push(`${SUCURSAL_ID} = $${params.length}`);
+    condiciones.push(`d.sucursal_id = $${params.length}`);
   }
   if (filtros.depositoId) {
     params.push(filtros.depositoId);

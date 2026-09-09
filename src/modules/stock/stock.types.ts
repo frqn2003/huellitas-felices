@@ -3,6 +3,7 @@ import type { EstadoStock } from "@/data/stock";
 export type DepositoRow = {
   id: number;
   sucursal_id: number;
+  sucursal_nombre: string;
   nombre: string;
   ubicacion: string | null;
 };
@@ -13,6 +14,7 @@ export type FichaStockRow = {
   deposito_id: number;
   deposito_nombre: string;
   sucursal_id: number;
+  sucursal_nombre: string;
   articulo_codigo: string;
   articulo_nombre: string;
   unidad_medida: string;

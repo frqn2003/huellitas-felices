@@ -2,7 +2,7 @@
 
 import { PackageOpen } from "lucide-react";
 import type { Recepcion } from "@/data/recepciones";
-import { formatFecha, numeroRecepcion } from "@/data/recepciones";
+import { formatFecha } from "@/data/recepciones";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { EstadoRecepcionBadge } from "./EstadoRecepcionBadge";
@@ -45,7 +45,7 @@ export function RecepcionDetalleModal({
     <Modal
       open={!!recepcion}
       onClose={onClose}
-      title={`Detalle Recepción ${numeroRecepcion(recepcion.id)}`}
+      title={`Detalle Recepción ${recepcion.numero}`}
       icon={<PackageOpen className="h-5 w-5 text-brand-900" aria-hidden="true" />}
       maxWidth="max-w-3xl"
       footer={

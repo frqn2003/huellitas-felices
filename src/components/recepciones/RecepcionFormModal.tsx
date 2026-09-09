@@ -1,24 +1,23 @@
 "use client";
 
-// BLOQUEADO-DBA (D1): este módulo modela `recepcion_mercaderia*`, tablas que el
-// diccionario (docs/esquema-bd-front.md) ya no define (hoy es `notificacion_compra`).
-// Pendiente de resolver con la DBA. NO alinear campos hasta desbloquear.
+// DESBLOQUEADO (2026-09-08). Antes decía "BLOQUEADO-DBA (D1)" porque el modal
+// modelaba `recepcion_mercaderia*`, tablas que la base no tiene.
+//
+// Se resolvió como pidió el Product Owner: una recepción es un movimiento de
+// stock con origen `recepcion_compra`. Este formulario ya no fabrica la
+// recepción en el navegador — arma el body y lo manda a POST /api/recepciones.
+//
+// Tres cosas dejaron de decidirse acá porque las decide el backend o la base:
+//   · el NÚMERO (lo genera un trigger; ya no se muestra un "REC-0004" de mentira
+//     que el servidor iba a ignorar)
+//   · el TIPO de recepción (parcial/total): se deriva de si quedó algo
+//     pendiente, ver abajo
+//   · el PENDIENTE de cada línea: se pide a la API al elegir la OC
 
 import { PackageOpen, AlertTriangle } from "lucide-react";
-import { useMemo, useState } from "react";
-import type {
-  ObservacionRecepcion,
-  OrdenDisponible,
-  Recepcion,
-  TipoRecepcion,
-} from "@/data/recepciones";
-import {
-  DEPOSITOS,
-  SUCURSALES,
-  TIPOS_RECEPCION,
-  OBSERVACIONES_RECEPCION,
-  numeroRecepcion,
-} from "@/data/recepciones";
+import { useCallback, useMemo, useState } from "react";
+import type { ObservacionRecepcion, OrdenDisponible } from "@/data/recepciones";
+import { OBSERVACIONES_RECEPCION } from "@/data/recepciones";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
@@ -28,9 +27,38 @@ export interface RecepcionDraft {
   ordenCompraId: string;
   depositoId: string;
   sucursalId: string;
-  tipoRecepcion: TipoRecepcion;
   observacionGeneral: string;
   items: RecepcionItemDraft[];
+}
+
+/** Depósito real, traído de GET /api/depositos. */
+export interface DepositoOpcion {
+  id: number;
+  nombre: string;
+  ubicacion: string | null;
+  sucursalId: number;
+  sucursal: string;
+}
+
+/** Una línea pendiente, de GET /api/ordenes-compra/:id/pendiente-recepcion. */
+export interface LineaPendiente {
+  ordenCompraDetalleId: number;
+  articuloId: number;
+  articuloNombre: string;
+  cantidadPendiente: number;
+}
+
+/** El body de POST /api/recepciones. */
+export interface CrearRecepcionPayload {
+  ordenCompraId: number;
+  depositoId: number;
+  observacionGeneral: string | null;
+  items: {
+    ordenCompraDetalleId: number;
+    cantidadRecibida: number;
+    observacion: ObservacionRecepcion | null;
+    observacionDetalle: string | null;
+  }[];
 }
 
 export interface RecepcionItemDraft {
@@ -48,7 +76,6 @@ const EMPTY_DRAFT: RecepcionDraft = {
   ordenCompraId: "",
   depositoId: "",
   sucursalId: "",
-  tipoRecepcion: "total",
   observacionGeneral: "",
   items: [],
 };
@@ -56,9 +83,20 @@ const EMPTY_DRAFT: RecepcionDraft = {
 interface RecepcionFormModalProps {
   open: boolean;
   onClose: () => void;
-  onConfirm: (recepcion: Recepcion) => void;
+  /**
+   * Manda la recepción al backend.
+   *
+   * Devuelve el mensaje de error si el servidor la rechazó, o `null` si salió
+   * bien. Se resuelve así y no con un `throw` para que el modal pueda mostrar
+   * el mensaje del backend —"solo quedaban 15 pendientes"— sin cerrarse y
+   * perder lo que la persona ya cargó.
+   */
+  onConfirm: (payload: CrearRecepcionPayload) => Promise<string | null>;
+  /** OCs que admiten recepción: cualquiera con `es_final = false`. */
   ordenes: OrdenDisponible[];
-  numeroSiguiente: number;
+  depositos: DepositoOpcion[];
+  /** Pide a la API qué falta recibir de esa OC. */
+  cargarPendiente: (ordenCompraId: number) => Promise<LineaPendiente[]>;
 }
 
 function parseCantidad(raw: string): number {
@@ -72,7 +110,8 @@ export function RecepcionFormModal({
   onClose,
   onConfirm,
   ordenes,
-  numeroSiguiente,
+  depositos,
+  cargarPendiente,
 }: RecepcionFormModalProps) {
   // formKey fuerza remontaje del contenido cuando se abre el modal
   const formKey = open ? "open" : "closed";
@@ -92,7 +131,8 @@ export function RecepcionFormModal({
           onClose={onClose}
           onConfirm={onConfirm}
           ordenes={ordenes}
-          numeroSiguiente={numeroSiguiente}
+          depositos={depositos}
+          cargarPendiente={cargarPendiente}
         />
       )}
     </Modal>
@@ -103,39 +143,73 @@ function RecepcionFormContent({
   onClose,
   onConfirm,
   ordenes,
-  numeroSiguiente,
+  depositos,
+  cargarPendiente,
 }: Omit<RecepcionFormModalProps, "open">) {
   const [draft, setDraft] = useState<RecepcionDraft>(EMPTY_DRAFT);
   const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [cargandoLineas, setCargandoLineas] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  /** Mensaje que devolvió el backend al rechazar la recepción. */
+  const [errorServidor, setErrorServidor] = useState<string | null>(null);
 
-  const ordenSeleccionada = useMemo(
-    () => ordenes.find((o) => o.id === Number(draft.ordenCompraId)),
-    [ordenes, draft.ordenCompraId],
-  );
 
-  const handleOrdenChange = (ordenId: string) => {
-    const orden = ordenes.find((o) => o.id === Number(ordenId));
-    // El depósito de la OC determina la sucursal a mostrar
-    const depositoOrden = DEPOSITOS.find((d) => d.id === orden?.deposito.id);
-    setDraft((prev) => ({
-      ...prev,
-      ordenCompraId: ordenId,
-      sucursalId: orden && depositoOrden ? String(depositoOrden.sucursalId) : "",
-      depositoId: orden ? String(orden.deposito.id) : "",
-      items: orden
-        ? orden.articulos.map((a) => ({
-            key: `item-${a.articuloId}`,
-            articuloId: a.articuloId,
-            articuloNombre: a.articuloNombre,
-            cantidadSolicitada: a.cantidad,
-            cantidadRecibida: String(a.cantidad),
+
+  /**
+   * Al elegir la OC, se le pregunta al backend QUÉ FALTA RECIBIR.
+   *
+   * Antes las filas salían de `orden.articulos`, o sea de la cantidad original
+   * de la OC. Eso rompía el caso central de la HU: en una segunda entrega
+   * parcial, el formulario ofrecía recibir de nuevo lo que ya había llegado.
+   *
+   * `/pendiente-recepcion` devuelve solo las líneas con pendiente > 0, así que
+   * una OC ya completa muestra la lista vacía en vez de invitar a duplicar el
+   * stock.
+   */
+  const handleOrdenChange = useCallback(
+    async (ordenId: string) => {
+      const orden = ordenes.find((o) => o.id === Number(ordenId));
+      const depositoOrden = depositos.find((d) => d.id === orden?.deposito.id);
+
+      setErrorServidor(null);
+      setDraft((prev) => ({
+        ...prev,
+        ordenCompraId: ordenId,
+        // El depósito pactado en la OC viene precargado, pero se puede cambiar:
+        // la entrega puede terminar descargándose en otro depósito, y eso lo
+        // decide quien recibe.
+        sucursalId: depositoOrden ? String(depositoOrden.sucursalId) : "",
+        depositoId: depositoOrden ? String(depositoOrden.id) : "",
+        items: [],
+      }));
+
+      if (!orden) return;
+
+      setCargandoLineas(true);
+      try {
+        const lineas = await cargarPendiente(orden.id);
+        setDraft((prev) => ({
+          ...prev,
+          items: lineas.map((l) => ({
+            key: `item-${l.ordenCompraDetalleId}`,
+            articuloId: l.articuloId,
+            articuloNombre: l.articuloNombre,
+            // "Solicitado" es el PENDIENTE, no la cantidad de la OC (D-4).
+            cantidadSolicitada: l.cantidadPendiente,
+            cantidadRecibida: String(l.cantidadPendiente),
             observacion: "" as ObservacionRecepcion | "",
             observacionDetalle: "",
-            ordenCompraDetalleId: a.ordenCompraDetalleId,
-          }))
-        : [],
-    }));
-  };
+            ordenCompraDetalleId: l.ordenCompraDetalleId,
+          })),
+        }));
+      } catch {
+        setErrorServidor("No se pudo cargar lo que falta recibir de esa orden.");
+      } finally {
+        setCargandoLineas(false);
+      }
+    },
+    [ordenes, depositos, cargarPendiente],
+  );
 
   const validacion = useMemo(() => {
     const errores: string[] = [];
@@ -144,8 +218,11 @@ function RecepcionFormContent({
     if (!draft.depositoId) errores.push("Seleccioná el depósito destino.");
 
     const items = draft.items;
-    if (items.length === 0) {
-      errores.push("La orden no tiene artículos para recibir.");
+    if (items.length === 0 && draft.ordenCompraId && !cargandoLineas) {
+      // No es un error de carga: la orden ya se recibió entera. El mensaje lo
+      // dice, en vez del "la orden no tiene artículos" anterior, que sonaba a
+      // que la OC estaba mal armada.
+      errores.push("Esa orden ya fue recibida por completo: no queda nada pendiente.");
     }
 
     const allZero = items.every(
@@ -169,30 +246,17 @@ function RecepcionFormContent({
       }
     }
 
-    if (draft.tipoRecepcion === "total") {
-      const incomplete = items.filter(
-        (it) => parseCantidad(it.cantidadRecibida) !== it.cantidadSolicitada,
-      );
-      if (incomplete.length > 0) {
-        errores.push(
-          `Recepción completa: todos los artículos deben recibirse en su totalidad (${incomplete.map((i) => i.articuloNombre).join(", ")}).`,
-        );
-      }
-    }
-
-    if (draft.tipoRecepcion === "parcial") {
-      const allExact = items.every(
-        (it) => parseCantidad(it.cantidadRecibida) === it.cantidadSolicitada,
-      );
-      if (allExact && items.length > 0) {
-        errores.push(
-          "Recepción parcial: al menos un artículo debe tener diferencia respecto a lo solicitado.",
-        );
-      }
-    }
+    // Acá había dos reglas más, atadas al select "Tipo de recepción":
+    // "si es total, todos los artículos completos" y "si es parcial, alguno
+    // tiene que diferir". Se fueron con el select.
+    //
+    // La segunda además era falsa: una segunda entrega que completa lo que
+    // faltaba es parcial en el sentido de que la OC ya venía a medias, y sin
+    // embargo cada línea llega exacta. La regla obligaba a inventar una
+    // diferencia para poder guardar.
 
     return errores;
-  }, [draft]);
+  }, [draft, cargandoLineas]);
 
   const diferencias = useMemo(() => {
     return draft.items.filter(
@@ -205,9 +269,18 @@ function RecepcionFormContent({
   // Filtrar depósitos por sucursal seleccionada (patrón FichaFormModal)
   const sucursalId = draft.sucursalId ? Number(draft.sucursalId) : 0;
   const depositosSucursal = useMemo(() => {
-    if (!sucursalId) return DEPOSITOS;
-    return DEPOSITOS.filter((d) => d.sucursalId === sucursalId);
-  }, [sucursalId]);
+    if (!sucursalId) return depositos;
+    return depositos.filter((d) => d.sucursalId === sucursalId);
+  }, [sucursalId, depositos]);
+
+  // Las sucursales salen de los depósitos que devolvió la API, no de una lista
+  // aparte: si un depósito existe, su sucursal existe. Evita que el select
+  // ofrezca una sucursal sin depósitos donde descargar.
+  const sucursales = useMemo(() => {
+    const porId = new Map<number, string>();
+    for (const d of depositos) porId.set(d.sucursalId, d.sucursal);
+    return [...porId].map(([id, nombre]) => ({ id, nombre }));
+  }, [depositos]);
 
   const showErrors = submitAttempted;
 
@@ -224,64 +297,54 @@ function RecepcionFormContent({
     }));
   }
 
-  function handleConfirm() {
+  async function handleConfirm() {
     setSubmitAttempted(true);
+    setErrorServidor(null);
     if (validacion.length > 0) return;
 
-    // BACKEND: reemplazar por el usuario autenticado actual (session/token)
-    const receptor = "Carlos López";
-    const now = new Date().toISOString();
-
-    const nuevaRecepcion: Recepcion = {
-      id: numeroSiguiente,
-      numero: numeroRecepcion(numeroSiguiente),
-      orden_compra_id: Number(draft.ordenCompraId),
-      ordenCompra: ordenSeleccionada
-        ? {
-            numero: ordenSeleccionada.numero,
-            proveedor: ordenSeleccionada.proveedor,
-          }
-        : { numero: "", proveedor: { id: 0, razonSocial: "" } },
-      sucursal: SUCURSALES.find((s) => s.id === Number(draft.sucursalId))?.nombre ?? "",
-      deposito_id: Number(draft.depositoId),
-      deposito:
-        DEPOSITOS.find((d) => d.id === Number(draft.depositoId)) ??
-        DEPOSITOS[0],
-      tipo_recepcion: draft.tipoRecepcion,
-      usuario_id: 3,
-      usuario: { nombre: receptor },
-      fecha_hora: now,
-      observacion_general: draft.observacionGeneral || null,
-      _detalles: draft.items.map((it, idx) => ({
-        id: idx + 1,
-        recepcion_id: numeroSiguiente,
-        orden_compra_detalle_id: it.ordenCompraDetalleId,
-        articulo_id: it.articuloId,
-        articuloNombre: it.articuloNombre,
-        cantidadSolicitada: it.cantidadSolicitada,
+    // El body lleva SOLO lo que el backend no puede saber solo. Quedaron fuera,
+    // a propósito, cuatro cosas que la versión anterior fabricaba acá:
+    //
+    //   · `numero`         lo genera un trigger de la base
+    //   · `tipoRecepcion`  lo deriva el backend de lo que quede pendiente
+    //   · `usuario_id`     sale de la sesión, nunca del navegador
+    //   · `fecha_hora`     la pone la base con su reloj, no el del cliente
+    //
+    // Las líneas con 0 recibido igual se mandan: el backend valida el conjunto
+    // y es él quien decide que "no llegó nada" es RECEPCION_VACIA.
+    const payload: CrearRecepcionPayload = {
+      ordenCompraId: Number(draft.ordenCompraId),
+      depositoId: Number(draft.depositoId),
+      observacionGeneral: draft.observacionGeneral.trim() || null,
+      items: draft.items.map((it) => ({
+        ordenCompraDetalleId: it.ordenCompraDetalleId,
         cantidadRecibida: parseCantidad(it.cantidadRecibida),
-        observacion: (it.observacion || null) as ObservacionRecepcion | null,
-        observacionDetalle: it.observacionDetalle || null,
+        observacion: it.observacion || null,
+        observacionDetalle: it.observacionDetalle.trim() || null,
       })),
     };
 
-    onConfirm(nuevaRecepcion);
+    setGuardando(true);
+    const error = await onConfirm(payload);
+    setGuardando(false);
+
+    // Si falló, el modal queda abierto con todo cargado: rehacer una recepción
+    // de doce artículos porque el servidor devolvió un error sería peor que el
+    // error.
+    if (error) setErrorServidor(error);
   }
 
   return (
     <>
       <div className="flex flex-col gap-5">
-        {/* Número automático */}
-        <div
-          role="note"
-          className="rounded-md border border-border bg-cream-50 px-4 py-3 text-sm text-text-secondary"
-        >
-          Número de recepción:{" "}
-          <span className="font-mono font-bold text-brand-900">
-            {numeroRecepcion(numeroSiguiente)}
-          </span>{" "}
-          (se asigna automáticamente)
-        </div>
+        {/*
+          Acá iba un "Número de recepción: REC-0004 (se asigna automáticamente)".
+          Se sacó porque era un número inventado en el navegador que el servidor
+          después ignoraba: el real lo genera un trigger al insertar, y encima
+          con otro formato (MOV-000123, porque la recepción es un movimiento de
+          stock). Mostrar el de mentira solo servía para que no coincidiera con
+          el del comprobante.
+        */}
 
         {/* Campos de cabecera */}
         <div className="grid gap-4 sm:grid-cols-2">
@@ -289,7 +352,7 @@ function RecepcionFormContent({
             label="OC vinculada"
             requiredMark
             value={draft.ordenCompraId}
-            onChange={(e) => handleOrdenChange(e.target.value)}
+            onChange={(e) => void handleOrdenChange(e.target.value)}
             error={
               showErrors && !draft.ordenCompraId
                 ? "Seleccioná una orden de compra"
@@ -321,7 +384,7 @@ function RecepcionFormContent({
             hint="Selecciona la sucursal para ver sus depósitos disponibles"
           >
             <option value="">[ Seleccionar sucursal ]</option>
-            {SUCURSALES.map((s) => (
+            {sucursales.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.nombre}
               </option>
@@ -345,33 +408,22 @@ function RecepcionFormContent({
             <option value="">[ Seleccionar sucursal primero ]</option>
             {depositosSucursal.map((d) => (
               <option key={d.id} value={d.id}>
-                {d.nombre} — {d.ubicacion}
+                {d.nombre}{d.ubicacion ? ` — ${d.ubicacion}` : ""}
               </option>
             ))}
           </Select>
 
-          <Select
-            label="Tipo de recepción"
-            requiredMark
-            value={draft.tipoRecepcion}
-            onChange={(e) =>
-              setDraft((prev) => ({
-                ...prev,
-                tipoRecepcion: e.target.value as TipoRecepcion,
-              }))
-            }
-            hint={
-              draft.tipoRecepcion === "total"
-                ? "Todos los artículos deben recibirse en su totalidad"
-                : "Se reciben solo los artículos que llegaron"
-            }
-          >
-            {TIPOS_RECEPCION.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
-              </option>
-            ))}
-          </Select>
+          {/*
+            Acá iba el select "Tipo de recepción (Completa/Parcial)".
+            Se eliminó (decisión D-1, docs/backend/HU-COMP-03.md §8.1).
+
+            Que el usuario lo eligiera permitía marcar "Completa" con artículos
+            faltando, y eso CIERRA la orden de compra: la mercadería que no
+            llegó dejaba de estar pendiente y nadie se enteraba.
+
+            Ahora lo deriva el backend de un hecho, no de una opinión: si
+            después de esta entrega alguna línea sigue incompleta, es parcial.
+          */}
 
           <Input
             label="Observaciones"
@@ -385,6 +437,12 @@ function RecepcionFormContent({
             }
           />
         </div>
+
+        {cargandoLineas && (
+          <p role="status" className="text-sm text-text-secondary">
+            Cargando lo que falta recibir de esta orden…
+          </p>
+        )}
 
         {/* Detalle por artículo */}
         {draft.items.length > 0 && (
@@ -559,6 +617,21 @@ function RecepcionFormContent({
           </div>
         )}
 
+        {/*
+          El error del backend va SEPARADO de los de validación del formulario.
+          Son cosas distintas: los de arriba los podés arreglar mirando la
+          pantalla; este te dice algo que solo la base sabía — que otro ya
+          recibió esa mercadería, o que la orden se cerró mientras cargabas.
+        */}
+        {errorServidor && (
+          <div
+            role="alert"
+            className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3"
+          >
+            <p className="text-sm font-bold text-destructive">{errorServidor}</p>
+          </div>
+        )}
+
         {/* Errores de validación */}
         {showErrors && validacion.length > 0 && (
           <div
@@ -579,16 +652,18 @@ function RecepcionFormContent({
 
       {/* Footer del modal */}
       <div className="flex items-center justify-end gap-3 border-t border-border px-6 py-4">
-        <Button variant="outline" size="md" onClick={onClose}>
+        <Button variant="outline" size="md" onClick={onClose} disabled={guardando}>
           Cancelar
         </Button>
         <Button
           variant="primary"
           size="md"
-          onClick={handleConfirm}
-          disabled={showErrors && validacion.length > 0}
+          onClick={() => void handleConfirm()}
+          // También mientras guarda: un doble clic mandaría dos recepciones, y
+          // la segunda sumaría stock de nuevo.
+          disabled={guardando || cargandoLineas || (showErrors && validacion.length > 0)}
         >
-          Confirmar Recepción
+          {guardando ? "Guardando…" : "Confirmar Recepción"}
         </Button>
       </div>
     </>

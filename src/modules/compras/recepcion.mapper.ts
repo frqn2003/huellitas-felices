@@ -7,25 +7,15 @@ import type {
 } from "./recepcion.types";
 
 /**
- * HU-COMP-03 — fila de Postgres → shape que el front espera.
+ * HU-COMP-03 — traduce filas de la base al contrato que consume la pantalla.
  *
- * El contrato es `src/data/recepciones.ts`. Ese archivo mezcla snake_case
- * (`orden_compra_id`, `tipo_recepcion`, `_detalles`) con camelCase
- * (`articuloNombre`, `cantidadRecibida`), y el mapper lo copia tal cual: es el
- * contrato que la pantalla ya consume, y cambiarlo de un solo lado la rompe
- * (GUIA-IMPLEMENTACION §7).
+ * El mapper existe para que un cambio de nombre de columna no llegue al front.
+ * Acá pasa tres cosas y ninguna es lógica de negocio:
  *
- * Tres traducciones que no son cosméticas:
- *
- *  1. numeric → number. El driver `pg` devuelve los numeric(12,2) como STRING
- *     para no perder precisión. Sin convertir, el front recibiría
- *     cantidadRecibida: "85" y cualquier resta o comparación numérica fallaría
- *     en silencio.
- *
- *  2. Date → string ISO. Los timestamp llegan como objetos Date; el tipo del
- *     front dice `string`.
- *
- *  3. nombre + apellido → `usuario.nombre`. El front muestra un solo campo.
+ *  1. snake_case de la base → el shape que espera el componente
+ *  2. `numeric` → `number` (el driver `pg` los entrega como STRING para no
+ *     perder precisión; si se pasaran tal cual, `cantidad + 1` daría "501")
+ *  3. `Date` → string ISO
  */
 
 function aNumero(valor: string | number): number {
@@ -35,20 +25,39 @@ function aNumero(valor: string | number): number {
 export function toApiDetalle(row: RecepcionDetalleRow): RecepcionDetalle {
   return {
     id: row.id,
-    recepcion_id: row.recepcion_id,
-    orden_compra_detalle_id: row.orden_compra_detalle_id,
+    // El front lo llama `recepcion_id`; en la base es el id de la cabecera del
+    // movimiento. Es el mismo número: la recepción ES el movimiento.
+    recepcion_id: row.movimiento_id,
+    // 0 solo si el artículo no está en ninguna línea de la OC, que la base
+    // rechaza al insertar. Queda por si hay datos cargados a mano.
+    orden_compra_detalle_id: row.orden_compra_detalle_id ?? 0,
     articulo_id: row.articulo_id,
     articuloNombre: row.articulo_nombre,
 
-    // ⚠️ Esto es el PENDIENTE que había al momento de la entrega, no la cantidad
+    // ⚠️ Esto es el PENDIENTE que había ANTES de esta entrega, no la cantidad
     // total de la OC (D-4). En una primera recepción total coinciden; en una
-    // segunda parcial, no. El brief del front asume lo contrario: la columna
-    // "Solicitado" de la pantalla tiene que mostrar este número (§8.3 del doc).
+    // segunda parcial, no. La columna "Solicitado" de la pantalla muestra este
+    // número.
     cantidadSolicitada: aNumero(row.cantidad_solicitada),
     cantidadRecibida: aNumero(row.cantidad_recibida),
 
-    observacion: row.observacion,
-    observacionDetalle: row.observacion_detalle,
+    // ⚠️ SIEMPRE NULL, Y NO ES UN OLVIDO.
+    //
+    // `movimiento_stock_det` tiene tres columnas —movimiento, ficha, cantidad—
+    // y ninguna donde guardar "faltante" o "2 envases rotos". Al unificar la
+    // recepción con los movimientos de stock (pedido del PO), la observación
+    // por línea se quedó sin lugar.
+    //
+    // Qué sí queda registrado de la diferencia:
+    //   · `notificacion_compra` la detecta sola y guarda cantidades y mensaje
+    //   · el texto que el usuario escriba se conserva en `motivo` de la
+    //     cabecera (ver armarMotivo() en el service), sin atribución por línea
+    //
+    // Para recuperarla haría falta una columna nueva en `movimiento_stock_det`.
+    // Está planteado en docs/backend/HU-COMP-03.md como decisión abierta: es
+    // una decisión de modelo, no algo que el backend pueda resolver solo.
+    observacion: null,
+    observacionDetalle: null,
   };
 }
 
@@ -61,6 +70,7 @@ export function toApi(row: RecepcionRow, detalles: RecepcionDetalleRow[]): Recep
       numero: row.orden_cod_ord,
       proveedor: { id: row.proveedor_id, razonSocial: row.proveedor_razon_social },
     },
+    sucursal: row.sucursal_nombre,
     deposito_id: row.deposito_id,
     deposito: { id: row.deposito_id, nombre: row.deposito_nombre },
     tipo_recepcion: row.tipo_recepcion,
@@ -84,31 +94,35 @@ export function toApiList(
   detalles: RecepcionDetalleRow[],
 ): Recepcion[] {
   const porRecepcion = new Map<number, RecepcionDetalleRow[]>();
+
   for (const d of detalles) {
-    const grupo = porRecepcion.get(d.recepcion_id);
-    if (grupo) grupo.push(d);
-    else porRecepcion.set(d.recepcion_id, [d]);
+    const lista = porRecepcion.get(d.movimiento_id);
+    if (lista) lista.push(d);
+    else porRecepcion.set(d.movimiento_id, [d]);
   }
-  return rows.map((row) => toApi(row, porRecepcion.get(row.id) ?? []));
+
+  return rows.map((r) => toApi(r, porRecepcion.get(r.id) ?? []));
 }
 
 /**
- * Línea de la OC → lo que el formulario de alta necesita para armar una fila.
+ * Una línea de la OC con su pendiente, para el formulario de alta.
  *
- * `cantidadPendiente` nunca sale negativa: si la base tuviera una
- * sobre-recepción cargada a mano desde el SQL Editor, mostrar "-5 pendientes"
- * confundiría más de lo que informa.
+ * `cantidadPendiente` puede dar negativo si se recibió de más (algo que la base
+ * permite y notifica). Se deja pasar el número real en vez de truncarlo en 0:
+ * si la pantalla muestra "-5 pendientes", eso es exactamente lo que hay que
+ * mirar, y esconderlo detrás de un cero haría que el problema no exista para
+ * nadie.
  */
 export function toLineaPendiente(row: LineaPendienteRow): LineaPendienteApi {
   const pedida = aNumero(row.cantidad_pedida);
-  const acumulada = aNumero(row.cantidad_recibida_acumulada);
+  const recibida = aNumero(row.cantidad_recibida_acumulada);
 
   return {
     ordenCompraDetalleId: row.orden_compra_detalle_id,
     articuloId: row.articulo_id,
     articuloNombre: row.articulo_nombre,
     cantidadPedida: pedida,
-    cantidadRecibidaAcumulada: acumulada,
-    cantidadPendiente: Math.max(0, pedida - acumulada),
+    cantidadRecibida: recibida,
+    cantidadPendiente: pedida - recibida,
   };
 }

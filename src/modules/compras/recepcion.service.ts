@@ -1,5 +1,4 @@
-import type { PoolClient } from "pg";
-import type { Recepcion, TipoRecepcion } from "@/data/recepciones";
+import type { Recepcion } from "@/data/recepciones";
 import { withTransaction } from "@/lib/db/tx";
 import { withAuditUser } from "@/lib/audit/audit";
 import { BusinessRuleError, NotFoundError } from "@/lib/http/errors";
@@ -11,7 +10,6 @@ import type {
   FichaCreada,
   FiltrosRecepcion,
   LineaPendienteApi,
-  LineaPendienteRow,
   LineaRecepcionInsert,
   ListadoRecepciones,
   NotificacionGenerada,
@@ -22,38 +20,42 @@ import type { CrearRecepcionInput } from "./recepcion.schema";
 /**
  * HU-COMP-03 — reglas de negocio de la Recepción de Mercadería.
  *
- * ACÁ VA: las reglas de los criterios de aceptación, la orquestación de la
- * transacción y la decisión de qué error corresponde.
+ * ⚠️ REESCRITO (2026-09-08) sobre `movimiento_stock_cab` / `_det`.
+ *    La versión anterior escribía en `recepcion_mercaderia*`, dos tablas que no
+ *    existen. Ver el encabezado de recepcion.types.ts.
  *
- * ACÁ NO VA: SQL (es del repo) ni nada de HTTP. En este archivo no aparece
- * `Request`, `Response` ni un status code.
+ * LO QUE ESTE SERVICE **NO** HACE, PORQUE LO HACE LA BASE
  *
- * LO QUE ESTE SERVICE **NO** HACE, A PROPÓSITO:
+ *   Al reescribirlo, cinco bloques de código desaparecieron. No se "borraron
+ *   por prolijidad": cada uno duplicaba un trigger, y un cálculo duplicado no
+ *   es redundancia inofensiva — es dos respuestas que tarde o temprano difieren.
  *
- *  · No actualiza `ficha_stock.stock_actual`. Lo hace el trigger
- *    `fn_actualizar_stock_det` al insertar cada detalle del movimiento. Si el
- *    service lo hiciera también, el stock se contaría DOS VECES.
+ *   · No suma `ficha_stock.stock_actual`      → fn_actualizar_stock_det
+ *   · No mueve `orden_compra.estado_id`       → fn_actualiza_oc_por_recepcion
+ *   · No escribe `notificacion_compra`        → fn_notificar_diferencia_compra
+ *   · No genera el `numero`                   → fn_generar_numero_movimiento
+ *   · No escribe en `auditoria`               → trg_auditoria_movimiento_stock_cab
+ *     (lo único que hay que recordar es `withAuditUser()` al abrir la transacción)
  *
- *  · No escribe en `auditoria`. Lo hace `trg_auditoria_recepcion_mercaderia`.
- *    Lo único que hay que recordar es `withAuditUser()` al abrir la transacción.
+ *   Tampoco valida que el artículo pertenezca a la OC ni que la OC no esté
+ *   cerrada: eso lo hacen `fn_valida_mov_det_recepcion_compra` y
+ *   `fn_valida_mov_recepcion_compra`. El service igual chequea el estado final
+ *   antes, para devolver un 409 con un mensaje útil en vez del texto crudo de
+ *   un RAISE de Postgres.
  *
- *  · No genera el `numero`. Lo pone `trg_generar_numero_recepcion`.
+ * LO QUE SÍ SIGUE ACÁ
  *
- *  · No acepta el `tipo_recepcion` del usuario. Lo deriva (D-1).
+ *   Las reglas que la base NO impone y son criterios de aceptación: que la
+ *   recepción no venga vacía, que no se repita una línea, y que no se reciba
+ *   más de lo que faltaba. Esa última es la importante — la base tolera la
+ *   sobre-recepción y se limita a notificarla.
  */
 
-// ---------------------------------------------------------
-// Nombres de estado que este módulo produce
-// ---------------------------------------------------------
-// Se resuelven contra el catálogo por nombre normalizado (ver
-// repo.findEstadoByNombre): el proyecto convive con 'Recibida Parcial' en el
-// seed y 'recibida_parcial' en el código de órdenes, y este módulo funciona con
-// cualquiera de las dos sin tener que unificar nada primero.
-const ESTADO_PARCIAL = "recibida_parcial";
-const ESTADO_TOTAL = "recibida_total";
-
-/** El origen del catálogo `origen_movimiento` que corresponde a una recepción. */
+/** El origen del catálogo `origen_movimiento` que convierte un ingreso en recepción. */
 const ORIGEN_RECEPCION = "recepcion_compra";
+
+/** `movimiento_stock_cab.motivo` es varchar(255). */
+const MAX_MOTIVO = 255;
 
 // ---------------------------------------------------------
 // Lecturas
@@ -117,26 +119,34 @@ export async function pendienteDeRecepcion(
 }
 
 // ---------------------------------------------------------
-// Escritura — el corazón de la HU
+// Escritura
 // ---------------------------------------------------------
 
 export type ResultadoRecepcion = {
   recepcion: Recepcion;
-  /** Cómo quedó la OC: el nombre del estado tal cual lo guarda el catálogo. */
+  /** Cómo quedó la OC. Lo movió el trigger; acá solo se lee para el front. */
   estadoOrdenResultante: string;
+  /**
+   * El movimiento de stock que se generó.
+   *
+   * Se mantiene en la respuesta aunque ahora sea la recepción misma: el front
+   * ya lo muestra ("Movimiento MOV-000123 registrado") y sacarlo obligaría a
+   * tocar la pantalla sin ganar nada. `id` y `numero` coinciden con los de
+   * `recepcion`.
+   */
   movimientoStock: { id: number; numero: string };
   /** Fichas que no existían y se crearon al vuelo (D-2). Dispara el aviso de umbrales. */
   fichasCreadas: FichaCreada[];
-  /** Alimenta el toast de alerta por diferencias. */
+  /** Diferencias vivas de la OC, tal como las dejó el trigger. */
   notificaciones: NotificacionGenerada[];
 };
 
 /**
  * Registra una recepción contra una Orden de Compra.
  *
- * TODO pasa en UNA transacción. Si algo falla después de haber sumado stock,
- * el ROLLBACK lo deshace: no puede quedar una recepción sin movimiento, ni un
- * movimiento sin recepción, ni una OC cerrada sin lo que la cerró.
+ * TODO pasa en UNA transacción. Si algo falla después de haber sumado stock, el
+ * ROLLBACK lo deshace: no puede quedar stock sumado sin movimiento que lo
+ * explique, ni una OC cerrada sin la entrega que la cerró.
  */
 export async function registrar(
   input: CrearRecepcionInput,
@@ -159,11 +169,14 @@ export async function registrar(
     // 2. Validar la OC y el depósito
     // -----------------------------------------------------
     // Solo `es_final`, y no la tabla de transiciones de puedeTransicionar():
-    // esa máquina no admite pendiente → recibida_parcial, pero el criterio del
-    // doc (§8.2) es explícito en que se puede recibir contra CUALQUIER orden no
-    // final —Pendiente, Enviada o Recibida Parcial—. Un proveedor que entrega
-    // antes de que alguien marque la orden como "enviada" es lo normal, no un
-    // error que haya que frenar en el depósito.
+    // esa máquina no admite pendiente → recibida_parcial, pero se puede recibir
+    // contra CUALQUIER orden no final —Pendiente, Enviada o Recibida Parcial—.
+    // Un proveedor que entrega antes de que alguien marque la orden como
+    // "enviada" es lo normal, no un error que haya que frenar en el depósito.
+    //
+    // `fn_valida_mov_recepcion_compra` lo rechazaría igual; esto existe para
+    // que el usuario reciba un mensaje con el código de la orden y su estado,
+    // en vez del texto crudo de un RAISE.
     if (orden.es_final) {
       throw new BusinessRuleError(
         "OC_ESTADO_FINAL",
@@ -192,116 +205,101 @@ export async function registrar(
     );
 
     // -----------------------------------------------------
-    // 4. Validar los items del body contra ese pendiente
+    // 4. Validar los items contra ese pendiente
     // -----------------------------------------------------
     const lineas = validarItems(input, pendientePorLinea, orden);
 
     // -----------------------------------------------------
-    // 5. Cabecera
+    // 5. Fichas de stock
     // -----------------------------------------------------
-    // `tipo_recepcion` es NOT NULL y el veredicto AUTORITATIVO recién se puede
-    // dar en el paso 7, con el detalle ya escrito. Pero acá no se pone un
-    // placeholder: se calcula en memoria, que con la OC bloqueada da el mismo
-    // resultado, porque nadie más puede estar recibiendo contra esta orden.
-    //
-    // POR QUÉ IMPORTA: `trg_auditoria_recepcion_mercaderia` es AFTER INSERT y
-    // guarda un snapshot de la fila tal como nace. Si naciera siempre 'parcial'
-    // y se corrigiera después con un UPDATE, la bitácora diría "parcial" en la
-    // entrega que cerró la orden — y la bitácora es un criterio de aceptación
-    // de esta HU, no un detalle.
-    const tipoEstimado = derivarTipo(lineasOrden, lineas);
+    // Antes de la cabecera, porque el detalle las necesita. Se crean al vuelo
+    // si no existen (D-2): la recepción es la forma natural en que un artículo
+    // entra por primera vez a un depósito.
+    const fichasCreadas: FichaCreada[] = [];
+    const fichaPorLinea = new Map<number, number>();
 
-    const cabecera = await repo.insertCabecera(
+    for (const linea of lineas) {
+      const ficha = await repo.asegurarFichaStock(linea.articuloId, input.depositoId, client);
+      fichaPorLinea.set(linea.ordenCompraDetalleId, ficha.id);
+
+      if (ficha.creada) {
+        fichasCreadas.push({
+          articuloId: linea.articuloId,
+          articuloNombre: linea.articuloNombre,
+          fichaStockId: ficha.id,
+        });
+      }
+    }
+
+    // -----------------------------------------------------
+    // 6. La cabecera del movimiento — o sea, la recepción
+    // -----------------------------------------------------
+    const origen = await repo.findOrigenRecepcion(client);
+    if (!origen) {
+      // No es culpa del usuario: falta correr db/seeds/01_catalogos.sql. Sale
+      // como 500 genérico y el detalle queda en el log del server.
+      throw new Error(
+        `El catálogo origen_movimiento no tiene '${ORIGEN_RECEPCION}'. Correr db/seeds/01_catalogos.sql.`,
+      );
+    }
+
+    const cabecera = await movimientoRepo.insertCabecera(
       {
-        ordenCompraId: orden.id,
         depositoId: input.depositoId,
-        tipoRecepcion: tipoEstimado,
+        // NOT NULL y validado por trigger: una recepción siempre suma.
+        tipo: "ingreso",
+        origenId: origen.id,
+        // El gancho con la OC. Sin esto los cuatro triggers de recepción no se
+        // activan y el movimiento queda como un ingreso suelto.
+        origenEntidadId: orden.id,
         usuarioId,
-        observacionGeneral: input.observacionGeneral ?? null,
+        motivo: armarMotivo(input, lineas),
       },
       client,
     );
 
     // -----------------------------------------------------
-    // 6. Detalles
+    // 7. El detalle
     // -----------------------------------------------------
-    // `cantidad_solicitada` = el pendiente calculado en el paso 3, NUNCA lo que
-    // vino en el body (D-4).
-    const detallesInsertados: DetalleInsertado[] = [];
+    // Uno por uno y DESPUÉS de la cabecera: `fn_actualizar_stock_det` lee
+    // `movimiento_stock_cab.tipo` por `NEW.movimiento_id` para saber si suma o
+    // resta. Sin la cabecera no tiene contra qué resolverlo.
+    //
+    // Las líneas con cantidad 0 no se insertan. "De este artículo no llegó
+    // nada" es información válida para el formulario, pero como fila de
+    // movimiento sería un movimiento de cero unidades — y `ck_mov_det_cantidad`
+    // exige cantidad > 0. Que no haya fila ES el registro de que no llegó.
     for (const linea of lineas) {
-      // `diferencia` la devuelve la base: es una columna GENERATED, así que ese
-      // número es el que quedó guardado — no una resta hecha en JS que podría
-      // redondear distinto que numeric(12,2).
-      const { id, diferencia } = await repo.insertDetalle(cabecera.id, linea, client);
-      detallesInsertados.push({ detalleId: id, linea, diferencia: Number(diferencia) });
-    }
+      if (linea.cantidadRecibida <= 0) continue;
 
-    // -----------------------------------------------------
-    // 7. Confirmar el tipo contra la base y actualizar el estado de la OC
-    // -----------------------------------------------------
-    // La pregunta es una sola: ¿queda alguna línea de la orden cuyo acumulado
-    // siga siendo menor a lo pedido? Se le pregunta a la BASE, que ya ve los
-    // detalles recién insertados: el veredicto lo da la fuente de verdad, no
-    // una cuenta hecha en JS sobre un snapshot leído antes de escribir.
-    const incompletas = await repo.contarLineasIncompletas(orden.id, client);
-    const tipo = incompletas === 0 ? "total" : "parcial";
-    const nombreEstado = incompletas === 0 ? ESTADO_TOTAL : ESTADO_PARCIAL;
-
-    // Normalmente coinciden y no hay UPDATE. Solo difieren si alguien escribió
-    // detalle desde fuera de la aplicación (SQL Editor), que es el único camino
-    // que el lock no cubre. Ahí gana la base y la fila se corrige.
-    if (tipo !== tipoEstimado) {
-      await repo.setTipoRecepcion(cabecera.id, tipo, client);
-    }
-
-    const estado = await repo.findEstadoByNombre(nombreEstado, client);
-    if (!estado) {
-      // No es culpa del usuario: falta correr db/seeds/01_catalogos.sql. Sale
-      // como 500 genérico y el detalle queda en el log del server.
-      throw new Error(
-        `El catálogo estado_orden_compra no tiene '${nombreEstado}'. Correr db/seeds/01_catalogos.sql.`,
+      await movimientoRepo.insertDetalle(
+        {
+          movimientoId: cabecera.id,
+          fichaStockId: fichaPorLinea.get(linea.ordenCompraDetalleId)!,
+          cantidad: linea.cantidadRecibida,
+        },
+        client,
       );
     }
 
-    // Dispara trg_auditoria_orden_compra_estado, que guarda la fila anterior y
-    // la nueva: es el "registra en bitácora cada modificación de estado".
-    await ordenRepo.setEstado(orden.id, estado.id, client);
+    // -----------------------------------------------------
+    // 8. Leer cómo quedó todo
+    // -----------------------------------------------------
+    // El estado de la OC y las notificaciones los escribieron los triggers
+    // mientras se insertaba el detalle. Se leen con el MISMO client: desde otra
+    // conexión del pool estas filas todavía no existen (falta el COMMIT).
+    const estadoOrdenResultante =
+      (await repo.findEstadoOrden(orden.id, client)) ?? orden.estado_nombre;
 
-    // -----------------------------------------------------
-    // 8 y 9. Fichas de stock + movimiento de ingreso
-    // -----------------------------------------------------
-    const { movimiento, fichasCreadas } = await generarIngresoStock(
-      client,
-      { recepcionId: cabecera.id, numero: cabecera.numero },
-      orden,
-      input.depositoId,
-      usuarioId,
-      lineas,
-      pendientePorLinea,
-    );
+    const notificaciones = await repo.findNotificacionesDeOrden(orden.id, client);
 
-    // -----------------------------------------------------
-    // 10. Notificaciones por diferencia
-    // -----------------------------------------------------
-    const notificaciones = await generarNotificaciones(
-      client,
-      detallesInsertados,
-      orden,
-      pendientePorLinea,
-    );
-
-    // -----------------------------------------------------
-    // 11. Respuesta
-    // -----------------------------------------------------
-    // Se lee con el MISMO client: desde otra conexión del pool estas filas
-    // todavía no existen (falta el COMMIT) y la respuesta saldría en 404.
     const row = await repo.findById(cabecera.id, client);
     if (!row) throw new NotFoundError("la recepción", cabecera.id);
 
     return {
       recepcion: mapper.toApi(row, await repo.findDetalles([cabecera.id], client)),
-      estadoOrdenResultante: estado.nombre,
-      movimientoStock: movimiento,
+      estadoOrdenResultante,
+      movimientoStock: { id: cabecera.id, numero: cabecera.numero },
       fichasCreadas,
       notificaciones,
     };
@@ -309,23 +307,17 @@ export async function registrar(
 }
 
 // ---------------------------------------------------------
-// Validación de los items (paso 4)
+// Validaciones que la base no hace
 // ---------------------------------------------------------
 
 type PendienteLinea = { articuloId: number; articuloNombre: string; pendiente: number };
 
-/** Una línea ya escrita, con la `diferencia` que calculó la base. */
-type DetalleInsertado = {
-  detalleId: number;
-  linea: LineaRecepcionInsert;
-  diferencia: number;
-};
-
 /**
- * Convierte los items del body en líneas listas para insertar, o lanza.
+ * Valida las líneas del body contra el pendiente real de la OC.
  *
- * Todo lo de acá necesita el estado de la base, así que no puede vivir en zod:
- * se valida DENTRO del lock, contra el pendiente real.
+ * Corre DENTRO de la transacción y con la orden bloqueada. Hacerlo en el schema
+ * de zod sería leer un snapshot y decidir sobre datos que pueden haber cambiado
+ * un milisegundo después.
  */
 function validarItems(
   input: CrearRecepcionInput,
@@ -339,7 +331,7 @@ function validarItems(
     if (vistas.has(item.ordenCompraDetalleId)) {
       throw new BusinessRuleError(
         "LINEA_DUPLICADA",
-        "Hay una línea repetida: cargá la cantidad recibida en una sola fila.",
+        "Hay un artículo repetido en la recepción. Cargá una sola línea por artículo.",
         "items",
       );
     }
@@ -354,58 +346,37 @@ function validarItems(
       );
     }
 
-    // Una línea ya completa no puede volver a recibirse. Se separa del caso
-    // general porque el mensaje "solo quedaban 0 pendientes" no explica nada.
-    if (linea.pendiente <= 0) {
-      throw new BusinessRuleError(
-        "SOBRE_RECEPCION",
-        `Ya se recibió todo lo pedido de "${linea.articuloNombre}": no quedan unidades pendientes.`,
-        "items",
-      );
-    }
-
+    // ⚠️ ESTA VALIDACIÓN NO LA HACE LA BASE.
+    //
+    // `fn_notificar_diferencia_compra` acepta recibir de más y se limita a
+    // dejar una notificación con diferencia positiva. Que la base lo tolere no
+    // significa que el negocio lo permita: recibir 60 de una línea de 50 y
+    // sumarlo al stock sin que nadie lo autorice es una diferencia que hay que
+    // resolver con el proveedor, no absorber en silencio.
+    //
+    // Si la entrega realmente trajo de más, se recibe lo pactado y el excedente
+    // entra por un movimiento de ajuste, que deja constancia de quién lo aceptó.
     if (item.cantidadRecibida > linea.pendiente) {
       throw new BusinessRuleError(
         "SOBRE_RECEPCION",
-        `Se recibieron ${item.cantidadRecibida} unidades de "${linea.articuloNombre}" pero solo quedaban ${linea.pendiente} pendientes.`,
-        "items",
-      );
-    }
-
-    // La diferencia se calcula contra el PENDIENTE, no contra el total de la OC
-    // (D-4): significa "de lo que faltaba, esto no vino".
-    const diferencia = linea.pendiente - item.cantidadRecibida;
-    const observacion = item.observacion ?? null;
-
-    if (diferencia !== 0 && !observacion) {
-      throw new BusinessRuleError(
-        "OBSERVACION_REQUERIDA",
-        `Indicá el motivo de la diferencia en "${linea.articuloNombre}".`,
-        "items",
-      );
-    }
-
-    if (diferencia === 0 && observacion) {
-      throw new BusinessRuleError(
-        "OBSERVACION_INVALIDA",
-        `"${linea.articuloNombre}" llegó completo: no corresponde cargarle un motivo de diferencia.`,
+        `Se intentan recibir ${item.cantidadRecibida} unidades de ${linea.articuloNombre} ` +
+          `pero solo quedaban ${linea.pendiente} pendientes.`,
         "items",
       );
     }
 
     lineas.push({
       ordenCompraDetalleId: item.ordenCompraDetalleId,
-      cantidadSolicitada: linea.pendiente,
+      articuloId: linea.articuloId,
+      articuloNombre: linea.articuloNombre,
       cantidadRecibida: item.cantidadRecibida,
-      observacion,
-      observacionDetalle: item.observacionDetalle ?? null,
+      cantidadSolicitada: linea.pendiente,
     });
   }
 
-  // Criterio: "se ingresan solo los artículos y cantidades recibidos". Una
-  // recepción donde no llegó nada de nada no es una recepción parcial: es una
-  // entrega que no ocurrió, y no tiene por qué mover el stock ni cambiar el
-  // estado de la orden.
+  // Una recepción donde no llegó nada de nada no es una recepción. Se valida
+  // acá y no en zod porque el doc le asigna un código propio que el front
+  // distingue; un `.refine()` lo devolvería como DATOS_INVALIDOS genérico.
   if (!lineas.some((l) => l.cantidadRecibida > 0)) {
     throw new BusinessRuleError(
       "RECEPCION_VACIA",
@@ -418,192 +389,40 @@ function validarItems(
 }
 
 /**
- * ¿Esta entrega cierra la orden? (D-1)
+ * Arma el `motivo` de la cabecera juntando la observación general con las de cada línea.
  *
- * Es la misma pregunta que hace `contarLineasIncompletas()`, resuelta en
- * memoria para poder insertar la cabecera con el valor correcto de entrada.
+ * POR QUÉ SE CONCATENA EN VEZ DE GUARDARSE APARTE
+ *   Al unificar la recepción con los movimientos de stock, la observación por
+ *   línea se quedó sin columna: `movimiento_stock_det` solo tiene movimiento,
+ *   ficha y cantidad. Las opciones eran tirar ese texto o guardarlo donde
+ *   entre. Tirarlo sería perder lo que la persona del depósito escribió
+ *   —"faltan 15", "2 envases rotos"—, que es exactamente lo que después se le
+ *   reclama al proveedor.
  *
- * Se compara POR LÍNEA DE OC lo pedido contra el acumulado de TODAS las
- * recepciones —las anteriores más esta—, no solo contra lo que trae este body.
- * Ese es exactamente el motivo por el que el usuario no puede elegir el tipo a
- * mano: el criterio "si es total, todos los artículos tienen diferencia 0" es
- * falso cuando una parcial previa ya completó algunas líneas.
+ *   Se pierde la atribución por línea (queda el nombre del artículo en el texto,
+ *   no un FK). Recuperarla requiere una columna nueva; está anotado como
+ *   decisión abierta en docs/backend/HU-COMP-03.md.
  *
- * Las líneas de la OC que no vinieron en el body cuentan igual: si quedó alguna
- * sin completar, la entrega es parcial aunque todo lo que sí vino haya llegado
- * entero.
+ * `motivo` es varchar(255): si se pasa, se corta con "…" en vez de dejar que la
+ * base rechace el INSERT entero por un texto largo.
  */
-function derivarTipo(
-  lineasOrden: LineaPendienteRow[],
-  lineas: LineaRecepcionInsert[],
-): TipoRecepcion {
-  const recibidoAhora = new Map<number, number>();
-  for (const l of lineas) {
-    recibidoAhora.set(l.ordenCompraDetalleId, l.cantidadRecibida);
+function armarMotivo(input: CrearRecepcionInput, lineas: LineaRecepcionInsert[]): string | null {
+  const partes: string[] = [];
+
+  if (input.observacionGeneral) partes.push(input.observacionGeneral);
+
+  for (const item of input.items) {
+    if (!item.observacion && !item.observacionDetalle) continue;
+
+    const linea = lineas.find((l) => l.ordenCompraDetalleId === item.ordenCompraDetalleId);
+    const nombre = linea?.articuloNombre ?? `línea ${item.ordenCompraDetalleId}`;
+    const detalle = [item.observacion, item.observacionDetalle].filter(Boolean).join(": ");
+
+    partes.push(`${nombre} — ${detalle}`);
   }
 
-  const quedaAlgunaCorta = lineasOrden.some((l) => {
-    const acumulado =
-      Number(l.cantidad_recibida_acumulada) +
-      (recibidoAhora.get(l.orden_compra_detalle_id) ?? 0);
-    return acumulado < Number(l.cantidad_pedida);
-  });
+  if (partes.length === 0) return null;
 
-  return quedaAlgunaCorta ? "parcial" : "total";
-}
-
-// ---------------------------------------------------------
-// Ingreso de stock (pasos 8 y 9)
-// ---------------------------------------------------------
-
-/**
- * Genera el movimiento de ingreso por lo efectivamente recibido.
- *
- * Criterio: "Al confirmar, genera automáticamente un movimiento de ingreso de
- * stock (HU-STK-04) por las cantidades recibidas, referenciando la recepción".
- *
- * POR QUÉ ACÁ Y NO EN UN TRIGGER (D-5)
- *   El brief del front y el DBML piden un `AFTER INSERT ON recepcion_mercaderia`
- *   que genere el movimiento. No puede funcionar: en el instante en que se
- *   inserta la cabecera todavía no existe ninguna fila de detalle, así que el
- *   movimiento saldría vacío. Se hace acá, después de los detalles, dentro de la
- *   misma transacción — que además es el patrón que ya usa HU-STK-04.
- *
- * Se reutilizan los repos de Movimientos en vez de escribir el INSERT de nuevo:
- * el día que cambie la forma de registrar un movimiento, cambia en un solo lado.
- */
-async function generarIngresoStock(
-  client: PoolClient,
-  recepcion: { recepcionId: number; numero: string },
-  orden: OrdenParaRecepcionRow,
-  depositoId: number,
-  usuarioId: number,
-  lineas: LineaRecepcionInsert[],
-  pendientePorLinea: Map<number, PendienteLinea>,
-): Promise<{ movimiento: { id: number; numero: string }; fichasCreadas: FichaCreada[] }> {
-  // Solo lo que entró de verdad. Una línea recibida en 0 queda registrada en la
-  // recepción (con su observación) pero no mueve stock ni justifica crear una
-  // ficha: no entró nada al depósito.
-  const recibidas = lineas.filter((l) => l.cantidadRecibida > 0);
-
-  // El origen se resuelve por NOMBRE contra el catálogo, nunca por id
-  // hardcodeado. Ese bug ya pasó una vez en este proyecto: un `?? 1` dejaba
-  // TODA transferencia registrada como recepción de compra (ver el comentario
-  // en movimiento.repo.findOrigenByNombre).
-  const origenId = await movimientoRepo.findOrigenByNombre(ORIGEN_RECEPCION, client);
-  if (!origenId) {
-    throw new BusinessRuleError(
-      "ORIGEN_NO_CONFIGURADO",
-      `Falta el origen "${ORIGEN_RECEPCION}" en el catálogo origen_movimiento.`,
-    );
-  }
-
-  // Fichas primero: el trigger del stock tira HF002 si la ficha no existe.
-  const fichasCreadas: FichaCreada[] = [];
-  const cantidadPorFicha = new Map<number, number>();
-
-  for (const linea of recibidas) {
-    const info = pendientePorLinea.get(linea.ordenCompraDetalleId)!;
-    const ficha = await repo.asegurarFichaStock(info.articuloId, depositoId, client);
-
-    if (ficha.creada) {
-      fichasCreadas.push({
-        articuloId: info.articuloId,
-        articuloNombre: info.articuloNombre,
-        depositoId,
-      });
-    }
-
-    // Se acumula por ficha, no por línea de OC: `uq_mov_det_ficha` prohíbe dos
-    // detalles del mismo movimiento contra la misma ficha. Hoy una OC no puede
-    // repetir un artículo, pero si alguna vez pudiera, esto lo suma en un solo
-    // renglón en vez de reventar contra el único.
-    cantidadPorFicha.set(
-      ficha.id,
-      (cantidadPorFicha.get(ficha.id) ?? 0) + linea.cantidadRecibida,
-    );
-  }
-
-  // UNA cabecera para toda la recepción, con N detalles. `origen_entidad_id`
-  // apunta a `recepcion_mercaderia.id` — a la CABECERA de la recepción, no a su
-  // detalle: es el gancho que permite ir del movimiento a la recepción que lo
-  // originó. (El COMMENT viejo de la columna decía "detalle" y era incorrecto;
-  // lo corrige db/correcciones/14.)
-  const movimiento = await movimientoRepo.insertCabecera(
-    {
-      depositoId,
-      tipo: "ingreso",
-      origenId,
-      origenEntidadId: recepcion.recepcionId,
-      usuarioId,
-      motivo: `Recepción ${recepcion.numero} contra ${orden.cod_ord}`.slice(0, 255),
-    },
-    client,
-  );
-
-  // Cada INSERT dispara trg_actualizar_stock_det, que es quien SUMA el stock.
-  // El service no toca ficha_stock: si lo hiciera, se contaría dos veces.
-  for (const [fichaStockId, cantidad] of cantidadPorFicha) {
-    await movimientoRepo.insertDetalle(
-      { movimientoId: movimiento.id, fichaStockId, cantidad },
-      client,
-    );
-  }
-
-  return { movimiento, fichasCreadas };
-}
-
-// ---------------------------------------------------------
-// Notificaciones (paso 10)
-// ---------------------------------------------------------
-
-/**
- * Una notificación por cada línea con diferencia, dirigida al emisor de la OC.
- *
- * Criterio: "Detecta y registra diferencias entre cantidad solicitada y
- * recibida, notificando al responsable de compras".
- *
- * El destinatario es `orden_compra.usuario_id` (D-3): no existe un rol
- * "responsable de compras" en el modelo, y quien emitió la orden es quien tiene
- * el contexto para reclamarle al proveedor.
- */
-async function generarNotificaciones(
-  client: PoolClient,
-  detalles: DetalleInsertado[],
-  orden: OrdenParaRecepcionRow,
-  pendientePorLinea: Map<number, PendienteLinea>,
-): Promise<NotificacionGenerada[]> {
-  const generadas: NotificacionGenerada[] = [];
-
-  for (const { detalleId, linea, diferencia } of detalles) {
-    if (diferencia === 0) continue;
-
-    const info = pendientePorLinea.get(linea.ordenCompraDetalleId)!;
-
-    // `mensaje` es varchar(255): el detalle libre que escribió el operario
-    // puede ser largo, así que el recorte va sobre el texto final.
-    const motivo = linea.observacionDetalle?.trim();
-    const mensaje = [
-      `Diferencia en ${info.articuloNombre} (${orden.cod_ord}):`,
-      `solicitado ${linea.cantidadSolicitada}, recibido ${linea.cantidadRecibida}.`,
-      linea.observacion ? `Motivo: ${linea.observacion}.` : "",
-      motivo ?? "",
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .slice(0, 255);
-
-    await repo.insertNotificacion(
-      {
-        recepcionDetalleId: detalleId,
-        usuarioResponsableId: orden.usuario_id,
-        mensaje,
-      },
-      client,
-    );
-
-    generadas.push({ usuarioResponsableId: orden.usuario_id, mensaje });
-  }
-
-  return generadas;
+  const texto = partes.join(" · ");
+  return texto.length <= MAX_MOTIVO ? texto : `${texto.slice(0, MAX_MOTIVO - 1)}…`;
 }

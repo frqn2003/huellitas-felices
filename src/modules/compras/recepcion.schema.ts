@@ -16,14 +16,33 @@ import { z } from "zod";
  *    "Total" a mano, la OC se cerraría aunque falten artículos.
  *  · `cantidadSolicitada` — la calcula el service con la OC bloqueada (D-4).
  *    Es el pendiente real al momento de la entrega, no lo que crea el front.
- *  · `numero` — lo genera el trigger `trg_generar_numero_recepcion`.
+ *  · `numero` — lo genera el trigger `fn_generar_numero_movimiento` (MOV-000123:
+ *    la recepción es un movimiento de stock, ver recepcion.types.ts).
  *  · `usuarioId` — sale de la sesión, nunca del body (regla dura §7.5).
  *
  * La regla detrás de las cuatro: lo que la base o el server saben calcular, no
  * se acepta del cliente.
  */
 
-/** Los tres motivos del enum `tipo_observacion_recepcion`. */
+/**
+ * Los tres motivos de diferencia.
+ *
+ * ⚠️ YA NO SE PERSISTEN POR LÍNEA. Al unificar la recepción con los movimientos
+ *    de stock (pedido del PO), `movimiento_stock_det` quedó con tres columnas
+ *    —movimiento, ficha, cantidad— y ninguna donde guardar esto.
+ *
+ *    Se siguen aceptando en el body, y NO se descartan: el service los junta en
+ *    `movimiento_stock_cab.motivo` (ver armarMotivo()). Lo que se pierde es la
+ *    atribución por línea: queda el nombre del artículo dentro del texto, no un
+ *    FK. La diferencia en sí la detecta y registra sola
+ *    `fn_notificar_diferencia_compra`, con cantidades.
+ *
+ *    Recuperar la observación estructurada necesita una columna nueva; está
+ *    anotado como decisión abierta en docs/backend/HU-COMP-03.md.
+ *
+ * El valor `danado` va sin ñ a propósito: era un valor de enum, no texto de
+ * interfaz. La pantalla traduce a "Dañado" con OBSERVACIONES_RECEPCION.
+ */
 export const OBSERVACIONES = ["faltante", "danado", "error"] as const;
 
 /**
@@ -43,10 +62,6 @@ export const itemRecepcionSchema = z.object({
     .nonnegative("La cantidad recibida no puede ser negativa.")
     .max(9_999_999.99, "La cantidad supera el máximo que admite la base."),
 
-  /**
-   * `danado` sin ñ: es el valor del enum de la base, no el texto que se muestra.
-   * La pantalla traduce a "Dañado" con OBSERVACIONES_RECEPCION.
-   */
   observacion: z.enum(OBSERVACIONES, { message: "Motivo de diferencia inválido." })
     .nullable()
     .optional(),
@@ -66,6 +81,10 @@ export const crearRecepcionSchema = z.object({
    * Va en el body y no se toma de `orden_compra.deposito_id` porque esa columna
    * es nullable y porque la entrega puede terminar descargándose en otro
    * depósito del que se había pactado. Es una decisión de quien recibe.
+   *
+   * Es también el `deposito_id` de la cabecera del movimiento: una recepción
+   * entra a UN depósito. Si una entrega se reparte entre dos, son dos
+   * recepciones.
    */
   depositoId: z
     .number({ message: "Elegí el depósito." })
