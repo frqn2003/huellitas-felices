@@ -285,9 +285,24 @@ export async function registrar(
     // -----------------------------------------------------
     // 8. Leer cómo quedó todo
     // -----------------------------------------------------
-    // El estado de la OC y las notificaciones los escribieron los triggers
-    // mientras se insertaba el detalle. Se leen con el MISMO client: desde otra
-    // conexión del pool estas filas todavía no existen (falta el COMMIT).
+    // FIX TEMPORAL: El trigger de BD (fn_actualiza_oc_por_recepcion) tiene un 
+    // bug buscando el estado en minúsculas. Actualizamos desde el backend hasta
+    // que se aplique la corrección en SQL.
+    let quedanPendientes = false;
+    for (const [ocdId, lineaPendiente] of pendientePorLinea.entries()) {
+      const itemRecibido = lineas.find((l) => l.ordenCompraDetalleId === ocdId);
+      const cantRecibida = itemRecibido ? itemRecibido.cantidadRecibida : 0;
+      if (lineaPendiente.pendiente - cantRecibida > 0) {
+        quedanPendientes = true;
+        break;
+      }
+    }
+    const estadoNombreFijo = quedanPendientes ? "Recibida Parcial" : "Recibida Total";
+    const estadoCat = await ordenRepo.findEstadoByNombre(estadoNombreFijo, client);
+    if (estadoCat) {
+      await ordenRepo.setEstado(orden.id, estadoCat.id, client);
+    }
+
     const estadoOrdenResultante =
       (await repo.findEstadoOrden(orden.id, client)) ?? orden.estado_nombre;
 
