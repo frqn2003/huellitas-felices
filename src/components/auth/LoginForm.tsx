@@ -91,7 +91,7 @@ export function LoginForm() {
   // Redirección post-login
   useEffect(() => {
     if (isAuthenticated) {
-      router.push("/articulos");
+      router.replace("/articulos");
     }
   }, [isAuthenticated, router]);
 

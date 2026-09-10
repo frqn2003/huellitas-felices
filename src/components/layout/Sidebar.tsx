@@ -110,7 +110,6 @@ function NavBody({
   onNavigate?: () => void;
 }) {
   const { state, logout } = useAuth();
-  const router = useRouter();
   const isAuthenticated = state.status === "authenticated";
 
   const usuarioNombre = isAuthenticated
@@ -118,10 +117,6 @@ function NavBody({
     : "Usuario";
   const rolNombre = isAuthenticated ? state.rol.nombre : "";
 
-  const handleLogout = () => {
-    logout();
-    router.push("/login");
-  };
 
   return (
     <>
@@ -156,7 +151,10 @@ function NavBody({
               </div>
               <button
                 type="button"
-                onClick={handleLogout}
+                onClick={async () => {
+                  await logout();
+                  window.location.replace("/login");
+                }}
                 aria-label="Cerrar sesión"
                 className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-pill text-cream-50/75 transition-colors duration-fast ease-out hover:bg-cream-50/10 hover:text-cream-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cream-50"
               >
@@ -263,18 +261,18 @@ export function Sidebar() {
           </button>
           {expanded && (
             <button
-                type="button"
-                onClick={() => setPinned((p) => !p)}
-                aria-pressed={pinned}
-                aria-label={pinned ? "Desfijar menú abierto" : "Fijar menú abierto"}
-                title={pinned ? "Desfijar menú" : "Fijar menú"}
-                className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-pill text-cream-50/75 transition-colors duration-fast ease-out hover:bg-cream-50/10 hover:text-cream-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cream-50"
-              >
-                <Pin
-                  className={`h-4 w-4 transition-transform duration-fast ease-out ${pinned ? "rotate-45" : ""}`}
-                  aria-hidden="true"
-                />
-              </button>
+              type="button"
+              onClick={() => setPinned((p) => !p)}
+              aria-pressed={pinned}
+              aria-label={pinned ? "Desfijar menú abierto" : "Fijar menú abierto"}
+              title={pinned ? "Desfijar menú" : "Fijar menú"}
+              className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-pill text-cream-50/75 transition-colors duration-fast ease-out hover:bg-cream-50/10 hover:text-cream-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cream-50"
+            >
+              <Pin
+                className={`h-4 w-4 transition-transform duration-fast ease-out ${pinned ? "rotate-45" : ""}`}
+                aria-hidden="true"
+              />
+            </button>
           )}
         </div>
         <NavBody collapsed={!expanded} />
