@@ -11,7 +11,7 @@
 |---|---|---|---|
 | 1 | Cada comprobante pendiente, con su fecha de vencimiento | `vista_cuenta_corriente_proveedor` | ✅ |
 | 2 | Registra los pagos, **actualizando el saldo en tiempo real** | `POST /api/pagos` devuelve el detalle recalculado | ✅ |
-| 3 | **Alerta visual** sobre próximos a vencer o vencidos | `estado_cuenta` + `dias_para_vencer` de la vista | ✅ |
+| 3 | **Alerta visual** sobre próximos a vencer o vencidos | `estado_vencimiento` + `dias_para_vencer` de la vista | ✅ |
 | 4 | Exportar el detalle a **PDF** | `window.print()` + `@media print` | ✅ |
 
 ---
@@ -59,19 +59,30 @@ Con solo 3 valores el backend tendría que derivar `saldado` y `credito` por su
 cuenta, y la definición de "en qué estado está este comprobante" quedaría
 partida entre la vista y el mapper.
 
-### 2. La columna se renombró a propósito
+### 2. El nombre de la columna se conservó
 
-`estado_vencimiento` → **`estado_cuenta`**.
+Se evaluó renombrar `estado_vencimiento` a `estado_vencimiento` y **se descartó**.
 
-Hoy no la consumía nadie, así que el rename salió gratis. Y compra algo
-concreto: si alguien no pega la corrección, `SELECT estado_cuenta` explota con
-`42703`, que `responses.ts` ya loguea con *"revisá si falta aplicar alguna
-corrección"*.
+El argumento a favor del rename era que el nombre quedó impreciso: `credito` y
+`saldado` no son estados de vencimiento, describen la **cuenta**. Sigue siendo
+cierto, y por eso el `COMMENT` de la vista lo aclara.
 
-Manteniendo el nombre viejo con semántica nueva, una corrección sin aplicar
-**falla en silencio**: colores mal, cero errores, nadie se entera. El equipo pega
-esto a mano en Supabase, y la corrección 15 sigue pendiente — el fracaso ruidoso
-no es paranoia.
+Pesaron más dos cosas en contra:
+
+- **La vista la escribió la DBA.** Renombrarle una columna significa que, si ella
+  la regenera desde su propia fuente, vuelve el nombre viejo y rompe el backend
+  sin que nadie se entere. Menos fricción con quien es dueño del objeto.
+
+- **El "que falle fuerte si no se aplica la corrección" ya lo cubre otra cosa.**
+  `dias_para_vencer` es una columna **nueva**: sin la corrección aplicada,
+  `SELECT dias_para_vencer` explota con `42703` y `responses.ts` loguea *"revisá
+  si falta aplicar alguna corrección"*. Las **dos** consultas del módulo la
+  seleccionan justamente para eso — el listado la usa además para el ícono de
+  alerta, así que no es una columna puesta solo para romper.
+
+Sin ese resguardo el riesgo sería real: leer la versión vieja de la columna (3
+valores, sin mirar el saldo) devuelve estados que **parecen buenos y no lo son**,
+sin ningún error.
 
 ### 3. `CURRENT_DATE` corría en UTC
 
@@ -164,7 +175,7 @@ a efectos de la cuenta.
 
 > ⚠️ **Bug abierto, de HU-FIN-03**: anular un pago devuelve el saldo del
 > comprobante, pero **nadie lo saca de `pagado`**. Queda marcado como pagado con
-> saldo positivo. Con esta vista al menos se sigue viendo, y su `estado_cuenta`
+> saldo positivo. Con esta vista al menos se sigue viendo, y su `estado_vencimiento`
 > dirá "vencido" o "pendiente", que es lo correcto — con el filtro viejo habría
 > desaparecido con la deuda adentro. La anulación tiene que revertir el estado.
 
@@ -299,7 +310,7 @@ layout que el navegador ya sabe paginar y repaginar.
 
 1. **Aplicar `db/correcciones/17_ctacte_proveedor.sql`** + `npm run db:dump`.
    Sin esto, `/api/cuentas-corrientes` devuelve 500 con `42703` (la columna
-   `estado_cuenta` no existe todavía) — a propósito.
+   `estado_vencimiento` no existe todavía) — a propósito.
 2. Cargar al menos un comprobante de proveedor (HU-PROV-04) contra una OC recibida.
 
 ### Los casos que importan
@@ -335,7 +346,7 @@ ORDER BY saldo DESC;
 
 -- Los estados, con los días. Una fila 'vencido' con saldo 0 sería el bug viejo.
 SELECT numero_completo, fecha_vencimiento, saldo_pendiente,
-       dias_para_vencer, estado_cuenta
+       dias_para_vencer, estado_vencimiento
 FROM vista_cuenta_corriente_proveedor
 ORDER BY fecha_vencimiento;
 

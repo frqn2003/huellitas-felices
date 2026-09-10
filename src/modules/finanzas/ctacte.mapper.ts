@@ -66,8 +66,9 @@ export function resumenToApi(row: ResumenCtaCteRow): CuentaCorriente {
     nombre: row.razon_social,
     documento: row.cuit,
     saldoActual: aNumero(row.saldo_actual),
-    estadoCta: aEstado(row.estado_cuenta),
+    estadoCta: aEstado(row.estado_vencimiento),
     proximoVencimiento: row.proximo_vencimiento,
+    diasProximoVencimiento: row.dias_proximo_vencimiento,
   };
 }
 
@@ -79,7 +80,7 @@ export function comprobanteToApi(row: ComprobanteCtaCteRow): ComprobantePendient
     fechaEmision: row.fecha_emision,
     fechaVencimiento: row.fecha_vencimiento,
     saldoPendiente: aNumero(row.saldo_pendiente),
-    estadoCta: aEstado(row.estado_cuenta),
+    estadoCta: aEstado(row.estado_vencimiento),
     // Negativo = ya venció. Lo calcula la vista: el front no vuelve a restar
     // fechas, que era donde el `DIAS_ALERTA_PROXIMO_VENCER = 7` del front
     // duplicaba el '7 days' de la vista.

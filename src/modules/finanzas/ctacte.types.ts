@@ -21,14 +21,18 @@
  *    `proveedor LEFT JOIN vista`.
  *
  * ⚠️ REQUIERE LA CORRECCIÓN 17.
- *    Antes de ella la vista exponía `estado_vencimiento` con 3 valores y sin
- *    mirar el saldo (una factura pagada y vencida figuraba 'vencido'). El
- *    rename a `estado_cuenta` es a propósito: sin la corrección aplicada, la
- *    consulta falla con 42703 y `responses.ts` lo loguea, en vez de pintar mal
- *    los colores en silencio.
+ *    Antes de ella, `estado_vencimiento` tenía 3 valores y NO miraba el saldo:
+ *    una factura pagada y vencida figuraba 'vencido'.
+ *
+ *    Se conservó el nombre original de la columna (se evaluó renombrarla a
+ *    `estado_cuenta` y se descartó: la vista es de la DBA, y renombrarle una
+ *    columna la rompe si ella la regenera). El riesgo de leer la versión vieja
+ *    sin darse cuenta lo cubre `dias_para_vencer`, que es una columna NUEVA:
+ *    sin la corrección aplicada, las dos consultas de este módulo fallan con
+ *    42703 en vez de devolver estados que parecen buenos y no lo son.
  */
 
-/** Los 5 valores de `estado_cuenta` de la vista (corrección 17). */
+/** Los 5 valores de `estado_vencimiento` de la vista (corrección 17). */
 export type EstadoCuentaDb = "credito" | "saldado" | "vencido" | "por_vencer" | "pendiente";
 
 /** Lo que habla el front (`src/data/cuentas-corrientes.ts`). */
@@ -60,8 +64,10 @@ export type ResumenCtaCteRow = {
    * Sin ese filtro saldría la fecha de una factura ya saldada.
    */
   proximo_vencimiento: string | null;
+  /** Días hasta `proximo_vencimiento`. Negativo = vencido. null si no debe nada. */
+  dias_proximo_vencimiento: number | null;
   /** El PEOR estado entre sus comprobantes. Se calcula en SQL, no en el mapper. */
-  estado_cuenta: EstadoCuentaDb;
+  estado_vencimiento: EstadoCuentaDb;
 };
 
 /** Un comprobante de la cuenta corriente. */
@@ -76,7 +82,7 @@ export type ComprobanteCtaCteRow = {
   saldo_pendiente: string;
   /** Negativo = ya venció. El front lo muestra como "vence en N días". */
   dias_para_vencer: number;
-  estado_cuenta: EstadoCuentaDb;
+  estado_vencimiento: EstadoCuentaDb;
 };
 
 /** Un pago registrado, con sus imputaciones ya resueltas. */

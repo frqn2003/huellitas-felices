@@ -37,8 +37,8 @@ type Ejecutor = Pool | PoolClient;
  */
 const ESTADO_PROVEEDOR = `
   CASE
-    WHEN bool_or(v.estado_cuenta = 'vencido')    THEN 'vencido'
-    WHEN bool_or(v.estado_cuenta = 'por_vencer') THEN 'por_vencer'
+    WHEN bool_or(v.estado_vencimiento = 'vencido')    THEN 'vencido'
+    WHEN bool_or(v.estado_vencimiento = 'por_vencer') THEN 'por_vencer'
     WHEN COALESCE(SUM(v.saldo_pendiente), 0) < 0 THEN 'credito'
     WHEN COALESCE(SUM(v.saldo_pendiente), 0) = 0 THEN 'saldado'
     ELSE 'pendiente'
@@ -72,7 +72,19 @@ const SELECT_RESUMEN = `
       MIN(v.fecha_vencimiento) FILTER (WHERE v.saldo_pendiente > 0),
       'YYYY-MM-DD'
     )               AS proximo_vencimiento,
-    ${ESTADO_PROVEEDOR} AS estado_cuenta
+    -- Días hasta ese vencimiento. Se usa para el ícono de alerta del listado
+    -- (⚠ vencido / ● por vencer) sin que el front reste fechas.
+    --
+    -- Y de paso hace que esta consulta FALLE FUERTE si no se aplicó la
+    -- corrección 17: dias_para_vencer es una columna NUEVA, así que sin ella
+    -- sale un 42703 y responses.ts loguea "revisá si falta aplicar alguna
+    -- corrección". estado_vencimiento, en cambio, ya existía con OTRA semántica
+    -- (3 valores, sin mirar el saldo) — leerla sin la corrección devolvería
+    -- datos que parecen buenos y no lo son.
+    -- (Sin backticks en este comentario: va dentro de un template literal.)
+    MIN(v.dias_para_vencer) FILTER (WHERE v.saldo_pendiente > 0)
+                    AS dias_proximo_vencimiento,
+    ${ESTADO_PROVEEDOR} AS estado_vencimiento
   ${FROM_RESUMEN}
 `;
 
@@ -204,7 +216,7 @@ export async function findComprobantes(
        v.monto_pagado,
        v.saldo_pendiente,
        v.dias_para_vencer,
-       v.estado_cuenta
+       v.estado_vencimiento
      FROM vista_cuenta_corriente_proveedor v
      WHERE v.proveedor_id = $1
      ORDER BY v.fecha_vencimiento, v.comprobante_id`,

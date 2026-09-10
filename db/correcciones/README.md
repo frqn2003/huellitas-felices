@@ -18,7 +18,7 @@ y commitear el `db/schema.sql` actualizado.
 
 | # | Archivo | Qué arregla | Urgencia |
 |---|---|---|---|
-| 17 | `ctacte_proveedor.sql` | la vista de cta. cte. con los 5 estados y en hora argentina, + tapa el agujero de imputar a un comprobante anulado | 🔴 sin esto **`/api/cuentas-corrientes` devuelve 500** (HU-FIN-02) |
+| 17 | `ctacte_proveedor.sql` | la vista de cta. cte. con los 5 estados, en hora argentina y con dias_para_vencer, + tapa el agujero de imputar a un comprobante anulado | 🔴 sin esto **`/api/cuentas-corrientes` devuelve 500** (HU-FIN-02) |
 | 16 | `fix_pagos_cliente.sql` | 2 funciones que nombran `cliente_id` / `comprobante_cliente`, columnas y tablas ya borradas | 🔴 **anular un pago devuelve 500 hoy** |
 | 15 | `login.sql` | conecta la secuencia de `auditoria_sesion`, parte el trigger de auditoría de `usuario`, corrige COMMENT | 🔴 sin esto **ningún login funciona** (HU-SIS-04) |
 

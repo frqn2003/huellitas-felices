@@ -56,7 +56,7 @@
 -- ---------------------------------------------------------
 -- 1 · La vista: cinco estados, hora argentina, días para vencer
 -- ---------------------------------------------------------
--- CAMBIO 1 · `estado_vencimiento` → `estado_cuenta`, de 3 valores a 5.
+-- CAMBIO 1 · `estado_vencimiento` → `estado_vencimiento`, de 3 valores a 5.
 --
 --   Antes: vencido | por_vencer | vigente
 --   Ahora: credito | saldado | vencido | por_vencer | pendiente
@@ -70,17 +70,25 @@
 --   vencida es crédito a favor, no deuda vencida — si se evaluara la fecha
 --   antes, saldría en rojo como si le debiéramos algo al proveedor.
 --
--- CAMBIO 2 · el nombre de la columna cambia A PROPÓSITO.
+-- CAMBIO 2 · el nombre de la columna NO cambia.
 --
---   Hoy no la consume nadie, así que el rename sale gratis. Y compra algo
---   concreto: si alguien no pega esta corrección, `SELECT estado_cuenta` explota
---   con 42703, que responses.ts ya loguea con "revisá si falta aplicar alguna
---   corrección de db/correcciones/".
+--   Se evaluó renombrarla a `estado_cuenta`, porque `credito` y `saldado` no
+--   son estados de vencimiento: describen la CUENTA, no la fecha. El nombre
+--   queda impreciso y eso se paga en lectura futura — por eso el COMMENT de
+--   la vista lo aclara.
 --
---   Manteniendo el nombre viejo con semántica nueva, una corrección sin aplicar
---   falla EN SILENCIO: colores mal, cero errores, nadie se entera. El equipo
---   pega esto a mano en Supabase y las correcciones 15 y 16 siguen pendientes,
---   así que el fracaso ruidoso no es paranoia.
+--   Se descartó el rename por dos motivos:
+--
+--   · Esta vista la escribió la DBA. Renombrarle una columna significa que, si
+--     ella regenera la vista desde su propia fuente, vuelve el nombre viejo y
+--     rompe el backend sin que nadie se entere. Menos fricción con quien es
+--     dueño del objeto.
+--
+--   · El argumento de "que falle fuerte si no se aplica esta corrección" ya lo
+--     cubre `dias_para_vencer`, que es una columna NUEVA: sin la corrección,
+--     `SELECT dias_para_vencer` explota con 42703 y responses.ts loguea "revisá
+--     si falta aplicar alguna corrección". Las DOS consultas del módulo la
+--     seleccionan, justamente para eso.
 --
 -- CAMBIO 3 · la fecha se toma en hora ARGENTINA, no en la del servidor.
 --
@@ -128,7 +136,10 @@ SELECT
       WHEN cp.fecha_vencimiento < h.d                    THEN 'vencido'
       WHEN cp.fecha_vencimiento <= h.d + 7               THEN 'por_vencer'
       ELSE 'pendiente'
-    END AS estado_cuenta
+    -- OJO: el nombre habla de vencimiento pero los dos primeros valores
+    -- (credito, saldado) describen el SALDO. Se conservó el nombre original de
+    -- la DBA a propósito; ver CAMBIO 2 arriba y el COMMENT de la vista.
+    END AS estado_vencimiento
 
 FROM comprobante_proveedor cp
 JOIN tipo_comprobante tc ON tc.id = cp.tipo_comprobante_id
@@ -175,7 +186,7 @@ WHERE cp.estado <> 'anulado'::estado_documento;
 -- ⚠️ QUEDA UN BUG ABIERTO, DE HU-FIN-03: anular un pago devuelve el saldo del
 --    comprobante, pero NADIE lo saca de 'pagado'. El comprobante queda marcado
 --    como pagado con saldo positivo. Con esta vista al menos se sigue viendo (y
---    su `estado_cuenta` dirá 'vencido' o 'pendiente', que es lo correcto); con
+--    su `estado_vencimiento` dirá 'vencido' o 'pendiente', que es lo correcto); con
 --    el filtro viejo habría desaparecido con la deuda adentro. La anulación
 --    tiene que revertir el estado, y eso es alcance de HU-FIN-03.
 
@@ -184,6 +195,10 @@ COMMENT ON VIEW vista_cuenta_corriente_proveedor IS
   'Incluye los que estan en estado ''pagado'': si se filtraran, pagar un comprobante lo haria '
   'desaparecer de la cuenta corriente junto con su historial de pagos. '
   'Solo descuenta imputaciones de pagos vigentes: anular un pago devuelve el saldo solo. '
+  'OJO CON estado_vencimiento: el nombre es historico y quedo corto. Devuelve CINCO valores '
+  '(credito, saldado, vencido, por_vencer, pendiente) y mira el SALDO ademas de la fecha, asi '
+  'que describe el estado de la CUENTA. Antes miraba solo la fecha, y por eso una factura ya '
+  'pagada y vencida figuraba vencida. '
   'El saldo de un proveedor es SUM(saldo_pendiente) — neto, porque las Notas de Crédito '
   'entran con monto_signado negativo (tipo_comprobante.afecta_saldo = -1). '
   'OJO: un proveedor SIN comprobantes no aparece acá. Para el listado de cuentas corrientes '

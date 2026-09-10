@@ -127,6 +127,11 @@ export interface CuentaCorriente {
   saldoActual: number; // BACKEND: derivado de vista_cuenta_corriente_proveedor (proveedor NO tiene saldo_actual); signo según entidad
   estadoCta: EstadoCtaCte;
   proximoVencimiento: string | null;
+  /**
+   * Días hasta `proximoVencimiento`. Negativo = ya venció, null = no debe nada.
+   * Lo calcula la vista en hora argentina; el front no resta fechas.
+   */
+  diasProximoVencimiento?: number | null;
 }
 
 export interface Pago {
