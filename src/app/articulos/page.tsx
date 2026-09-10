@@ -10,7 +10,7 @@ import { ArticulosTable } from "@/components/articulos/ArticulosTable";
 import { ArticuloFormModal, type ArticuloDraft, type FormModo } from "@/components/articulos/ArticuloFormModal";
 import { DesactivarModal } from "@/components/articulos/DesactivarModal";
 import { FiltrosArticulos, FiltrosChips, type Filtros } from "@/components/articulos/FiltrosArticulos";
-import { FABRICANTES, PRESENTACIONES, type Articulo, type CatalogosArticulo } from "@/data/articulos";
+import type { Articulo, CatalogosArticulo } from "@/data/articulos";
 import { apiGet, apiGetOpcional, apiSend, mensajeDeError } from "@/lib/api-client";
 
 const CATALOGOS_VACIOS: CatalogosArticulo = {
@@ -97,22 +97,15 @@ function ArticulosScreen() {
         // React avisaría por actualizar algo que ya no existe.
         if (cancelado) return;
         setArticulos(lista);
-        // Merge defensivo: si la API todavía no expone algún catálogo (p.ej.
-        // `presentaciones` o `fabricantes`), se cae a los placeholders de
-        // src/data/articulos.ts en vez de dejar el select vacío.
-        // BACKEND: cuando GET /api/articulos/catalogos devuelva presentaciones
-        // y fabricantes, los placeholders dejan de usarse solos.
-        setCatalogos((prev) => ({
-          ...CATALOGOS_VACIOS,
-          ...prev,
-          ...cat,
-          presentaciones:
-            cat.presentaciones && cat.presentaciones.length > 0
-              ? cat.presentaciones
-              : PRESENTACIONES,
-          fabricantes:
-            cat.fabricantes && cat.fabricantes.length > 0 ? cat.fabricantes : FABRICANTES,
-        }));
+        // Sin fallbacks a arrays hardcodeados. Antes, si un catálogo venía
+        // vacío se caía a PRESENTACIONES / FABRICANTES de src/data/articulos.ts
+        // — y los ids de esas listas NO COINCIDEN con los de la base: ahí el
+        // id 1 era "Comprimido" y en la tabla el id 1 es "Bolsa".
+        //
+        // O sea que el "fallback defensivo" no protegía nada: hacía que el
+        // formulario guardara la presentación equivocada sin avisar. Un select
+        // vacío es molesto pero honesto; uno con ids inventados es peor.
+        setCatalogos({ ...CATALOGOS_VACIOS, ...cat });
       })
       .catch(() => {
         if (!cancelado) setError(true);
@@ -204,18 +197,22 @@ function ArticulosScreen() {
       descripcion: draft.descripcion.trim(),
       categoriaId: Number(draft.categoriaId),
       unidadMedidaId: Number(draft.unidadMedidaId),
-      fabricante_id: Number(draft.fabricante_id),
-      // BACKEND: el dict pide presentacion_id NOT NULL, numero_lote,
-      // fecha_vencimiento y contenido_neto. La API todavía no los persiste
-      // (schemas no estrictos: se ignoran hasta que el back los implemente).
-      presentacion_id: Number(draft.presentacion_id),
-      numero_lote: draft.numero_lote.trim() || undefined,
-      fecha_vencimiento: draft.fecha_vencimiento || undefined,
-      contenido_neto:
+      fabricanteId: Number(draft.fabricante_id),
+      // camelCase, como el resto del body.
+      //
+      // ⚠️ Antes esto iba como `presentacion_id` (snake), y el schema de zod del
+      //    back no lo declaraba. Un objeto de zod sin `.strict()` DESCARTA en
+      //    silencio lo que no conoce, así que el valor se perdía acá y el
+      //    INSERT omitía una columna NOT NULL: 500 en cada alta.
+      presentacionId: Number(draft.presentacion_id) || 0,
+      contenidoNeto:
         draft.contenido_neto.trim() !== "" ? Number(draft.contenido_neto) : undefined,
+      // `numero_lote` y `fecha_vencimiento` NO se mandan: son de HU-STK-05
+      // (lotes), fuera del alcance de este sprint por la decisión D1. Las
+      // columnas siguen en la tabla pero nadie las escribe.
       // `proveedorPreferidoId` NO se manda: lo deriva el back de la última orden
       // de compra del artículo (decisión D2).
-      imagen_url: draft.imagen_url || null,
+      imagen: draft.imagen_url || null,
     };
 
     try {

@@ -40,12 +40,17 @@ export function toApi(row: ArticuloRow): Articulo {
     unidadMedidaId: row.unidad_medida_id,
     unidadMedida: row.unidad_medida_nombre as UnidadMedida,
 
-    // C1: snake_case directo como el dict. `presentacion_id`, `numero_lote`,
-    // `fecha_vencimiento` y `contenido_neto` son columnas nuevas que la API
-    // todavía no persiste (son opcionales en el contrato; ver BACKEND en
-    // src/data/articulos.ts) — por eso acá no se emiten todavía.
+    // C1: snake_case directo como el dict.
     fabricante_id: row.fabricante_id,
     fabricante: row.fabricante_nombre,
+
+    // Antes no se emitían y el formulario de EDICIÓN no podía preseleccionar la
+    // presentación: abrías un artículo y el select arrancaba en la primera
+    // opción, así que guardar sin tocar nada la cambiaba.
+    presentacion_id: row.presentacion_id,
+    presentacion: row.presentacion_nombre,
+    // `numeric` llega como string desde `pg`.
+    contenido_neto: Number(row.contenido_neto),
 
     proveedorPreferido:
       row.proveedor_preferido_id && row.proveedor_preferido_nombre

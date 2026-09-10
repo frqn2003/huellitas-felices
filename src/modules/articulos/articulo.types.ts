@@ -21,6 +21,10 @@ export type ArticuloRow = {
   unidad_medida_nombre: string;
   fabricante_id: number;
   fabricante_nombre: string;
+  presentacion_id: number;
+  presentacion_nombre: string;
+  /** `numeric` -> llega como STRING desde `pg`. El mapper lo pasa a number. */
+  contenido_neto: string;
   // DERIVADOS, no columnas: salen del LEFT JOIN LATERAL contra la última orden
   // de compra no cancelada (decisión D2). Ver LATERAL_PROVEEDOR en el repo.
   proveedor_preferido_id: number | null;
@@ -54,6 +58,14 @@ export type ArticuloInput = {
   categoriaId: number;
   unidadMedidaId: number;
   fabricanteId: number;
+  /**
+   * FK a `presentacion`. La columna es NOT NULL y SIN DEFAULT, así que omitirla
+   * en el INSERT es un 23502 — que era exactamente el 500 que devolvía el alta
+   * de artículos.
+   */
+  presentacionId: number;
+  /** `articulo.contenido_neto`. NOT NULL con DEFAULT 1. */
+  contenidoNeto?: number;
   imagenUrl?: string | null;
   activo?: boolean;
 };
@@ -64,4 +76,14 @@ export type CatalogosArticulo = {
   unidadesMedida: { id: number; nombre: string }[];
   fabricantes: { id: number; nombre: string }[];
   proveedores: { id: number; nombre: string }[];
+  /**
+   * ⚠️ FALTABA, Y NO ERA COSMÉTICO.
+   *
+   * Sin esta lista el front caía a un array hardcodeado (`PRESENTACIONES` de
+   * src/data/articulos.ts) cuyos ids NO coinciden con la tabla: ahí el id 1 era
+   * "Comprimido" y en la base el id 1 es "Bolsa". O sea que aun arreglando el
+   * INSERT, el formulario habría guardado la presentación equivocada sin
+   * avisar.
+   */
+  presentaciones: { id: number; nombre: string }[];
 };

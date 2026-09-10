@@ -328,6 +328,29 @@ export function traducirErrorPostgres(e: unknown): AppError | null {
     );
   }
 
+  // 23502 = not_null_violation
+  //
+  // Sin esta rama era un 500 pelado, y costó una tarde: el alta de artículos
+  // fallaba porque el INSERT omitía `presentacion_id` (NOT NULL sin default) y
+  // el usuario solo veía "Ocurrió un error inesperado".
+  //
+  // Casi siempre significa lo mismo: el front manda un campo, el schema de zod
+  // no lo declara —y un objeto sin `.strict()` lo descarta EN SILENCIO—, así
+  // que nunca llega al INSERT. El nombre de la columna va al log, no al
+  // cliente: filtra el esquema.
+  if (codigo === "23502") {
+    const columna = (e as { column?: string }).column;
+    console.error(
+      `[api] NOT NULL violado en la columna "${columna ?? "?"}". ` +
+        `Revisá que el schema de zod la declare: si no está, el valor que manda ` +
+        `el front se descarta en silencio y nunca llega al INSERT.`,
+    );
+    return new ValidationError(
+      "CAMPO_OBLIGATORIO",
+      "Falta un dato obligatorio del formulario. Revisá que estén completos todos los campos marcados con *.",
+    );
+  }
+
   // 23503 = foreign_key_violation
   if (codigo === "23503") {
     return new ValidationError(

@@ -616,7 +616,8 @@ SELECT cp.id AS comprobante_id,
             WHEN (cp.fecha_vencimiento < CURRENT_DATE) THEN 'vencido'::text
             WHEN (cp.fecha_vencimiento <= (CURRENT_DATE + '7 days'::interval)) THEN 'por_vencer'::text
             ELSE 'vigente'::text
-        END AS estado_vencimiento
+        END AS estado_vencimiento,
+    (cp.fecha_vencimiento - CURRENT_DATE) AS dias_para_vencer
    FROM ((comprobante_proveedor cp
      JOIN tipo_comprobante tc ON ((tc.id = cp.tipo_comprobante_id)))
      LEFT JOIN ( SELECT pi_1.comprobante_proveedor_id,
@@ -1038,19 +1039,49 @@ CREATE OR REPLACE FUNCTION public.fn_ck_comprobante_no_excede()
  LANGUAGE plpgsql
 AS $function$
 DECLARE
-  v_monto_total  decimal(12,2);
-  v_imputado     decimal(12,2);
+  v_monto_total   decimal(12,2);
+  v_estado        estado_documento;
+  v_afecta_saldo  smallint;
+  v_imputado      decimal(12,2);
 BEGIN
-  -- FOR UPDATE evita que dos imputaciones concurrentes sobre el mismo
-  -- comprobante lean la suma histórica antes de que la otra haga commit.
-  -- Nota de orden de locks: este trigger (trg_ck_comprobante_no_excede)
-  -- se dispara antes que trg_ck_suma_imputada por orden alfabético del
-  -- nombre, así que SIEMPRE se bloquea primero comprobante y después
-  -- pago, en todas las transacciones — mismo orden en cualquier INSERT
-  -- concurrente, lo que evita un deadlock cruzado entre ambos locks.
-  SELECT monto_total INTO v_monto_total
-  FROM comprobante_proveedor WHERE id = NEW.comprobante_proveedor_id
-  FOR UPDATE;
+  -- Mismo motivo que en fn_ck_suma_imputada: FOR UPDATE evita que dos
+  -- imputaciones concurrentes sobre el mismo comprobante lean la suma histórica
+  -- antes de que la otra haga commit.
+  -- Nota de orden de locks: este trigger (trg_ck_comprobante_no_excede) se
+  -- dispara antes que trg_ck_suma_imputada por orden alfabético del nombre, así
+  -- que SIEMPRE se bloquea primero comprobante y después pago, en todas las
+  -- transacciones — lo que evita un deadlock cruzado entre ambos locks.
+  SELECT cp.monto_total, cp.estado, tc.afecta_saldo
+  INTO v_monto_total, v_estado, v_afecta_saldo
+  FROM comprobante_proveedor cp
+  JOIN tipo_comprobante tc ON tc.id = cp.tipo_comprobante_id
+  WHERE cp.id = NEW.comprobante_proveedor_id
+  FOR UPDATE OF cp;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'No existe el comprobante_proveedor %', NEW.comprobante_proveedor_id
+      USING ERRCODE = 'HF011';
+  END IF;
+
+  -- Anulado: no existe a efectos de la cuenta, y la vista lo esconde. Sin este
+  -- chequeo la plata entraba a pago_imputacion, quedaba auditada como legítima,
+  -- y desaparecía de la pantalla: un pago fantasma sin traza visible.
+  --
+  -- Pagado: el saldo ya está en cero. El chequeo de más abajo lo rechazaría
+  -- igual (lo imputado ya iguala el monto_total), pero con un mensaje sobre
+  -- montos en vez de decir lo que pasa. Se nombra el estado.
+  IF v_estado <> 'vigente'::estado_documento THEN
+    RAISE EXCEPTION 'El comprobante % está en estado %: no admite imputaciones',
+      NEW.comprobante_proveedor_id, v_estado
+      USING ERRCODE = 'HF014';
+  END IF;
+
+  -- afecta_saldo = -1 es una Nota de Crédito.
+  IF v_afecta_saldo = -1 THEN
+    RAISE EXCEPTION 'El comprobante % es una Nota de Crédito: no se le imputan pagos',
+      NEW.comprobante_proveedor_id
+      USING ERRCODE = 'HF013';
+  END IF;
 
   SELECT COALESCE(SUM(pi.monto_imputado), 0) INTO v_imputado
   FROM pago_imputacion pi
@@ -1060,7 +1091,8 @@ BEGIN
 
   IF v_imputado + NEW.monto_imputado > v_monto_total THEN
     RAISE EXCEPTION 'La suma imputada histórica (%) supera el monto_total del comprobante (%)',
-      v_imputado + NEW.monto_imputado, v_monto_total;
+      v_imputado + NEW.monto_imputado, v_monto_total
+      USING ERRCODE = 'HF011';
   END IF;
 
   RETURN NEW;
@@ -1083,7 +1115,8 @@ BEGIN
   FROM comprobante_proveedor WHERE id = NEW.comprobante_proveedor_id;
 
   IF v_cp_proveedor_id IS DISTINCT FROM v_pago_proveedor_id THEN
-    RAISE EXCEPTION 'El comprobante_proveedor imputado no pertenece al proveedor del pago';
+    RAISE EXCEPTION 'El comprobante_proveedor imputado no pertenece al proveedor del pago'
+      USING ERRCODE = 'HF012';
   END IF;
 
   RETURN NEW;
@@ -1096,15 +1129,15 @@ CREATE OR REPLACE FUNCTION public.fn_ck_suma_imputada()
  LANGUAGE plpgsql
 AS $function$
 DECLARE
-  v_monto_pago     decimal(12,2);
-  v_ya_imputado     decimal(12,2);
+  v_monto_pago   decimal(12,2);
+  v_ya_imputado  decimal(12,2);
 BEGIN
   -- FOR UPDATE bloquea la fila de pago hasta que termine esta transacción.
-  -- Sin esto, dos INSERT concurrentes sobre el mismo pago_id podrían leer
-  -- la suma ya imputada ANTES de que el otro haga commit, y los dos
-  -- pasarían la validación con datos desactualizados (sobre-imputación
-  -- real en la tabla aunque cada INSERT individualmente "cumplía" el
-  -- CHECK). Con el lock, el segundo espera y recalcula con el dato posta.
+  -- Sin esto, dos INSERT concurrentes sobre el mismo pago_id podrían leer la
+  -- suma ya imputada ANTES de que el otro haga commit, y los dos pasarían la
+  -- validación con datos desactualizados (sobre-imputación real en la tabla
+  -- aunque cada INSERT individualmente "cumplía"). Con el lock, el segundo
+  -- espera y recalcula con el dato posta.
   SELECT monto INTO v_monto_pago FROM pago WHERE id = NEW.pago_id FOR UPDATE;
 
   SELECT COALESCE(SUM(monto_imputado), 0) INTO v_ya_imputado
@@ -1113,7 +1146,8 @@ BEGIN
 
   IF v_ya_imputado + NEW.monto_imputado > v_monto_pago THEN
     RAISE EXCEPTION 'La suma imputada (%) supera el monto del pago (%)',
-      v_ya_imputado + NEW.monto_imputado, v_monto_pago;
+      v_ya_imputado + NEW.monto_imputado, v_monto_pago
+      USING ERRCODE = 'HF010';
   END IF;
 
   RETURN NEW;

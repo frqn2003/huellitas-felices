@@ -21,6 +21,14 @@ import { z } from "zod";
  *  · `proveedorPreferidoId` — se DERIVA de la última orden de compra (decisión
  *    D2), no se guarda. Si el front lo manda igual, zod lo descarta en silencio
  *    y la respuesta trae el valor derivado. Ver LATERAL_PROVEEDOR en el repo.
+ *
+ * ⚠️ OJO CON EL DESCARTE SILENCIOSO. Este objeto no es `.strict()`, así que
+ *    cualquier clave que el front mande y acá no esté declarada se pierde sin
+ *    error. Es cómodo para lo de arriba (que es a propósito) y fue una trampa
+ *    para `presentacionId`, que faltaba: el front lo mandaba, zod lo tiraba, y
+ *    el alta reventaba con un 500 por NOT NULL varios pasos después.
+ *
+ *    Si agregás un campo al formulario, agregalo también acá.
  */
 
 /** Id de catálogo: entero positivo. */
@@ -42,6 +50,33 @@ export const crearArticuloSchema = z.object({
   categoriaId: idCatalogo("una categoría"),
   unidadMedidaId: idCatalogo("una unidad de medida"),
   fabricanteId: idCatalogo("un fabricante"),
+
+  /**
+   * ⚠️ FALTABA ACÁ, Y ESE ERA EL 500 DEL ALTA.
+   *
+   * El formulario ya mandaba `presentacion_id`, pero este schema no lo
+   * declaraba — y un objeto de zod sin `.strict()` DESCARTA EN SILENCIO las
+   * claves que no conoce. Así que el valor se perdía antes de llegar al repo,
+   * el INSERT omitía la columna, y como `articulo.presentacion_id` es NOT NULL
+   * sin default, Postgres devolvía un 23502 que nadie traducía: 500 pelado.
+   *
+   * El nombre va en camelCase como el resto del body (`categoriaId`,
+   * `unidadMedidaId`); el front se adaptó.
+   */
+  presentacionId: idCatalogo("una presentación"),
+
+  /**
+   * Contenido neto (500 en "500 ml"). La columna es NOT NULL con DEFAULT 1.
+   *
+   * Es opcional en el body: si no viene, la base pone 1. Pero el formulario lo
+   * pide, y antes también se descartaba en silencio — se tecleaba 500 y se
+   * guardaba 1.
+   */
+  contenidoNeto: z
+    .number()
+    .positive("El contenido neto debe ser mayor a cero.")
+    .max(99_999_999.99, "El contenido neto supera el máximo que admite la base.")
+    .optional(),
 
   /**
    * La imagen llega como data URL en base64 (así la produce el FileReader del

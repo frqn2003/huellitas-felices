@@ -21,8 +21,8 @@ export type FormModo = "INSERCION" | "EDICION" | "LECTURA";
  *
  *  2. Categoría, unidad, fabricante y presentación viajan como **id**, no como
  *     texto. En la base son tablas con foreign key, no strings sueltos. Los
- *     ids salen de GET /api/articulos/catalogos (la presentación cae al
- *     placeholder PRESENTACIONES hasta que el back la exponga).
+ *     ids salen de GET /api/articulos/catalogos, que lee las tablas
+ *     categoria, unidad_medida, fabricante y presentacion.
  *
  *  3. NO lleva `proveedorId`. El proveedor preferido lo deriva el back de la
  *     última orden de compra del artículo: se muestra, no se elige.
@@ -74,7 +74,8 @@ function initialDraft(
         : String(catalogos.presentaciones?.[0]?.id ?? ""),
       numero_lote: articulo.numero_lote ?? "",
       fecha_vencimiento: articulo.fecha_vencimiento ?? "",
-      contenido_neto: articulo.contenido_neto ?? "",
+      // El draft del formulario es todo string (son inputs); la API emite number.
+      contenido_neto: articulo.contenido_neto != null ? String(articulo.contenido_neto) : "",
       imagen_url: articulo.imagen_url,
     };
   }
@@ -257,8 +258,9 @@ function ArticuloFormFields({
       </Select>
       <div className="flex flex-col gap-4 sm:flex-row">
         <div className="flex-1">
-          {/* BACKEND: el dict pide presentacion_id NOT NULL; la API aún no
-              expone el catálogo (cae al placeholder PRESENTACIONES). */}
+          {/* Las opciones salen de GET /api/articulos/catalogos, que lee la
+              tabla `presentacion`. Antes caían a un array hardcodeado con ids
+              que no coincidían con los de la base. */}
           <Select
             id="presentacion"
             label="Presentación"
