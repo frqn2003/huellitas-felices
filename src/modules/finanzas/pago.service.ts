@@ -112,3 +112,26 @@ function conCampo(e: unknown, campo: string): unknown {
 
   return traducido ?? e;
 }
+
+/**
+ * Anula un pago y sus imputaciones.
+ */
+export async function anular(pagoId: number, usuarioId: number): Promise<ctacte.DetalleCtaCte> {
+  return withTransaction(async (client) => {
+    await withAuditUser(client, usuarioId);
+
+    const info = await repo.obtenerInfoPago(pagoId, client);
+    if (!info) {
+      throw new NotFoundError("el pago", pagoId);
+    }
+    if (info.estado !== "vigente") {
+      throw new BusinessRuleError("PAGO_NO_VIGENTE", "El pago ya se encuentra anulado.");
+    }
+
+    await repo.anularPago(pagoId, usuarioId, client);
+
+    // Devuelve el detalle actualizado de la cuenta corriente
+    return ctacte.obtenerDetalle(info.proveedor_id, client);
+  });
+}
+

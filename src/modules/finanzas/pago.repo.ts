@@ -86,3 +86,38 @@ export async function existeProveedorActivo(
   );
   return rows[0]?.existe ?? false;
 }
+
+/**
+ * Anula un pago insertando un pago de anulación.
+ *
+ * El trigger \`trg_pago_anula_pago\` se encarga de cambiar el estado del pago original
+ * a 'anulado' y revertir las imputaciones al detectar que \`anula_pago_id\` no es nulo.
+ */
+export async function anularPago(
+  pagoId: number,
+  usuarioId: number,
+  client: PoolClient,
+): Promise<number> {
+  const { rows } = await client.query<{ id: number }>(
+    `INSERT INTO pago (tipo, proveedor_id, monto, fecha, forma_pago_id, numero_comprobante, anula_pago_id, usuario_id)
+     SELECT tipo, proveedor_id, monto, CURRENT_DATE, forma_pago_id, 'ANUL-' || numero_comprobante, id, $2
+     FROM pago
+     WHERE id = $1
+     RETURNING id`,
+    [pagoId, usuarioId],
+  );
+  return rows[0].id;
+}
+
+/** Verifica si un pago existe y devuelve su estado y proveedor_id. */
+export async function obtenerInfoPago(
+  id: number,
+  ejecutor: Ejecutor = pool,
+): Promise<{ estado: string; proveedor_id: number } | undefined> {
+  const { rows } = await ejecutor.query<{ estado: string; proveedor_id: number }>(
+    `SELECT estado, proveedor_id FROM pago WHERE id = $1`,
+    [id],
+  );
+  return rows[0];
+}
+
