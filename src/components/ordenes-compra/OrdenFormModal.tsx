@@ -217,14 +217,16 @@ function OrdenFormFields({
   };
 
   const actualizarLinea = (key: string, patch: Partial<Omit<LineaDraft, "key">>) => {
-    const next = {
-      ...draft,
-      lineas: draft.lineas.map((l) => (l.key === key ? { ...l, ...patch } : l)),
-    };
-    setDraft(next);
-    if (lineasTouched[key]) {
-      setErrors(validarDraft(next));
-    }
+    setDraft((prevDraft) => {
+      const next = {
+        ...prevDraft,
+        lineas: prevDraft.lineas.map((l) => (l.key === key ? { ...l, ...patch } : l)),
+      };
+      if (lineasTouched[key]) {
+        setErrors(validarDraft(next));
+      }
+      return next;
+    });
   };
 
   const agregarLinea = () => {
