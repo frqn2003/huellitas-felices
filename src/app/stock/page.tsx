@@ -7,7 +7,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { Button } from "@/components/ui/Button";
 import { Pagination } from "@/components/ui/Pagination";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
-import { SUCURSALES, type Deposito, type FichaStock } from "@/data/stock";
+import type { Deposito, FichaStock, Sucursal } from "@/data/stock";
 import type { Articulo } from "@/data/articulos";
 import { apiGet, apiGetOpcional, apiSend, mensajeDeError } from "@/lib/api-client";
 import {
@@ -169,7 +169,7 @@ function StockScreen() {
   const [alertaFicha, setAlertaFicha] = useState<FichaStock | null>(null);
 
   const [articulosActivos, setArticulosActivos] = useState<Articulo[]>([]);
-  const [sucursales, setSucursales] = useState<{ id: number; nombre: string }[]>([]);
+  const [sucursales, setSucursales] = useState<Sucursal[]>([]);
 
   // Opciones del filtro por artículo del tab de movimientos, derivadas de las
   // fichas cargadas (antes salían de un mock a nivel de módulo).
@@ -192,7 +192,7 @@ function StockScreen() {
       apiGet<MovimientoStock[]>("/api/movimientos-stock"),
       // Catálogos: si uno falla, la pantalla sigue y solo queda vacío su select.
       apiGetOpcional<Articulo[]>("/api/articulos?estado=activo", []),
-      apiGetOpcional<{ id: number; nombre: string }[]>("/api/sucursales", []),
+      apiGetOpcional<Sucursal[]>("/api/sucursales", []),
     ])
       .then(([listaFichas, listaDepositos, listaMovimientos, listaArticulos, listaSucursales]) => {
         if (cancelado) return;
@@ -230,14 +230,27 @@ function StockScreen() {
         f.articulo.codigo.toLowerCase().includes(q) ||
         f.articulo.nombre.toLowerCase().includes(q) ||
         f.deposito.sucursal.toLowerCase().includes(q);
+      // Por ID, no por nombre.
+      //
+      // Antes esto era:
+      //   f.deposito.sucursal === SUCURSALES.find(s => s.id === ...)?.nombre
+      //
+      // O sea: comparaba el nombre real que devuelve la API contra el de un
+      // array hardcodeado del front. La base dice "Sucursal Centro" y el array
+      // decía "Centro", así que la comparación era false SIEMPRE y elegir
+      // cualquier sucursal vaciaba la lista.
+      //
+      // (Funcionaba antes por el motivo equivocado: el backend también resolvía
+      // el nombre contra ese mismo array, así que los dos lados comparaban la
+      // misma ficción. Al hacer que el backend joinee la tabla `sucursal` de
+      // verdad, quedó al descubierto.)
       const matchSucursal =
-        !filtros.sucursalId ||
-        f.deposito.sucursal === SUCURSALES.find((s) => s.id === Number(filtros.sucursalId))?.nombre;
+        !filtros.sucursalId || f.deposito.sucursalId === Number(filtros.sucursalId);
       const matchDeposito = !filtros.depositoId || f.depositoId === Number(filtros.depositoId);
       const matchEstado = filtros.estadoStock === "todos" || f.estadoCalculado === filtros.estadoStock;
       return matchBusqueda && matchSucursal && matchDeposito && matchEstado;
     });
-  }, [fichasVisibles, busqueda, filtros, sucursales]);
+  }, [fichasVisibles, busqueda, filtros]);
 
   const totalPages = Math.max(1, Math.ceil(filtradas.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -623,13 +636,19 @@ function StockScreen() {
                   <FiltrosStock
                     filtros={filtros}
                     depositos={depositos}
+                    sucursales={sucursales}
                     onChange={handleFiltros}
                     disabled={loading || error}
                     hideChips
                   />
                 </div>
                 <div className="flex flex-wrap items-center">
-                  <FiltrosStockChips filtros={filtros} depositos={depositos} onChange={handleFiltros} />
+                  <FiltrosStockChips
+                    filtros={filtros}
+                    depositos={depositos}
+                    sucursales={sucursales}
+                    onChange={handleFiltros}
+                  />
                 </div>
               </div>
             )}

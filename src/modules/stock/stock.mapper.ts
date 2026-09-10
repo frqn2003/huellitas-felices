@@ -30,6 +30,7 @@ export function fichaToApi(row: FichaStockRow): FichaStock {
     deposito: {
       id: row.deposito_id,
       nombre: row.deposito_nombre,
+      sucursalId: row.sucursal_id,
       sucursal: row.sucursal_nombre,
     },
     articulo: {

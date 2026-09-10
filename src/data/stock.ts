@@ -9,12 +9,15 @@ export interface Sucursal {
   nombre: string;
 }
 
-// BACKEND: poblar desde GET /api/sucursales (catálogo externo a este módulo).
-export const SUCURSALES: Sucursal[] = [
-  { id: 1, nombre: "Centro" },
-  { id: 2, nombre: "Norte" },
-  { id: 3, nombre: "Sur" },
-];
+// Acá vivían SUCURSALES, depositosIniciales y fichasStockIniciales: tres arrays
+// de datos inventados. Los reemplazan GET /api/sucursales (que desde el
+// 2026-09-10 lee la tabla), /api/depositos y /api/fichas-stock.
+//
+// El de SUCURSALES no era inofensivo: decía "Centro" / "Norte" / "Sur" mientras
+// la base dice "Sucursal Centro" / "Sucursal Norte" / "Sucursal Sur", y el
+// filtro de stock comparaba esos nombres. Elegir una sucursal devolvía la lista
+// vacía.
+
 
 // Refleja la tabla `deposito`: id, sucursal_id, nombre, ubicacion.
 // NOTA: la tabla `deposito` NO tiene campo `activo`; los depósitos no se dan de baja lógica.
@@ -26,14 +29,6 @@ export interface Deposito {
   ubicacion: string;
 }
 
-// BACKEND: reemplazar por la respuesta de GET /api/depositos (join con sucursales).
-export const depositosIniciales: Deposito[] = [
-  { id: 1, sucursalId: 1, sucursal: "Centro", nombre: "Dep. Central", ubicacion: "Av. Principal 123" },
-  { id: 2, sucursalId: 2, sucursal: "Norte", nombre: "Dep. Norte", ubicacion: "Calle Norte 456" },
-  { id: 3, sucursalId: 3, sucursal: "Sur", nombre: "Dep. Sur", ubicacion: "Av. Sur 789" },
-  { id: 4, sucursalId: 1, sucursal: "Centro", nombre: "Dep. Auxiliar", ubicacion: "Av. Principal 123 - Subsuelo" },
-  { id: 5, sucursalId: 3, sucursal: "Sur", nombre: "Dep. Vacunas", ubicacion: "Av. Sur 789 - Ala este" },
-];
 
 export type EstadoStock = "normal" | "bajo" | "critico";
 
@@ -45,7 +40,15 @@ export interface FichaStock {
   id: number;
   articuloId: number;
   depositoId: number;
-  deposito: { id: number; nombre: string; sucursal: string };
+  /**
+   * `sucursalId` es lo que usa el filtro; `sucursal` es solo para mostrar.
+   *
+   * El filtro comparaba el NOMBRE contra el de un array hardcodeado del front,
+   * y como la base dice "Sucursal Centro" y el array decía "Centro", no
+   * matcheaba nunca: elegir una sucursal vaciaba la lista. Comparar ids saca
+   * los strings de la ecuación.
+   */
+  deposito: { id: number; nombre: string; sucursalId: number; sucursal: string };
   articulo: { id: number; codigo: string; nombre: string; unidadMedida: string; estado: "activo" | "inactivo" };
   stockActual: number;
   stockMinimo: number;
@@ -53,154 +56,6 @@ export interface FichaStock {
   estadoCalculado: EstadoStock;
 }
 
-// BACKEND: reemplazar por la respuesta de GET /api/fichas-stock (joins con deposito y articulo).
-// El campo `estadoCalculado` NO viene de la API: se calcula con calcularEstadoStock().
-export const fichasStockIniciales: FichaStock[] = [
-  {
-    id: 1,
-    articuloId: 1,
-    depositoId: 1,
-    deposito: { id: 1, nombre: "Dep. Central", sucursal: "Centro" },
-    articulo: { id: 1, codigo: "ART001", nombre: "Amoxicilina 500mg", unidadMedida: "Unidad", estado: "activo" },
-    stockActual: 45,
-    stockMinimo: 20,
-    stockCritico: 5,
-    estadoCalculado: "normal",
-  },
-  {
-    id: 2,
-    articuloId: 2,
-    depositoId: 1,
-    deposito: { id: 1, nombre: "Dep. Central", sucursal: "Centro" },
-    articulo: { id: 2, codigo: "ART002", nombre: "Jeringa 5ml", unidadMedida: "Unidad", estado: "inactivo" },
-    stockActual: 12,
-    stockMinimo: 30,
-    stockCritico: 10,
-    estadoCalculado: "bajo",
-  },
-  {
-    id: 3,
-    articuloId: 3,
-    depositoId: 2,
-    deposito: { id: 2, nombre: "Dep. Norte", sucursal: "Norte" },
-    articulo: { id: 3, codigo: "ART003", nombre: "Alimento Premium para Perros", unidadMedida: "Kg", estado: "activo" },
-    stockActual: 8,
-    stockMinimo: 15,
-    stockCritico: 5,
-    // Corrección al wireframe: 8 > crítico (5) pero 8 < mínimo (15) => "bajo", no "critico".
-    estadoCalculado: "bajo",
-  },
-  {
-    id: 4,
-    articuloId: 1,
-    depositoId: 2,
-    deposito: { id: 2, nombre: "Dep. Norte", sucursal: "Norte" },
-    articulo: { id: 1, codigo: "ART001", nombre: "Amoxicilina 500mg", unidadMedida: "Unidad", estado: "activo" },
-    stockActual: 25,
-    stockMinimo: 20,
-    stockCritico: 5,
-    estadoCalculado: "normal",
-  },
-  {
-    id: 5,
-    articuloId: 4,
-    depositoId: 1,
-    deposito: { id: 1, nombre: "Dep. Central", sucursal: "Centro" },
-    articulo: { id: 4, codigo: "ART004", nombre: "Ivermectina 1%", unidadMedida: "mL", estado: "activo" },
-    stockActual: 3,
-    stockMinimo: 10,
-    stockCritico: 5,
-    estadoCalculado: "critico",
-  },
-  {
-    id: 6,
-    articuloId: 5,
-    depositoId: 1,
-    deposito: { id: 1, nombre: "Dep. Central", sucursal: "Centro" },
-    articulo: { id: 5, codigo: "ART005", nombre: "Guantes de látex talla M", unidadMedida: "Unidad", estado: "activo" },
-    stockActual: 40,
-    stockMinimo: 15,
-    stockCritico: 5,
-    estadoCalculado: "normal",
-  },
-  {
-    id: 7,
-    articuloId: 6,
-    depositoId: 2,
-    deposito: { id: 2, nombre: "Dep. Norte", sucursal: "Norte" },
-    articulo: { id: 6, codigo: "ART006", nombre: "Comida Húmeda para Gatos", unidadMedida: "Unidad", estado: "activo" },
-    stockActual: 60,
-    stockMinimo: 20,
-    stockCritico: 8,
-    estadoCalculado: "normal",
-  },
-  {
-    id: 8,
-    articuloId: 7,
-    depositoId: 3,
-    deposito: { id: 3, nombre: "Dep. Sur", sucursal: "Sur" },
-    articulo: { id: 7, codigo: "ART007", nombre: "Vitamina B12", unidadMedida: "mL", estado: "activo" },
-    stockActual: 25,
-    stockMinimo: 20,
-    stockCritico: 10,
-    estadoCalculado: "normal",
-  },
-  {
-    id: 9,
-    articuloId: 8,
-    depositoId: 3,
-    deposito: { id: 3, nombre: "Dep. Sur", sucursal: "Sur" },
-    articulo: { id: 8, codigo: "ART008", nombre: "Algodón quirúrgico", unidadMedida: "Kg", estado: "activo" },
-    stockActual: 4,
-    stockMinimo: 12,
-    stockCritico: 6,
-    estadoCalculado: "critico",
-  },
-  {
-    id: 10,
-    articuloId: 10,
-    depositoId: 1,
-    deposito: { id: 1, nombre: "Dep. Central", sucursal: "Centro" },
-    articulo: { id: 10, codigo: "ART010", nombre: "Pipeta antipulgas 40kg", unidadMedida: "Unidad", estado: "activo" },
-    stockActual: 9,
-    stockMinimo: 12,
-    stockCritico: 3,
-    estadoCalculado: "bajo",
-  },
-  {
-    id: 11,
-    articuloId: 11,
-    depositoId: 2,
-    deposito: { id: 2, nombre: "Dep. Norte", sucursal: "Norte" },
-    articulo: { id: 11, codigo: "ART011", nombre: "Snack hipoalergénico", unidadMedida: "Unidad", estado: "activo" },
-    stockActual: 18,
-    stockMinimo: 20,
-    stockCritico: 10,
-    estadoCalculado: "bajo",
-  },
-  {
-    id: 12,
-    articuloId: 12,
-    depositoId: 3,
-    deposito: { id: 3, nombre: "Dep. Sur", sucursal: "Sur" },
-    articulo: { id: 12, codigo: "ART012", nombre: "Gasas estériles 10x10", unidadMedida: "Unidad", estado: "activo" },
-    stockActual: 30,
-    stockMinimo: 10,
-    stockCritico: 4,
-    estadoCalculado: "normal",
-  },
-  {
-    id: 13,
-    articuloId: 3,
-    depositoId: 3,
-    deposito: { id: 3, nombre: "Dep. Sur", sucursal: "Sur" },
-    articulo: { id: 3, codigo: "ART003", nombre: "Alimento Premium para Perros", unidadMedida: "Kg", estado: "activo" },
-    stockActual: 100,
-    stockMinimo: 30,
-    stockCritico: 10,
-    estadoCalculado: "normal",
-  },
-];
 
 // Regla de cálculo del estado visual (no se persiste):
 // - critico: hay stock_critico definido y stock_actual <= stock_critico.

@@ -1,7 +1,6 @@
 // Datos placeholder del módulo Movimientos de Stock (HU-STK-04).
 // Cada `id` es la PK que mandará la base de datos (ver comentarios // BACKEND:).
 
-import { fichasStockIniciales, type FichaStock } from "./stock";
 
 // Refleja la vista `v_movimiento_stock`, que aplana la cabecera
 // (`movimiento_stock_cab`: numero, deposito, tipo, origen, fecha, usuario,
@@ -171,12 +170,10 @@ export const USUARIOS: { id: number; nombre: string }[] = [
 // (GET /api/auth/sesion -> usuario_id).
 export const USUARIO_ACTUAL = { id: 1, nombre: "Ana Martínez" };
 
-// Fichas de stock usadas por el formulario "Nuevo movimiento": solo fichas con
-// artículo activo. El código de ficha `FIC-XXX` se deriva del id (no se persiste).
-// BACKEND: reemplazar por GET /api/fichas-stock?estado=activo.
-export const fichasMovimientos: FichaStock[] = fichasStockIniciales.filter(
-  (f) => f.articulo.estado === "activo",
-);
+// Acá vivía `fichasMovimientos`, derivado del array hardcodeado
+// `fichasStockIniciales`. Ya no lo usaba nadie: la pantalla de stock arma esa
+// lista con las fichas que trae GET /api/fichas-stock, filtrando por artículo
+// activo (ver `fichasMov` en src/app/stock/page.tsx).
 
 export function codigoFicha(fichaId: number): string {
   return `FIC-${String(fichaId).padStart(3, "0")}`;
