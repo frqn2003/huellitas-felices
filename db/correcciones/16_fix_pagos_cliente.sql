@@ -13,8 +13,10 @@
 --
 -- QUÉ ARREGLA
 --   1. 🔴 `fn_bloquea_update_pago` — ANULAR UN PAGO ES IMPOSIBLE HOY.
---   2. 🟠 `fn_ck_comprobante_no_excede` — rama muerta contra `comprobante_cliente`.
---   3. ⚪ dos COMMENT que describen tablas borradas.
+--   2. ⚪ dos COMMENT que describen tablas borradas.
+--
+--   (La limpieza de `fn_ck_comprobante_no_excede` se movió a la corrección 17,
+--    que reescribe esa función entera. Ver §2.)
 --
 -- CÓMO SE APLICA
 --   Pegar entero en el SQL Editor de Supabase, una sola vez. Después:
@@ -92,63 +94,21 @@ $function$;
 
 
 -- ---------------------------------------------------------
--- 2 · fn_ck_comprobante_no_excede — rama muerta
+-- 2 · fn_ck_comprobante_no_excede — MOVIDA a la corrección 17
 -- ---------------------------------------------------------
--- EL BUG
---   La función abre con `IF NEW.comprobante_proveedor_id IS NOT NULL THEN ...
---   ELSE ...`, y el ELSE consulta `comprobante_cliente` y
---   `pi.comprobante_cliente_id`: una tabla y una columna que no existen.
+-- Acá iba la limpieza del ELSE muerto contra `comprobante_cliente`.
 --
--- POR QUÉ IMPORTA AUNQUE PAREZCA INALCANZABLE
---   Existe `ck_pi_solo_comprobante_proveedor CHECK (comprobante_proveedor_id
---   IS NOT NULL)`, así que "el ELSE nunca corre" parece razonable. No lo es:
---   los triggers BEFORE INSERT se ejecutan ANTES de validar los CHECK. Un
---   INSERT con `comprobante_proveedor_id = NULL` entra al ELSE y devuelve
---   `42P01: relation "comprobante_cliente" does not exist` — un 500 confuso —
---   en vez del 23514 limpio del CHECK, que el backend ya traduce a un 422.
+-- Se movió a `17_ctacte_proveedor.sql` §3, que reescribe esa función entera
+-- para agregarle dos validaciones nuevas (comprobante anulado y Nota de
+-- Crédito) además de la limpieza.
 --
--- EL ARREGLO
---   Borrar la rama. El comprobante siempre es de proveedor.
+-- POR QUÉ SE MOVIÓ EN VEZ DE DEJARLA EN LAS DOS
+--   Dos archivos con `CREATE OR REPLACE` de la misma función hacen que el
+--   resultado dependa del ORDEN en que se peguen. Si alguien aplicara esta 16
+--   DESPUÉS de la 17, revertiría las validaciones nuevas —volviendo a permitir
+--   pagos a comprobantes anulados— sin ningún error y sin que nadie se entere.
 --
---   Se conserva textual el comentario sobre el orden de locks: es lo que
---   explica por qué estos dos triggers no se deadlockean entre sí, y es
---   exactamente el tipo de razonamiento que se pierde en una reescritura.
-
-CREATE OR REPLACE FUNCTION public.fn_ck_comprobante_no_excede()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
-DECLARE
-  v_monto_total  decimal(12,2);
-  v_imputado     decimal(12,2);
-BEGIN
-  -- Mismo motivo que en fn_ck_suma_imputada: FOR UPDATE evita que dos
-  -- imputaciones concurrentes sobre el mismo comprobante lean la suma
-  -- histórica antes de que la otra haga commit.
-  -- Nota de orden de locks: este trigger (trg_ck_comprobante_no_excede)
-  -- se dispara antes que trg_ck_suma_imputada por orden alfabético del
-  -- nombre, así que SIEMPRE se bloquea primero comprobante y después
-  -- pago, en todas las transacciones — mismo orden en cualquier INSERT
-  -- concurrente, lo que evita un deadlock cruzado entre ambos locks.
-  SELECT monto_total INTO v_monto_total
-  FROM comprobante_proveedor WHERE id = NEW.comprobante_proveedor_id
-  FOR UPDATE;
-
-  SELECT COALESCE(SUM(pi.monto_imputado), 0) INTO v_imputado
-  FROM pago_imputacion pi
-  JOIN pago p ON p.id = pi.pago_id
-  WHERE pi.comprobante_proveedor_id = NEW.comprobante_proveedor_id
-    AND p.estado = 'vigente';
-
-  IF v_imputado + NEW.monto_imputado > v_monto_total THEN
-    RAISE EXCEPTION 'La suma imputada histórica (%) supera el monto_total del comprobante (%)',
-      v_imputado + NEW.monto_imputado, v_monto_total;
-  END IF;
-
-  RETURN NEW;
-END;
-$function$;
-
+--   Con la función en un solo archivo, el orden no importa.
 
 -- ---------------------------------------------------------
 -- 3 · COMMENT que describen tablas que ya no existen

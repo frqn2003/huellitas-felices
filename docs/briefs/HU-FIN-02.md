@@ -1,6 +1,12 @@
 # HU-FIN-02: Como administrador del sistema, quiero visualizar la cuenta corriente de cada proveedor con saldos y vencimientos, para gestionar las obligaciones de pago a proveedores
 
 > Referencia: `docs/COMO-USAR.md` · Datos coherentes con `docs/esquema-bd-front.md`
+>
+> ⚠️ **Implementado el 2026-09-09.** La implementación del backend y las
+> decisiones que se tomaron están en [`docs/backend/HU-FIN-02.md`](../backend/HU-FIN-02.md).
+> Tres cosas de este brief cambiaron y están marcadas **CORREGIDO** más abajo;
+> además el **"Exportar PDF (EXE)"** entró al alcance y se resolvió con
+> `window.print()`, sin librería.
 
 ## Contexto
 
@@ -39,7 +45,7 @@
 └────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Deuda Total** = `proveedor.saldo_actual` (neto). Positivo = adeudado al proveedor. **Rojo si ≠ 0**; **verde** si es crédito a favor (negativo); neutral si es 0.
+- **Deuda Total** = `SUM(saldo_pendiente)` de `vista_cuenta_corriente_proveedor` (neto). ⚠️ **CORREGIDO**: decía `proveedor.saldo_actual`. Esa columna existe pero **ningún trigger la mantiene**: vale 0 para todos los proveedores. Positivo = adeudado al proveedor. **Rojo si ≠ 0**; **verde** si es crédito a favor (negativo); neutral si es 0.
 - **Próx. vto.** = fecha de vencimiento más cercana entre los comprobantes pendientes del proveedor. Icono `⚠` si vencido, `●` si próximo a vencer (≤ 7 días).
 - **Estado** via badge que muestra el peor estado del proveedor: `Vencido` > `Próximo a vencer` > `Crédito` > `Saldado`.
 - **Exportar PDF** en el header (EXE): exporta el resumen filtrado.
@@ -153,14 +159,14 @@ Regla de alerta: **próximo a vencer = vencimiento dentro de ≤ 7 días** respe
 ## Criterios de aceptación
 
 ### Listado (Pantalla A)
-- [ ] La pestaña "Cta. Cte." muestra un resumen por proveedor con su **Deuda Total** (neto de `saldo_actual`, integra facturas, NC/ND y pagos).
+- [ ] La pestaña "Cta. Cte." muestra un resumen por proveedor con su **Deuda Total** (neto: integra facturas, NC/ND y pagos). ⚠️ **CORREGIDO**: se deriva de la vista, no de `proveedor.saldo_actual`, que está sin uso.
 - [ ] La Deuda Total se muestra en **rojo si es distinta de cero**; en **verde** si es crédito a favor (negativo); neutral si es 0.
 - [ ] Se muestra la **próxima fecha de vencimiento** de cada proveedor y la **alerta visual** correspondiente (vencido `⚠` / próximo a vencer ≤ 7 días `●`).
 - [ ] El buscador filtra por razón social o CUIT, y el filtro por estado de saldo funciona (Vencido / Próximo a vencer / Crédito / Saldado).
 - [ ] Permite **exportar el resumen a PDF** (EXE).
 
 ### Detalle (Pantalla B)
-- [ ] Muestra el `saldo_actual` del proveedor (neto) con el mismo código de color que el listado.
+- [ ] Muestra el saldo del proveedor (neto, derivado de la vista) con el mismo código de color que el listado.
 - [ ] El panel **Comprobantes** lista cada comprobante pendiente con `fecha_vencimiento` y `saldo_pendiente`, actualizado **en tiempo real** al imputar pagos.
 - [ ] Alerta visual sobre comprobantes **vencidos** y **próximos a vencer** (≤ 7 días).
 - [ ] Las **Notas de Crédito** pendientes se muestran como **crédito a favor** (saldo negativo en verde), diferenciadas del rojo de deuda.

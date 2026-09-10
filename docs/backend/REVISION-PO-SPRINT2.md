@@ -407,8 +407,8 @@ backend ya traduce a 422.
 | 2 | aplicar **`16_fix_pagos_cliente.sql`** | anular un pago está roto hoy; son 2 funciones, cero riesgo |
 | 3 | ✅ aplicar `15_login.sql` + implementar **HU-SIS-04** | es lo que pediste; y la corrección 15 desbloquea `auditoria_sesion` |
 | 4 | ✅ **Recepciones reescrito** contra `movimiento_stock_cab/_det` + conectado al front | cierra A.2.1 y A.2.3 |
-| 5 | módulo + endpoints de cta. cte. sobre `vista_cuenta_corriente_proveedor` | la vista ya está; falta todo el backend (HU-FIN-03) |
+| 5 | ✅ **cta. cte. de proveedores implementada** (HU-FIN-02) sobre la vista | ver docs/backend/HU-FIN-02.md |
 | 6 | recortar el lado *cliente* del front | cierra el "no te metas con ventas" del PO |
 | 7 | borrar o reescribir `registrarEvento()` | deuda chica, trampa grande |
 
-Los puntos 5 a 7 **no** los toqué. El 4 está hecho: ver `docs/backend/HU-COMP-03.md`.
+Los puntos 6 y 7 **no** los toqué. El 4 (Recepciones) y el 5 (cta. cte.) están hechos.

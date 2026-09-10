@@ -18,10 +18,17 @@ y commitear el `db/schema.sql` actualizado.
 
 | # | Archivo | Qué arregla | Urgencia |
 |---|---|---|---|
+| 17 | `ctacte_proveedor.sql` | la vista de cta. cte. con los 5 estados y en hora argentina, + tapa el agujero de imputar a un comprobante anulado | 🔴 sin esto **`/api/cuentas-corrientes` devuelve 500** (HU-FIN-02) |
 | 16 | `fix_pagos_cliente.sql` | 2 funciones que nombran `cliente_id` / `comprobante_cliente`, columnas y tablas ya borradas | 🔴 **anular un pago devuelve 500 hoy** |
 | 15 | `login.sql` | conecta la secuencia de `auditoria_sesion`, parte el trigger de auditoría de `usuario`, corrige COMMENT | 🔴 sin esto **ningún login funciona** (HU-SIS-04) |
 
-Son independientes entre sí y de todo lo demás. Los dos son idempotentes.
+Son independientes entre sí y de todo lo demás. Los tres son idempotentes.
+
+⚠️ **La 17 reemplaza a la §2 de la 16.** Las dos tocaban `fn_ck_comprobante_no_excede`,
+y con `CREATE OR REPLACE` en dos archivos el resultado dependía del orden de
+aplicación: pegar la 16 DESPUÉS de la 17 habría revertido sus validaciones nuevas
+—volviendo a permitir pagos a comprobantes anulados— sin ningún error. Esa
+sección se quitó de la 16.
 
 ## Ya aplicadas — no están más en esta carpeta
 

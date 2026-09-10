@@ -15,7 +15,7 @@
 -- =========================================================
 
 CREATE TYPE estado_activo_inactivo AS ENUM ('activo', 'inactivo');
-CREATE TYPE estado_documento AS ENUM ('vigente', 'anulado');
+CREATE TYPE estado_documento AS ENUM ('vigente', 'anulado', 'pagado');
 CREATE TYPE modo_abm AS ENUM ('INSERCION', 'EDICION', 'LECTURA');
 CREATE TYPE tipo_evento_sesion AS ENUM ('login', 'logout', 'login_fallido', 'bloqueado');
 CREATE TYPE tipo_movimiento_stock AS ENUM ('ingreso', 'egreso');
@@ -274,7 +274,7 @@ CREATE TABLE origen_movimiento (
 CREATE TABLE pago (
   id integer(32,0) DEFAULT nextval('pago_id_seq'::regclass) NOT NULL,
   tipo tipo_pago NOT NULL,
-  proveedor_id integer(32,0),
+  proveedor_id integer(32,0) NOT NULL,
   monto numeric(12,2) NOT NULL,
   fecha date DEFAULT CURRENT_DATE NOT NULL,
   forma_pago_id integer(32,0) NOT NULL,
@@ -288,7 +288,7 @@ CREATE TABLE pago (
 CREATE TABLE pago_imputacion (
   id integer(32,0) DEFAULT nextval('pago_imputacion_id_seq'::regclass) NOT NULL,
   pago_id integer(32,0) NOT NULL,
-  comprobante_proveedor_id integer(32,0),
+  comprobante_proveedor_id integer(32,0) NOT NULL,
   monto_imputado numeric(12,2) NOT NULL
 );
 
@@ -438,11 +438,9 @@ ALTER TABLE orden_compra_detalle ADD CONSTRAINT orden_compra_detalle_pkey PRIMAR
 ALTER TABLE origen_movimiento ADD CONSTRAINT origen_movimiento_pkey PRIMARY KEY (id);
 ALTER TABLE origen_movimiento ADD CONSTRAINT origen_movimiento_nombre_key UNIQUE (nombre);
 ALTER TABLE pago ADD CONSTRAINT ck_pago_no_autoanulado CHECK (((anula_pago_id IS NULL) OR (anula_pago_id <> id)));
-ALTER TABLE pago ADD CONSTRAINT ck_pago_solo_proveedor CHECK ((proveedor_id IS NOT NULL));
 ALTER TABLE pago ADD CONSTRAINT pago_monto_check CHECK ((monto > (0)::numeric));
 ALTER TABLE pago ADD CONSTRAINT pago_pkey PRIMARY KEY (id);
 ALTER TABLE pago ADD CONSTRAINT pago_numero_comprobante_key UNIQUE (numero_comprobante);
-ALTER TABLE pago_imputacion ADD CONSTRAINT ck_pi_solo_comprobante_proveedor CHECK ((comprobante_proveedor_id IS NOT NULL));
 ALTER TABLE pago_imputacion ADD CONSTRAINT pago_imputacion_monto_imputado_check CHECK ((monto_imputado > (0)::numeric));
 ALTER TABLE pago_imputacion ADD CONSTRAINT pago_imputacion_pkey PRIMARY KEY (id);
 ALTER TABLE presentacion ADD CONSTRAINT presentacion_pkey PRIMARY KEY (id);
@@ -725,6 +723,42 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.fn_actualiza_estado_comprobante_por_pago()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  v_comprobante_id  int;
+  v_saldo_pendiente numeric(12,2);
+BEGIN
+  v_comprobante_id := COALESCE(NEW.comprobante_proveedor_id, OLD.comprobante_proveedor_id);
+
+  IF v_comprobante_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  -- La vista sólo incluye comprobantes con estado = 'vigente';
+  -- si no aparece, ya está anulado o pagado y no hay nada que recalcular.
+  SELECT saldo_pendiente INTO v_saldo_pendiente
+  FROM public.vista_cuenta_corriente_proveedor
+  WHERE comprobante_id = v_comprobante_id;
+
+  IF NOT FOUND THEN
+    RETURN NEW;
+  END IF;
+
+  IF v_saldo_pendiente <= 0 THEN
+    UPDATE public.comprobante_proveedor
+    SET estado = 'pagado'
+    WHERE id = v_comprobante_id
+      AND estado = 'vigente';
+  END IF;
+
+  RETURN NEW;
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.fn_actualiza_oc_por_recepcion()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -945,17 +979,22 @@ CREATE OR REPLACE FUNCTION public.fn_bloquea_update_comprobante_proveedor()
  LANGUAGE plpgsql
 AS $function$
 BEGIN
-  -- Único cambio permitido: estado vigente -> anulado, sin tocar nada más.
-  IF OLD.estado = 'vigente' AND NEW.estado = 'anulado'
-     AND row(NEW.id, NEW.proveedor_id, NEW.tipo_comprobante_id, NEW.numero,
+  -- Transiciones de estado permitidas, sin tocar ningún otro campo.
+  IF (
+       (OLD.estado = 'vigente' AND NEW.estado IN ('anulado', 'pagado'))
+       OR (OLD.estado = 'pagado' AND NEW.estado = 'anulado')
+     )
+     AND row(NEW.id, NEW.proveedor_id, NEW.tipo_comprobante_id,
               NEW.fecha_emision, NEW.fecha_vencimiento, NEW.orden_compra_id,
               NEW.comprobante_corregido_id, NEW.anula_comprobante_id, NEW.monto_total,
-              NEW.usuario_id, NEW.fecha_registro)
+              NEW.usuario_id, NEW.fecha_registro,
+              NEW.letra, NEW.punto_venta, NEW.numero_comprobante)
        IS NOT DISTINCT FROM
-       row(OLD.id, OLD.proveedor_id, OLD.tipo_comprobante_id, OLD.numero,
+       row(OLD.id, OLD.proveedor_id, OLD.tipo_comprobante_id,
               OLD.fecha_emision, OLD.fecha_vencimiento, OLD.orden_compra_id,
               OLD.comprobante_corregido_id, OLD.anula_comprobante_id, OLD.monto_total,
-              OLD.usuario_id, OLD.fecha_registro)
+              OLD.usuario_id, OLD.fecha_registro,
+              OLD.letra, OLD.punto_venta, OLD.numero_comprobante)
   THEN
     RETURN NEW;
   END IF;
@@ -964,7 +1003,7 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  RAISE EXCEPTION 'comprobante_proveedor es inmutable: no se permite UPDATE salvo la anulación interna (estado vigente -> anulado)';
+  RAISE EXCEPTION 'comprobante_proveedor es inmutable: no se permite UPDATE salvo las transiciones de estado permitidas (vigente->anulado, vigente->pagado, pagado->anulado)';
 END;
 $function$
 ;
@@ -975,10 +1014,10 @@ CREATE OR REPLACE FUNCTION public.fn_bloquea_update_pago()
 AS $function$
 BEGIN
   IF OLD.estado = 'vigente' AND NEW.estado = 'anulado' THEN
-    IF row(NEW.id, NEW.tipo, NEW.proveedor_id, NEW.cliente_id, NEW.monto, NEW.fecha,
+    IF row(NEW.id, NEW.tipo, NEW.proveedor_id, NEW.monto, NEW.fecha,
             NEW.forma_pago_id, NEW.numero_comprobante, NEW.usuario_id, NEW.fecha_registro)
        IS NOT DISTINCT FROM
-       row(OLD.id, OLD.tipo, OLD.proveedor_id, OLD.cliente_id, OLD.monto, OLD.fecha,
+       row(OLD.id, OLD.tipo, OLD.proveedor_id, OLD.monto, OLD.fecha,
             OLD.forma_pago_id, OLD.numero_comprobante, OLD.usuario_id, OLD.fecha_registro)
     THEN
       RETURN NEW;
@@ -1002,35 +1041,22 @@ DECLARE
   v_monto_total  decimal(12,2);
   v_imputado     decimal(12,2);
 BEGIN
-  -- Mismo motivo que en fn_ck_suma_imputada: FOR UPDATE evita que dos
-  -- imputaciones concurrentes sobre el mismo comprobante lean la suma
-  -- histórica antes de que la otra haga commit.
+  -- FOR UPDATE evita que dos imputaciones concurrentes sobre el mismo
+  -- comprobante lean la suma histórica antes de que la otra haga commit.
   -- Nota de orden de locks: este trigger (trg_ck_comprobante_no_excede)
   -- se dispara antes que trg_ck_suma_imputada por orden alfabético del
   -- nombre, así que SIEMPRE se bloquea primero comprobante y después
   -- pago, en todas las transacciones — mismo orden en cualquier INSERT
   -- concurrente, lo que evita un deadlock cruzado entre ambos locks.
-  IF NEW.comprobante_proveedor_id IS NOT NULL THEN
-    SELECT monto_total INTO v_monto_total
-    FROM comprobante_proveedor WHERE id = NEW.comprobante_proveedor_id
-    FOR UPDATE;
+  SELECT monto_total INTO v_monto_total
+  FROM comprobante_proveedor WHERE id = NEW.comprobante_proveedor_id
+  FOR UPDATE;
 
-    SELECT COALESCE(SUM(pi.monto_imputado), 0) INTO v_imputado
-    FROM pago_imputacion pi
-    JOIN pago p ON p.id = pi.pago_id
-    WHERE pi.comprobante_proveedor_id = NEW.comprobante_proveedor_id
-      AND p.estado = 'vigente';
-  ELSE
-    SELECT monto_total INTO v_monto_total
-    FROM comprobante_cliente WHERE id = NEW.comprobante_cliente_id
-    FOR UPDATE;
-
-    SELECT COALESCE(SUM(pi.monto_imputado), 0) INTO v_imputado
-    FROM pago_imputacion pi
-    JOIN pago p ON p.id = pi.pago_id
-    WHERE pi.comprobante_cliente_id = NEW.comprobante_cliente_id
-      AND p.estado = 'vigente';
-  END IF;
+  SELECT COALESCE(SUM(pi.monto_imputado), 0) INTO v_imputado
+  FROM pago_imputacion pi
+  JOIN pago p ON p.id = pi.pago_id
+  WHERE pi.comprobante_proveedor_id = NEW.comprobante_proveedor_id
+    AND p.estado = 'vigente';
 
   IF v_imputado + NEW.monto_imputado > v_monto_total THEN
     RAISE EXCEPTION 'La suma imputada histórica (%) supera el monto_total del comprobante (%)',
@@ -1421,6 +1447,7 @@ CREATE TRIGGER trg_generar_cod_orden_compra BEFORE INSERT ON public.orden_compra
 CREATE TRIGGER trg_auditoria_pago AFTER INSERT ON public.pago FOR EACH ROW EXECUTE FUNCTION fn_auditoria();
 CREATE TRIGGER trg_bloquea_update_pago BEFORE UPDATE ON public.pago FOR EACH ROW EXECUTE FUNCTION fn_bloquea_update_pago();
 CREATE TRIGGER trg_pago_anula_pago AFTER INSERT ON public.pago FOR EACH ROW WHEN ((new.anula_pago_id IS NOT NULL)) EXECUTE FUNCTION fn_anula_pago();
+CREATE TRIGGER trg_actualiza_estado_comprobante_por_pago AFTER INSERT OR UPDATE ON public.pago_imputacion FOR EACH ROW EXECUTE FUNCTION fn_actualiza_estado_comprobante_por_pago();
 CREATE TRIGGER trg_auditoria_pago_imputacion AFTER INSERT ON public.pago_imputacion FOR EACH ROW EXECUTE FUNCTION fn_auditoria();
 CREATE TRIGGER trg_auditoria_pago_imputacion_update AFTER UPDATE ON public.pago_imputacion FOR EACH ROW EXECUTE FUNCTION fn_auditoria();
 CREATE TRIGGER trg_ck_comprobante_no_excede BEFORE INSERT ON public.pago_imputacion FOR EACH ROW EXECUTE FUNCTION fn_ck_comprobante_no_excede();

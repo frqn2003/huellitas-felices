@@ -49,3 +49,54 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans);
 }
+
+/* =========================================================
+   IMPRESIÓN — HU-FIN-02
+   =========================================================
+   El "Exportar PDF" del detalle de cuenta corriente no usa ninguna librería:
+   llama a window.print() y el navegador ofrece "Guardar como PDF".
+
+   Lo que se oculta al imprimir lleva `print:hidden` en el componente (la
+   variante que ya trae Tailwind), no un selector acá: así el que borra un
+   bloque no deja atrás una regla huérfana apuntando a una clase que no existe.
+
+   ⚠️ LOS FONDOS NO SE IMPRIMEN salvo que el usuario tilde "gráficos de fondo",
+      y nadie lo hace. Por eso el detalle imprimible dice el estado con todas las
+      letras ("VENCIDO", "Vence en 3 días") en vez de confiar en el color de un
+      badge — si no, la alerta de vencimiento desaparecería del papel, y con ella
+      un criterio de aceptación. Ver CtaCteImprimible.tsx. */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 14mm;
+  }
+
+  html,
+  body {
+    background: #fff;
+    /* Que no queden cortadas las tablas largas por una altura heredada. */
+    height: auto;
+  }
+
+  body {
+    /* Negro sobre blanco: los grises de la pantalla salen ilegibles en papel. */
+    color: #000;
+    font-size: 11pt;
+  }
+
+  /* Para lo poco que SÍ tiene que conservar color (un total en rojo). */
+  .print-color {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  /* Una fila de tabla partida entre dos hojas es ilegible. */
+  tr,
+  thead {
+    break-inside: avoid;
+  }
+
+  thead {
+    display: table-header-group; /* repite el encabezado en cada hoja */
+  }
+}

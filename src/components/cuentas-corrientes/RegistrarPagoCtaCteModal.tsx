@@ -34,7 +34,15 @@ interface RegistrarPagoCtaCteModalProps {
   comprobantes: ComprobantePendiente[];
   pagosExistentes: { numero_comprobante: string }[];
   onClose: () => void;
-  onConfirm: (pago: PagoCtaCteNuevo) => void;
+  /**
+   * Manda el pago al backend.
+   *
+   * Devuelve el mensaje de error si el servidor lo rechazó, o `null` si salió
+   * bien. Se resuelve así y no con un `throw` para que el modal muestre el
+   * mensaje del backend —"ese comprobante ya está cancelado por otros pagos"—
+   * sin cerrarse y perder las imputaciones que la persona ya cargó.
+   */
+  onConfirm: (pago: PagoCtaCteNuevo) => Promise<string | null>;
 }
 
 function hoyISO() {
@@ -74,6 +82,9 @@ export function RegistrarPagoCtaCteModal({
   >({});
   const [errores, setErrores] = useState<Record<string, string>>({});
   const [confirmarCancelar, setConfirmarCancelar] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  /** Mensaje que devolvió el backend al rechazar el pago. */
+  const [errorServidor, setErrorServidor] = useState<string | null>(null);
 
   const imputaciones = useMemo(
     () =>
@@ -97,6 +108,7 @@ export function RegistrarPagoCtaCteModal({
     setMontoTotal("");
     setSeleccionados({});
     setErrores({});
+    setErrorServidor(null);
   };
 
   const toggleComprobante = (id: number) => {
@@ -159,18 +171,34 @@ export function RegistrarPagoCtaCteModal({
     }
     if (Object.keys(erroresImputacion).length) errs.imputaciones = "Hay montos de imputación inválidos.";
 
+    // IGUALDAD ESTRICTA, no "menor o igual".
+    //
+    // Antes se permitía imputar de menos y el pago quedaba "parcialmente
+    // imputado". Pero esa diferencia es plata que entra al sistema y no queda
+    // asociada a ningún comprobante — y no existe el concepto de "pago a
+    // cuenta": no hay tabla ni saldo a favor donde verla. El saldo del
+    // proveedor no baja por ella y nadie la vuelve a encontrar.
+    //
+    // La comparación va en CENTAVOS: 0.1 + 0.2 !== 0.3 en punto flotante, así
+    // que comparar los decimales directamente rechazaría pagos correctos.
+    const centavos = (n: number) => Math.round(n * 100);
     if (totalIngresado <= 0)
       errs.totalIngresado = "El total ingresado debe ser mayor a cero.";
-    else if (montoTotalNum > 0 && totalIngresado > montoTotalNum)
-      errs.totalIngresado = "El total ingresado supera el monto total.";
+    else if (montoTotalNum > 0 && centavos(totalIngresado) !== centavos(montoTotalNum))
+      errs.totalIngresado =
+        centavos(totalIngresado) > centavos(montoTotalNum)
+          ? "El total ingresado supera el monto total."
+          : "Falta imputar: el total ingresado tiene que ser igual al monto total.";
 
     return { errs, erroresImputacion };
   };
 
-  const handleGuardar = () => {
+  const handleGuardar = async () => {
     const { errs, erroresImputacion } = validar();
     setErrores({ ...errs, ...erroresImputacion });
     if (Object.keys(errs).length > 0 || Object.keys(erroresImputacion).length > 0) return;
+
+    setErrorServidor(null);
 
     const pago: PagoCtaCteNuevo = {
       numero_comprobante: numero.trim(),
@@ -182,7 +210,18 @@ export function RegistrarPagoCtaCteModal({
         .filter((i) => i.seleccionado)
         .map((i) => ({ comprobanteId: i.comprobanteId, monto: Number(i.monto) })),
     };
-    onConfirm(pago);
+    setGuardando(true);
+    const error = await onConfirm(pago);
+    setGuardando(false);
+
+    // Si el backend lo rechazó, el modal queda abierto con todo cargado:
+    // rehacer la imputación de seis comprobantes porque el servidor devolvió un
+    // error sería peor que el error.
+    if (error) {
+      setErrorServidor(error);
+      return;
+    }
+
     reset();
   };
 
@@ -196,11 +235,23 @@ export function RegistrarPagoCtaCteModal({
         maxWidth="max-w-2xl"
         footer={
           <>
-            <Button type="button" variant="outline" onClick={() => setConfirmarCancelar(true)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setConfirmarCancelar(true)}
+              disabled={guardando}
+            >
               Cancelar
             </Button>
-            <Button type="button" variant="primary" onClick={handleGuardar}>
-              {verboCTA}
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => void handleGuardar()}
+              // También mientras guarda: un doble clic mandaría dos pagos, y el
+              // segundo tomaría el saldo que el primero ya bajó.
+              disabled={guardando}
+            >
+              {guardando ? "Guardando…" : verboCTA}
             </Button>
           </>
         }
@@ -324,13 +375,26 @@ export function RegistrarPagoCtaCteModal({
               {formatARS(totalIngresado)}
             </span>
           </div>
+          {/*
+            El error del backend va SEPARADO de los de validación del formulario.
+            Son cosas distintas: los del formulario se arreglan mirando la
+            pantalla; este dice algo que solo la base sabía — que otro pago
+            canceló ese comprobante mientras vos cargabas, o que el comprobante
+            se anuló.
+          */}
+          {errorServidor && (
+            <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3">
+              <p className="text-sm font-bold text-destructive">{errorServidor}</p>
+            </div>
+          )}
           {errores.totalIngresado && (
             <p role="alert" className="-mt-3 text-sm font-semibold text-destructive">
               {errores.totalIngresado}
             </p>
           )}
           <p className="text-xs font-medium text-text-secondary">
-            Si el total ingresado es menor al monto total, el {verbo} queda imputado parcialmente.
+            El total ingresado tiene que ser igual al monto total: no se puede dejar
+            plata sin imputar a un comprobante.
           </p>
         </div>
       </Modal>

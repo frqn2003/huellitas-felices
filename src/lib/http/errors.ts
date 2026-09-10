@@ -194,6 +194,18 @@ export function traducirErrorPostgres(e: unknown): AppError | null {
         "Ese artículo ya tiene una ficha de stock en ese depósito.",
       );
     }
+    if (constraint.includes("pago_numero_comprobante")) {
+      // ⚠️ El UNIQUE es GLOBAL, no por proveedor. El modal de cta. cte. valida
+      // la unicidad contra los pagos de ESE proveedor, así que un número
+      // reusado con otro proveedor pasa el front y llega hasta acá. Sin esta
+      // rama caía en el "El registro ya existe" genérico, que no le dice al
+      // usuario que el problema es el número de recibo que tecleó.
+      return new ConflictError(
+        "NUMERO_PAGO_DUPLICADO",
+        "Ya existe un pago registrado con ese número de comprobante.",
+        "numero_comprobante",
+      );
+    }
     if (constraint.includes("deposito_nombre")) {
       return new ConflictError("DEPOSITO_DUPLICADO", "Ya existe un depósito con ese nombre.", "nombre");
     }
@@ -240,6 +252,52 @@ export function traducirErrorPostgres(e: unknown): AppError | null {
       "No existe la ficha de stock afectada por el movimiento.",
     );
   }
+  // ---------------------------------------------------------
+  // HF01x · imputación de pagos (HU-FIN-02)
+  // ---------------------------------------------------------
+  // Los cuatro triggers de `pago_imputacion` levantaban P0001 pelado, y el
+  // catch-all de más abajo los convertía a todos en el mismo
+  // "La operación fue rechazada por una regla de la base de datos".
+  //
+  // O sea que imputar $10.000 a una factura con $5.000 de saldo devolvía esa
+  // frase: sin el número, sin el comprobante, y sin decir cuál de las tres
+  // imputaciones falló. La corrección 17 les puso SQLSTATE propio.
+  if (codigo === "HF010") {
+    return new BusinessRuleError(
+      "IMPUTACION_EXCEDE_PAGO",
+      "Estás imputando más plata de la que suma el pago.",
+      "imputaciones",
+    );
+  }
+  if (codigo === "HF011") {
+    return new BusinessRuleError(
+      "IMPUTACION_EXCEDE_COMPROBANTE",
+      "Ese comprobante ya está cancelado por otros pagos: no admite más imputaciones.",
+      "imputaciones",
+    );
+  }
+  if (codigo === "HF012") {
+    return new BusinessRuleError(
+      "COMPROBANTE_DE_OTRO_PROVEEDOR",
+      "El comprobante no pertenece al proveedor de este pago.",
+      "imputaciones",
+    );
+  }
+  if (codigo === "HF013") {
+    return new BusinessRuleError(
+      "IMPUTACION_A_NOTA_CREDITO",
+      "A una Nota de Crédito no se le imputan pagos: su importe ya descuenta del saldo del proveedor.",
+      "imputaciones",
+    );
+  }
+  if (codigo === "HF014") {
+    return new BusinessRuleError(
+      "COMPROBANTE_ANULADO",
+      "Ese comprobante está anulado y no admite pagos.",
+      "imputaciones",
+    );
+  }
+
   if (codigo === "HF003") {
     return new BusinessRuleError(
       "MOVIMIENTO_INMUTABLE",
