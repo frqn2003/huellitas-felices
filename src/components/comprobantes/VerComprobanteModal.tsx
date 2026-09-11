@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, Pencil } from "lucide-react";
+import { FileText } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
@@ -15,6 +15,11 @@ interface VerComprobanteModalProps {
   open: boolean;
   comprobante: ComprobanteRow | null;
   onClose: () => void;
+  /**
+   * Ya no lo dispara nadie: el botón "Modificar datos" se eliminó porque un
+   * comprobante emitido es inmutable. Se conserva el prop para no cambiar la
+   * firma del componente.
+   */
   onModificar: (comprobante: ComprobanteRow) => void;
 }
 
@@ -34,10 +39,15 @@ export function VerComprobanteModal({ open, comprobante, onClose, onModificar }:
           <Button type="button" variant="outline" onClick={onClose}>
             Cerrar
           </Button>
-          <Button type="button" variant="primary" onClick={() => onModificar(comprobante)}>
-            <Pencil className="h-4 w-4" aria-hidden="true" />
-            Modificar datos
-          </Button>
+          {/*
+            Acá había un botón "Modificar datos". Se fue: un comprobante emitido
+            NO se modifica. La base lo prohíbe por trigger
+            (`trg_bloquea_update_comprobante_proveedor`) y es el criterio de
+            aceptación de la HU — para corregir uno se lo anula y se emite otro.
+
+            El prop `onModificar` se conserva para no cambiarle la firma al
+            componente, pero ya nadie lo dispara.
+          */}
         </>
       }
     >

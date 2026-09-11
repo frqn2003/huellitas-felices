@@ -2,7 +2,17 @@
  * HU-PROV-04 — Tipos para comprobante_proveedor y su detalle.
  */
 
-export type EstadoDocumento = "vigente" | "anulado" | string;
+/**
+ * Los TRES valores del enum `estado_documento` de la base.
+ *
+ * ⚠️ `pagado` se agregó el 2026-09-09 junto con el trigger
+ *    `fn_actualiza_estado_comprobante_por_pago`, que marca el comprobante
+ *    apenas su saldo llega a cero. Este módulo no lo contemplaba, y como el
+ *    tipo terminaba en `| string` TypeScript no avisó de nada.
+ *
+ *    El `| string` se fue justamente por eso: volvía inútil la unión.
+ */
+export type EstadoDocumento = "vigente" | "anulado" | "pagado";
 
 /** Fila real de comprobante_proveedor con JOINs resueltos */
 export type ComprobanteRow = {

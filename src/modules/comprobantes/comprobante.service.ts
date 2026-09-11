@@ -99,9 +99,20 @@ export async function crear(input: CrearComprobanteInput, usuarioId: number) {
 
     await repo.insertarLineas(client, comprobanteId, lineasInsert);
 
-    const comprobanteCreado = await repo.obtenerPorId(comprobanteId);
-    const detallesCreados = await repo.obtenerDetalles(comprobanteId);
-    return mapper.toComprobanteDTO(comprobanteCreado!, detallesCreados);
+    // Con el MISMO client: desde otra conexión del pool estas filas todavía no
+    // existen (falta el COMMIT). Sin esto la relectura devolvía null, el `!` lo
+    // tapaba en compilación, y el mapper reventaba — o sea que el alta SIEMPRE
+    // terminaba en 500 y ROLLBACK.
+    const comprobanteCreado = await repo.obtenerPorId(comprobanteId, client);
+    const detallesCreados = await repo.obtenerDetalles(comprobanteId, client);
+
+    if (!comprobanteCreado) {
+      // No debería pasar nunca, pero si pasa que se vea como lo que es en vez
+      // de romper con un TypeError adentro del mapper.
+      throw new Error(`El comprobante ${comprobanteId} no se pudo releer tras insertarlo.`);
+    }
+
+    return mapper.toComprobanteDTO(comprobanteCreado, detallesCreados);
   });
 }
 
@@ -134,7 +145,15 @@ export async function anular(id: number, _input: AnularComprobanteInput, usuario
       usuarioId,
     });
 
-    const actualizado = await repo.obtenerPorId(comprobanteOriginal.id);
-    return mapper.toComprobanteDTO(actualizado!);
+    // Mismo motivo: el trigger `fn_anula_comprobante_proveedor` ya pasó el
+    // original a 'anulado' dentro de ESTA transacción, y desde otra conexión
+    // seguiría figurando vigente.
+    const actualizado = await repo.obtenerPorId(comprobanteOriginal.id, client);
+
+    if (!actualizado) {
+      throw new Error(`El comprobante ${comprobanteOriginal.id} no se pudo releer tras anularlo.`);
+    }
+
+    return mapper.toComprobanteDTO(actualizado);
   });
 }

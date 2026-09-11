@@ -25,6 +25,9 @@ const tiposOpts = [
 const estadosOpts = [
   { value: "", label: "Todos los estados" },
   { value: "Vigente", label: "Vigente" },
+  // Lo pone el trigger `fn_actualiza_estado_comprobante_por_pago` cuando el
+  // saldo del comprobante llega a cero. Faltaba: filtrar por él era imposible.
+  { value: "Pagado", label: "Pagado" },
   { value: "Anulado", label: "Anulado" },
 ];
 
