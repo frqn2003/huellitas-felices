@@ -4,6 +4,7 @@ import { Edit2, Eye, PawPrint, UserRound } from "lucide-react";
 import type { Cliente } from "@/data/clientes";
 import type { Mascota } from "@/data/mascotas";
 import { EstadoMascotaBadge } from "./EstadoMascotaBadge";
+import { SexoBadge } from "./SexoBadge";
 
 interface MascotasTableProps {
   mascotas: Mascota[];
@@ -157,7 +158,9 @@ export function MascotasTable({
                   </td>
                   <td className="px-4 py-3 text-sm text-text-primary">{m.especie}</td>
                   <td className="px-4 py-3 text-sm text-text-primary">{m.raza ?? "—"}</td>
-                  <td className="px-4 py-3 text-sm text-text-primary">{m.sexo}</td>
+                  <td className="px-4 py-3">
+                    <SexoBadge sexo={m.sexo} />
+                  </td>
                   <td className="px-4 py-3 text-sm text-text-secondary">{formatearEdad(m.fechaNacimiento)}</td>
                   <td className="px-4 py-3">
                     <EstadoMascotaBadge estado={m.estado} />
