@@ -94,8 +94,8 @@ export function FiltrosMascotas({
             type="search"
             value={busqueda}
             onChange={(e) => onBusquedaChange(e.target.value)}
-            placeholder="Buscar por mascota, dueño o documento..."
-            aria-label="Buscar mascotas por nombre, dueño o documento"
+            placeholder="Buscar por mascota, raza o DNI del dueño..."
+            aria-label="Buscar mascotas por nombre, raza o DNI del dueño"
             className="h-11 w-full cursor-text rounded-pill border border-border bg-surface pl-12 pr-4 text-base text-text-primary transition-colors duration-fast ease-out placeholder:text-text-secondary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
           />
         </div>

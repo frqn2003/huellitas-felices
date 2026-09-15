@@ -19,7 +19,7 @@ interface MascotasTableProps {
   onEditar: (mascota: Mascota) => void;
 }
 
-const HEADERS = ["Id", "Nombre", "Especie", "Raza", "Sexo", "Edad", "Estado", "Acciones"];
+const HEADERS = ["Id", "Nombre", "Especie", "Raza", "Sexo", "Edad", "DNI dueño", "Estado", "Acciones"];
 
 // Edad calculada desde fecha_nacimiento (esquema: date nullable). El recepcionista
 // la necesita para vacunas y clasificación cachorro/adulto sin abrir la ficha.
@@ -54,7 +54,7 @@ export function MascotasTable({
   if (loading) {
     return (
       <div className="overflow-hidden rounded-md border border-border bg-surface shadow-card">
-        <div className="hidden grid-cols-8 gap-4 border-b border-border bg-cream-50 px-4 py-3 lg:grid">
+        <div className="hidden grid-cols-9 gap-4 border-b border-border bg-cream-50 px-4 py-3 lg:grid">
           {HEADERS.map((h) => (
             <span key={h} className="text-xs font-extrabold uppercase tracking-wide text-text-secondary">
               {h}
@@ -73,6 +73,7 @@ export function MascotasTable({
             <div className="h-4 w-24 animate-pulse rounded bg-cream-100" />
             <div className="h-4 w-16 animate-pulse rounded bg-cream-100" />
             <div className="h-4 w-20 animate-pulse rounded bg-cream-100" />
+            <div className="h-4 w-16 animate-pulse rounded bg-cream-100" />
             <div className="h-6 w-24 animate-pulse rounded-pill bg-cream-100" />
             <div className="ml-auto flex gap-1 lg:ml-0">
               <div className="h-11 w-11 animate-pulse rounded-pill bg-cream-100" />
@@ -127,7 +128,7 @@ export function MascotasTable({
       <div className="overflow-x-auto">
         <table className="w-full min-w-[840px] border-collapse text-left">
           <caption className="sr-only">
-            Listado de mascotas con su especie, raza, sexo, edad y estado, y acciones para ver, ver el dueño y editar
+            Listado de mascotas con su especie, raza, sexo, edad, DNI del dueño y estado, y acciones para ver, ver el dueño y editar
           </caption>
           <thead>
             <tr className="border-b border-border bg-cream-50">
@@ -162,6 +163,12 @@ export function MascotasTable({
                     <SexoBadge sexo={m.sexo} />
                   </td>
                   <td className="px-4 py-3 text-sm text-text-secondary">{formatearEdad(m.fechaNacimiento)}</td>
+                  {/* BACKEND: documento del cliente titular. Viene resuelto desde el
+                      mapa clientePorId (GET /api/clientes/:id/mascotas o JOIN en
+                      GET /api/mascotas con la tabla cliente). */}
+                  <td className="px-4 py-3 text-sm text-text-primary tabular-nums">
+                    {clientePorId[m.clienteId]?.documento ?? "—"}
+                  </td>
                   <td className="px-4 py-3">
                     <EstadoMascotaBadge estado={m.estado} />
                   </td>
