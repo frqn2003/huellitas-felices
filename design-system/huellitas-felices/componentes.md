@@ -12,6 +12,7 @@ Usar SIEMPRE estos antes de crear un equivalente propio del módulo.
 |---|---|---|
 | `Button` | Botón pill del sistema | `variant`: primary (amarillo, solo CTAs) / secondary (verde) / outline / ghost / destructive · `size`: sm/md/lg/icon |
 | `Input` | Input de texto estándar | extiende `InputHTMLAttributes`, estilos de foco/token ya resueltos |
+| `Textarea` | Área de texto que crece hacia abajo con el contenido (hasta 192px, luego scroll) | extiende `TextareaHTMLAttributes` + `label`/`error`/`hint`. Creado para HU-CLI-01 (campo Dirección) |
 | `Select` | Select nativo estándar | extiende `SelectHTMLAttributes` |
 | `Combobox` | Select con búsqueda (catálogos largos) | `options: {value,label,tone?}[]`, integra `label`/`error`/`hint` |
 | `Modal` | Modal base con overlay + cierre | `open`, `onClose`, `title`, `icon?`, `footer?`, `maxWidth?`; anima con Framer Motion y respeta `prefers-reduced-motion` |
@@ -19,6 +20,7 @@ Usar SIEMPRE estos antes de crear un equivalente propio del módulo.
 | `Pagination` | Paginación de tablas | `page`, `totalPages`, `totalItems`, `pageStart/End`, `pageSize`, `onPageChange`, `onPageSizeChange` (tamaños 10/25/50) |
 | `OrdenamientoSelect` | Orden por fecha | `value`: "recientes"/"antiguas", `onChange` |
 | `RangoNumerico` | Filtro numérico min–max | `label`, `valor: {min,max}`, `onChange` |
+| `Switch` | Toggle de estado Activo/Inactivo | `role="switch"` + `aria-checked`, `checked`, `onChange`, `ariaLabel`; touch target ≥ 44px. Creado para HU-CLI-01 (no existía switch en ui/) | 
 | `Toast` | Notificaciones de éxito/error | `ToastProvider` + `useToast()` → `showToast("success"\|"error", msg)` |
 
 ## Por módulo (`src/components/<módulo>/`)
@@ -30,6 +32,11 @@ Patrones recurrentes por pantalla: `<Entidad>Table`, `<Entidad>Filtros*`, `<Enti
 
 ### auth
 `LoginForm` · `TwoFactorModal` · `BlockedOverlay`
+
+### clientes
+Módulo HU-CLI-01 (ABM de clientes, `/clientes`): `ClientesTable` · `ClienteFormModal` (paramétrico 3 modos crear/editar/ver sobre `Modal` + toggle `Switch` de baja lógica + advertencia de duplicados inactivos + validación front por campo con `errors`/`touched`) · `EstadoClienteBadge` (mapea `StatusBadge`: success/neutral) · `FiltrosClientes` (búsqueda nombre/documento/teléfono + filtro estado, default Activos) · `BajaClienteModal` (confirmación de baja lógica)
+> El listado muestra por defecto solo activos (criterio HU-CLI-01); el inactivo solo ofrece Ver en Acciones (la baja se hace desde el formulario con el toggle).
+> La página `/clientes` es la del módulo **Recepción**: header "Recepción" + `recepcion/RecepcionTabs` (Clientes activa; Mascotas/Turnos muestran panel placeholder de HU futura).
 
 ### compras
 `ComprasTabs` (tabs compartidos Proveedores / Cotizaciones / Órdenes de compra)
@@ -52,7 +59,10 @@ Módulo global de Cuentas Corrientes (HU-FIN-03): maneja AMBOS lados, proveedore
 > Ruta nueva `/cuentas-corrientes` con ítem "Cuentas Corrientes" (`Landmark`) en la sección Operaciones de `Sidebar`.
 
 ### layout
-`Sidebar` (nav principal)
+`Sidebar` (nav principal) — sección **Recepción** con UN solo ítem "Recepción" (`/clientes`, icono `Users`): las sub-pantallas del módulo viven como pestañas dentro de la página (patrón Compras; ver `recepcion/RecepcionTabs`).
+
+### recepcion
+`RecepcionTabs` — tabs del módulo Recepción (Clientes `/clientes` + Mascotas/Turnos como HUs futuras), espejo de `compras/ComprasTabs` (role=tablist, navegación con ←/→).
 
 ### movimientos
 `AlertaReposicionModal` · `FiltrosMovimientos` · `MovimientoFormModal` · `MovimientosTable` · `TipoMovimientoBadge`
