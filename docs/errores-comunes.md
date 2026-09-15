@@ -16,6 +16,7 @@ Log vivo del equipo de diseño para **no volver a cometer los mismos errores**. 
      Cada nueva entrada puede sumar una regla acá. Mantener corto (máx ~15). -->
 
 - [x] Páginas con `useSearchParams` (client component) → envolver en `<Suspense fallback={null}>` (falla el prerender de `next build`).
+- [x] Siempre que un input cargue sugerencias, verificar cómo se renderizan dentro de un `Modal` animado (transform): el `datalist` nativo se posiciona mal → usar chips propios. Y si un Combobox "parece seleccionado", revisar el `value` interno: tipear sin elegir de la lista deja el value vacío.
 
 ---
 
@@ -23,6 +24,14 @@ Log vivo del equipo de diseño para **no volver a cometer los mismos errores**. 
 
 <!-- Formato de cada entrada. Agregar entradas NUEVAS ARRIBA de las existentes (más reciente primero).
      No borrar entradas viejas: si quedó obsoleta, marcarla como [OBSOLETA] y por qué. -->
+
+### 2026-09-15 · Recepción · Formulario de mascotas (`/clientes`, HU-MAS-01)
+
+- **Qué pasó:** (1) al guardar una mascota nueva aparecía "El dueño es obligatorio" aunque el usuario lo había tipeado; (2) el desplegable de sugerencias de raza (`datalist`) se veía mal.
+- **Cómo se detectó:** feedback del usuario (prueba real en el modal).
+- **Causa:** (1) el `Combobox` de `ui/` vaciaba `onChange("")` al tipear y solo recuperaba el value si se elegía una opción de la lista con click/Enter+flechas; tipear y tocar afuera dejaba el texto visible pero el value vacío (y Enter sin flechas nunca seleccionaba). (2) el `datalist` nativo se posiciona respecto del viewport: dentro de un Modal animado con Framer Motion (transform crea un containing block distinto) el navegador lo dibuja descolocado.
+- **Regla para no repetirlo:** (1) un Combobox debe auto-seleccionar en blur si el texto coincide con UNA sola opción (y Enter con un único resultado también); (2) NO usar `datalist` dentro de modales animados → sugerencias propias como chips (botones pill con `aria-pressed`, filtrados por lo tipeado).
+- **Fix:** `src/components/ui/Combobox.tsx` (auto-commit en blur + Enter) y `src/components/mascotas/MascotaFormModal.tsx` (chips de razasSugeridas en lugar de `<datalist>`).
 
 ### 2026-09-15 · Recepción · tab Mascotas (`/clientes`, HU-MAS-01)
 

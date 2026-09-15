@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 
 export type FiltroEstado = "Activo" | "Inactivo" | "Todos";
+export type FiltroEspecie = "Todas" | "Perro" | "Gato" | "Otro";
+export type FiltroSexo = "Todos" | "Macho" | "Hembra";
 
 const estadoOpts: { value: FiltroEstado; label: string }[] = [
   { value: "Activo", label: "Activos" },
@@ -12,11 +14,28 @@ const estadoOpts: { value: FiltroEstado; label: string }[] = [
   { value: "Todos", label: "Todos los estados" },
 ];
 
+const especieOpts: { value: FiltroEspecie; label: string }[] = [
+  { value: "Todas", label: "Todas las especies" },
+  { value: "Perro", label: "Perros" },
+  { value: "Gato", label: "Gatos" },
+  { value: "Otro", label: "Otras" },
+];
+
+const sexoOpts: { value: FiltroSexo; label: string }[] = [
+  { value: "Todos", label: "Todos los sexos" },
+  { value: "Macho", label: "Machos" },
+  { value: "Hembra", label: "Hembras" },
+];
+
 interface FiltrosMascotasProps {
   busqueda: string;
   onBusquedaChange: (q: string) => void;
   estado: FiltroEstado;
   onEstadoChange: (e: FiltroEstado) => void;
+  especie: FiltroEspecie;
+  onEspecieChange: (e: FiltroEspecie) => void;
+  sexo: FiltroSexo;
+  onSexoChange: (s: FiltroSexo) => void;
   /** Nombre del dueño pre-filtrado desde la patita de ClientesTable (null = sin filtro). */
   duenoNombre: string | null;
   onQuitarDueno: () => void;
@@ -27,6 +46,10 @@ export function FiltrosMascotas({
   onBusquedaChange,
   estado,
   onEstadoChange,
+  especie,
+  onEspecieChange,
+  sexo,
+  onSexoChange,
   duenoNombre,
   onQuitarDueno,
 }: FiltrosMascotasProps) {
@@ -47,10 +70,15 @@ export function FiltrosMascotas({
   // El listado muestra por defecto solo activos (criterio HU-MAS-01): el
   // filtro no cuenta como "aplicado" mientras siga en su valor por defecto.
   const hasFiltroEstado = estado !== "Activo";
-  const hasFiltros = hasFiltroEstado || duenoNombre !== null;
+  const hasFiltroEspecie = especie !== "Todas";
+  const hasFiltroSexo = sexo !== "Todos";
+  const filtrosActivos = [hasFiltroEstado, hasFiltroEspecie, hasFiltroSexo].filter(Boolean).length;
+  const hasFiltros = filtrosActivos > 0 || duenoNombre !== null;
 
   const limpiar = () => {
     onEstadoChange("Activo");
+    onEspecieChange("Todas");
+    onSexoChange("Todos");
   };
 
   return (
@@ -84,9 +112,9 @@ export function FiltrosMascotas({
           >
             <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
             Filtros
-            {hasFiltroEstado && (
+            {filtrosActivos > 0 && (
               <span className="flex h-5 min-w-5 items-center justify-center rounded-pill bg-accent-500 px-1.5 text-xs font-extrabold text-brand-900">
-                1
+                {filtrosActivos}
               </span>
             )}
           </Button>
@@ -102,6 +130,32 @@ export function FiltrosMascotas({
                     className="h-11 cursor-pointer rounded-sm border border-border bg-surface px-3 text-base font-normal text-text-primary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
                   >
                     {estadoOpts.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1.5 text-sm font-bold text-text-primary">
+                  Especie
+                  {/* BACKEND: catálogo fijo del front (especie varchar libre en BD). */}
+                  <select
+                    value={especie}
+                    onChange={(e) => onEspecieChange(e.target.value as FiltroEspecie)}
+                    className="h-11 cursor-pointer rounded-sm border border-border bg-surface px-3 text-base font-normal text-text-primary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
+                  >
+                    {especieOpts.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1.5 text-sm font-bold text-text-primary">
+                  Sexo
+                  {/* BACKEND: catálogo fijo del front (sexo varchar libre en BD). */}
+                  <select
+                    value={sexo}
+                    onChange={(e) => onSexoChange(e.target.value as FiltroSexo)}
+                    className="h-11 cursor-pointer rounded-sm border border-border bg-surface px-3 text-base font-normal text-text-primary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
+                  >
+                    {sexoOpts.map((o) => (
                       <option key={o.value} value={o.value}>{o.label}</option>
                     ))}
                   </select>
@@ -139,6 +193,32 @@ export function FiltrosMascotas({
                 type="button"
                 onClick={limpiar}
                 aria-label={`Quitar filtro Estado ${estado}`}
+                className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-pill transition-colors duration-fast ease-out hover:bg-cream-50/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cream-50"
+              >
+                <X className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            </span>
+          )}
+          {hasFiltroEspecie && (
+            <span className="inline-flex items-center gap-1.5 rounded-pill bg-brand-900 py-1 pl-3 pr-1 text-xs font-bold text-cream-50">
+              Especie: {especie}
+              <button
+                type="button"
+                onClick={() => onEspecieChange("Todas")}
+                aria-label={`Quitar filtro Especie ${especie}`}
+                className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-pill transition-colors duration-fast ease-out hover:bg-cream-50/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cream-50"
+              >
+                <X className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            </span>
+          )}
+          {hasFiltroSexo && (
+            <span className="inline-flex items-center gap-1.5 rounded-pill bg-brand-900 py-1 pl-3 pr-1 text-xs font-bold text-cream-50">
+              Sexo: {sexo}
+              <button
+                type="button"
+                onClick={() => onSexoChange("Todos")}
+                aria-label={`Quitar filtro Sexo ${sexo}`}
                 className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-pill transition-colors duration-fast ease-out hover:bg-cream-50/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cream-50"
               >
                 <X className="h-3.5 w-3.5" aria-hidden="true" />

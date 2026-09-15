@@ -42,10 +42,14 @@ Siempre punto + texto (nunca solo color). `EstadoMascotaBadge` delega en
   con `router.replace` — patrón ?tab= de Compras, sin setState-en-effect.
   `useSearchParams` vive bajo `<Suspense fallback={null}>` (bailout del prerender).
 - **Tab Mascotas** (HU-MAS-01):
-  - `FiltrosMascotas`: búsqueda privada (nombre de mascota, especie, nombre o
-    documento del dueño) + filtro estado (default Activos) + chip removible
-    "Dueño: …" cuando se llega pre-filtado desde la patita.
-  - `MascotasTable`: columnas Id, Nombre, Especie, Estado, Acciones.
+- `FiltrosMascotas`: búsqueda privada (nombre de mascota, especie, raza, nombre o
+  documento del dueño) + filtros de Estado (default Activos), Especie
+  (Todas/Perro/Gato/Otro) y Sexo (Todos/Macho/Hembra) + chip removible
+  "Dueño: …" cuando se llega pre-filtado desde la patita.
+  - `MascotasTable`: columnas Id, Nombre, Especie, Raza, Sexo, Edad (calculada
+    desde fecha_nacimiento — clave para vacunas y clasificación
+    cachorro/adulto), Estado, Acciones. El Dueño NO es columna (el recepcionista lo
+    resuelve con 👤 "Ver dueño" o desde la patita del listado de clientes).
     Acciones: 👁️ Ver (Eye), 👤 Ver dueño (UserRound — navega a la tab Clientes
     con `?busqueda=<nombre completo>` pre-cargada, la tabla filtra la fila del
     titular; simétrico a la patita de clientes), ✏️ Editar (solo si activa; el

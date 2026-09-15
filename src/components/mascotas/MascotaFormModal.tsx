@@ -146,6 +146,11 @@ function MascotaFormFields({
   const [guardando, setGuardando] = useState(false);
   // Confirmación de baja lógica al guardar con el toggle en inactivo.
   const [confirmandoBaja, setConfirmandoBaja] = useState(false);
+  // Raza: modo desplegable (sugerencias) o texto libre al elegir "Otra (escribirla)".
+  // Arranca en texto libre si la raza existente no está en las sugerencias.
+  const [razaEsOtra, setRazaEsOtra] = useState(
+    () => Boolean(mascota?.raza) && !razasSugeridas.includes(mascota?.raza ?? ""),
+  );
 
   // Opciones del buscador de dueño: label compuesto `documento · nombre apellido`
   // (el Combobox filtra por substring del label → matchea DNI y nombre).
@@ -297,24 +302,53 @@ function MascotaFormFields({
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="flex flex-col gap-1.5">
+          {/* Raza: mismo desplegable que Especie (Select con sugerencias) + opción
+              "Otra (escribirla)" que revela texto libre. El Select es nativo (como
+              especie/sexo), el datalist se descartó porque se posiciona mal dentro
+              del modal animado (transform). BACKEND: sin tabla catálogo — raza es
+              varchar nullable; las sugerencias solo orientan. */}
+          {isLectura ? (
+            <Input
+              id="mas-raza"
+              label="Raza"
+              value={draft.raza}
+              readOnly
+            />
+          ) : razaEsOtra ? (
             <Input
               id="mas-raza"
               label="Raza"
               value={draft.raza}
               onChange={(e) => setField("raza", e.target.value)}
-              readOnly={isLectura}
-              list="raza-sugerencias"
-              hint={isLectura ? undefined : "Opcional · texto libre"}
+              hint="Opcional · texto libre"
+              placeholder="Escribí la raza"
             />
-            {/* BACKEND: sin tabla catálogo — raza es varchar nullable; el datalist
-                solo sugiere valores conocidos, el usuario puede escribir cualquiera. */}
-            <datalist id="raza-sugerencias">
+          ) : (
+            <Select
+              id="mas-raza"
+              label="Raza"
+              value={razasSugeridas.includes(draft.raza) ? draft.raza : ""}
+              onChange={(e) => {
+                if (e.target.value === "__otra__") {
+                  setRazaEsOtra(true);
+                  setField("raza", "");
+                } else {
+                  setField("raza", e.target.value);
+                }
+              }}
+              hint="Opcional"
+            >
+              <option value="" disabled>
+                Seleccionar raza
+              </option>
               {razasSugeridas.map((r) => (
-                <option key={r} value={r} />
+                <option key={r} value={r}>
+                  {r}
+                </option>
               ))}
-            </datalist>
-          </div>
+              <option value="__otra__">Otra (escribirla)</option>
+            </Select>
+          )}
           <Select
             id="mas-sexo"
             label="Sexo"

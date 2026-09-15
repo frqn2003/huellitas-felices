@@ -9,6 +9,8 @@ import { ClientesTable } from "@/components/clientes/ClientesTable";
 import type { FiltroEstado as FiltroEstadoCliente } from "@/components/clientes/FiltrosClientes";
 import { FiltrosClientes } from "@/components/clientes/FiltrosClientes";
 import { Sidebar } from "@/components/layout/Sidebar";
+import type { FiltroEspecie as FiltroEspecieMascota } from "@/components/mascotas/FiltrosMascotas";
+import type { FiltroSexo as FiltroSexoMascota } from "@/components/mascotas/FiltrosMascotas";
 import { FiltrosMascotas } from "@/components/mascotas/FiltrosMascotas";
 import type { MascotaModalMode } from "@/components/mascotas/MascotaFormModal";
 import { MascotaFormModal } from "@/components/mascotas/MascotaFormModal";
@@ -72,6 +74,8 @@ function ClientesScreen() {
 
   const [busquedaMascotas, setBusquedaMascotas] = useState("");
   const [estadoFiltroMascotas, setEstadoFiltroMascotas] = useState<FiltroEstadoCliente>("Activo");
+  const [especieFiltroMascotas, setEspecieFiltroMascotas] = useState<FiltroEspecieMascota>("Todas");
+  const [sexoFiltroMascotas, setSexoFiltroMascotas] = useState<FiltroSexoMascota>("Todos");
 
   const [pageSizeClientes, setPageSizeClientes] = useState(10);
   const [pageClientes, setPageClientes] = useState(1);
@@ -119,18 +123,22 @@ function ClientesScreen() {
   const pageEndClientes = Math.min(safePageClientes * pageSizeClientes, filtradosClientes.length);
 
   // El listado de mascotas muestra por defecto SÓLO activas (criterio HU-MAS-01),
-  // con búsqueda por nombre de mascota, nombre del dueño o documento del dueño.
+  // con búsqueda por nombre de mascota, nombre del dueño o documento del dueño,
+  // y filtros de especie y sexo (lo que busca un recepcionista en el mostrador).
   const filtradasMascotas = useMemo(() => {
     const base = SIMULAR_VACIO_MASCOTA ? [] : mascotas;
     return base.filter((m) => {
       if (dueno !== null && m.clienteId !== dueno) return false;
       if (estadoFiltroMascotas !== "Todos" && m.estado !== estadoFiltroMascotas.toLowerCase()) return false;
+      if (especieFiltroMascotas !== "Todas" && m.especie !== especieFiltroMascotas) return false;
+      if (sexoFiltroMascotas !== "Todos" && m.sexo !== sexoFiltroMascotas) return false;
       if (busquedaMascotas) {
         const query = busquedaMascotas.toLowerCase();
         const duenoMascota = clientePorId[m.clienteId];
         return (
           m.nombre.toLowerCase().includes(query) ||
           m.especie.toLowerCase().includes(query) ||
+          m.raza?.toLowerCase().includes(query) ||
           (duenoMascota?.nombre.toLowerCase().includes(query) ?? false) ||
           (duenoMascota?.apellido.toLowerCase().includes(query) ?? false) ||
           (duenoMascota?.documento.toLowerCase().includes(query) ?? false)
@@ -138,7 +146,7 @@ function ClientesScreen() {
       }
       return true;
     });
-  }, [mascotas, dueno, estadoFiltroMascotas, busquedaMascotas, clientePorId]);
+  }, [mascotas, dueno, estadoFiltroMascotas, especieFiltroMascotas, sexoFiltroMascotas, busquedaMascotas, clientePorId]);
 
   const totalPagesMascotas = Math.max(1, Math.ceil(filtradasMascotas.length / pageSizeMascotas));
   const safePageMascotas = Math.min(pageMascotas, totalPagesMascotas);
@@ -147,7 +155,12 @@ function ClientesScreen() {
   const pageEndMascotas = Math.min(safePageMascotas * pageSizeMascotas, filtradasMascotas.length);
 
   const hasActiveFiltersClientes = busquedaClientes !== "" || estadoFiltroClientes !== "Activo";
-  const hasActiveFiltersMascotas = busquedaMascotas !== "" || estadoFiltroMascotas !== "Activo" || dueno !== null;
+  const hasActiveFiltersMascotas =
+    busquedaMascotas !== "" ||
+    estadoFiltroMascotas !== "Activo" ||
+    especieFiltroMascotas !== "Todas" ||
+    sexoFiltroMascotas !== "Todos" ||
+    dueno !== null;
 
   const duenoNombre = dueno !== null ? clientePorId[dueno] ? `${clientePorId[dueno].nombre} ${clientePorId[dueno].apellido}` : null : null;
 
@@ -162,6 +175,8 @@ function ClientesScreen() {
   const handleClearFiltersMascotas = () => {
     setBusquedaMascotas("");
     setEstadoFiltroMascotas("Activo");
+    setEspecieFiltroMascotas("Todas");
+    setSexoFiltroMascotas("Todos");
     setPageMascotas(1);
   };
 
@@ -327,6 +342,16 @@ function ClientesScreen() {
                 estado={estadoFiltroMascotas}
                 onEstadoChange={(e) => {
                   setEstadoFiltroMascotas(e);
+                  setPageMascotas(1);
+                }}
+                especie={especieFiltroMascotas}
+                onEspecieChange={(e) => {
+                  setEspecieFiltroMascotas(e);
+                  setPageMascotas(1);
+                }}
+                sexo={sexoFiltroMascotas}
+                onSexoChange={(s) => {
+                  setSexoFiltroMascotas(s);
                   setPageMascotas(1);
                 }}
                 duenoNombre={duenoNombre}

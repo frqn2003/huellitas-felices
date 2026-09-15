@@ -18,7 +18,26 @@ interface MascotasTableProps {
   onEditar: (mascota: Mascota) => void;
 }
 
-const HEADERS = ["Id", "Nombre", "Especie", "Estado", "Acciones"];
+const HEADERS = ["Id", "Nombre", "Especie", "Raza", "Sexo", "Edad", "Estado", "Acciones"];
+
+// Edad calculada desde fecha_nacimiento (esquema: date nullable). El recepcionista
+// la necesita para vacunas y clasificación cachorro/adulto sin abrir la ficha.
+function formatearEdad(fechaNacimiento: string | null): string {
+  if (!fechaNacimiento) return "—";
+  const nacimiento = new Date(`${fechaNacimiento}T00:00:00`);
+  if (Number.isNaN(nacimiento.getTime())) return "—";
+  const hoy = new Date();
+  let meses =
+    (hoy.getFullYear() - nacimiento.getFullYear()) * 12 +
+    (hoy.getMonth() - nacimiento.getMonth());
+  if (hoy.getDate() < nacimiento.getDate()) meses -= 1;
+  if (meses < 0) return "—";
+  const anios = Math.floor(meses / 12);
+  const resto = meses % 12;
+  if (anios === 0) return resto <= 0 ? "menos de 1 mes" : `${resto} meses`;
+  if (resto === 0) return `${anios} ${anios === 1 ? "año" : "años"}`;
+  return `${anios} ${anios === 1 ? "año" : "años"} ${resto} ${resto === 1 ? "mes" : "meses"}`;
+}
 
 export function MascotasTable({
   mascotas,
@@ -34,7 +53,7 @@ export function MascotasTable({
   if (loading) {
     return (
       <div className="overflow-hidden rounded-md border border-border bg-surface shadow-card">
-        <div className="hidden grid-cols-5 gap-4 border-b border-border bg-cream-50 px-4 py-3 lg:grid">
+        <div className="hidden grid-cols-8 gap-4 border-b border-border bg-cream-50 px-4 py-3 lg:grid">
           {HEADERS.map((h) => (
             <span key={h} className="text-xs font-extrabold uppercase tracking-wide text-text-secondary">
               {h}
@@ -50,6 +69,9 @@ export function MascotasTable({
             <div className="h-4 w-10 animate-pulse rounded bg-cream-100" />
             <div className="h-4 w-28 animate-pulse rounded bg-cream-100" />
             <div className="h-4 w-24 animate-pulse rounded bg-cream-100" />
+            <div className="h-4 w-24 animate-pulse rounded bg-cream-100" />
+            <div className="h-4 w-16 animate-pulse rounded bg-cream-100" />
+            <div className="h-4 w-20 animate-pulse rounded bg-cream-100" />
             <div className="h-6 w-24 animate-pulse rounded-pill bg-cream-100" />
             <div className="ml-auto flex gap-1 lg:ml-0">
               <div className="h-11 w-11 animate-pulse rounded-pill bg-cream-100" />
@@ -102,9 +124,9 @@ export function MascotasTable({
   return (
     <div className="overflow-hidden rounded-md border border-border bg-surface shadow-card">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] border-collapse text-left">
+        <table className="w-full min-w-[840px] border-collapse text-left">
           <caption className="sr-only">
-            Listado de mascotas con su estado y acciones para ver, ver el dueño y editar
+            Listado de mascotas con su especie, raza, sexo, edad y estado, y acciones para ver, ver el dueño y editar
           </caption>
           <thead>
             <tr className="border-b border-border bg-cream-50">
@@ -134,6 +156,9 @@ export function MascotasTable({
                     <span className="font-bold text-brand-900">{m.nombre}</span>
                   </td>
                   <td className="px-4 py-3 text-sm text-text-primary">{m.especie}</td>
+                  <td className="px-4 py-3 text-sm text-text-primary">{m.raza ?? "—"}</td>
+                  <td className="px-4 py-3 text-sm text-text-primary">{m.sexo}</td>
+                  <td className="px-4 py-3 text-sm text-text-secondary">{formatearEdad(m.fechaNacimiento)}</td>
                   <td className="px-4 py-3">
                     <EstadoMascotaBadge estado={m.estado} />
                   </td>
