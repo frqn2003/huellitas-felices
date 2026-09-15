@@ -34,9 +34,13 @@ Patrones recurrentes por pantalla: `<Entidad>Table`, `<Entidad>Filtros*`, `<Enti
 `LoginForm` · `TwoFactorModal` · `BlockedOverlay`
 
 ### clientes
-Módulo HU-CLI-01 (ABM de clientes, `/clientes`): `ClientesTable` · `ClienteFormModal` (paramétrico 3 modos crear/editar/ver sobre `Modal` + toggle `Switch` de baja lógica + advertencia de duplicados inactivos + validación front por campo con `errors`/`touched`) · `EstadoClienteBadge` (mapea `StatusBadge`: success/neutral) · `FiltrosClientes` (búsqueda nombre/documento/teléfono + filtro estado, default Activos) · `BajaClienteModal` (confirmación de baja lógica)
+Módulo HU-CLI-01 (ABM de clientes, `/clientes`): `ClientesTable` (extendido HU-MAS-01 con prop opcional `onVerMascotas?: (cliente) => void` — la patita navega a `/clientes?tab=mascotas&dueno=id`) · `ClienteFormModal` (paramétrico 3 modos crear/editar/ver sobre `Modal` + toggle `Switch` de baja lógica + advertencia de duplicados inactivos + validación front por campo con `errors`/`touched`) · `EstadoClienteBadge` (mapea `StatusBadge`: success/neutral) · `FiltrosClientes` (búsqueda nombre/documento/teléfono + filtro estado, default Activos) · `BajaClienteModal` (confirmación de baja lógica)
 > El listado muestra por defecto solo activos (criterio HU-CLI-01); el inactivo solo ofrece Ver en Acciones (la baja se hace desde el formulario con el toggle).
-> La página `/clientes` es la del módulo **Recepción**: header "Recepción" + `recepcion/RecepcionTabs` (Clientes activa; Mascotas/Turnos muestran panel placeholder de HU futura).
+> La página `/clientes` es la del módulo **Recepción**: header "Recepción" + `recepcion/RecepcionTabs`. El tab y el dueno se **derivan de la URL** (`?tab=`/`?dueno=`): cambiar de tab o quitar el chip "Dueño" navega con `router.replace` (patrón ?tab= de Compras, sin setState-en-effect). `useSearchParams` vive bajo `<Suspense>` en el export default (bailout del prerender de Next).
+
+### mascotas
+Módulo HU-MAS-01 (ABM de mascotas, tab "Mascotas" dentro de `/clientes`): `MascotasTable` (columna Acciones: 👁️ Ver, 👤 Ver dueño — este navega a la tab Clientes con `?busqueda=<nombre completo>` pre-cargada, simétrico a la patita; el icono del dueño ya NO abre un modal) · `MascotaFormModal` (espejo de `ClienteFormModal`: 3 modos crear/editar/ver, `Combobox` de dueño con label `documento · nombre apellido` filtrando solo clientes activos, `datalist` de razas, `Switch` de baja lógica con confirmación vía `ui/ConfirmarDialog`, peso con hint "kg · opcional") · `EstadoMascotaBadge` (wrapper que delega en `EstadoClienteBadge` — mismo enum de estados, sin duplicar StatusBadge) · `FiltrosMascotas` (búsqueda nombre/especie/dueno + filtro estado + chip removible "Dueño: …")
+> Datos hardcodeados con tipos propios en `src/data/mascotas.ts` (`Mascota`/`MascotaDraft`, claves camelCase `clienteId`/`fechaNacimiento`/`senasParticulares` por ser placeholder front; el BACKEND las pasa a snake_case del esquema: cliente_id, fecha_nacimiento, senas_particulares).
 
 ### compras
 `ComprasTabs` (tabs compartidos Proveedores / Cotizaciones / Órdenes de compra)

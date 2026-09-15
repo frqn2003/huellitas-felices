@@ -1,40 +1,40 @@
 "use client";
 
-import { Edit2, Eye, PawPrint, Users } from "lucide-react";
-import type { Cliente, Mascota } from "@/data/clientes";
-import { EstadoClienteBadge } from "./EstadoClienteBadge";
+import { Edit2, Eye, PawPrint, UserRound } from "lucide-react";
+import type { Cliente } from "@/data/clientes";
+import type { Mascota } from "@/data/mascotas";
+import { EstadoMascotaBadge } from "./EstadoMascotaBadge";
 
-interface ClientesTableProps {
-  clientes: Cliente[];
-  /** Mascotas vinculadas por cliente (clave = cliente.id); tabla `mascota`. */
-  mascotasPorCliente?: Record<number, Mascota[]>;
+interface MascotasTableProps {
+  mascotas: Mascota[];
+  /** Mapa de clientes por id (resuelve el dueño de cada mascota para el aria-label). */
+  clientePorId?: Record<number, Cliente>;
   loading?: boolean;
   hasActiveFilters: boolean;
   onClearFilters: () => void;
   onNuevo: () => void;
-  onVer: (cliente: Cliente) => void;
-  onEditar: (cliente: Cliente) => void;
-  /** HU-MAS-01: la patita navega a la tab Mascotas pre-filtrada por el cliente. */
-  onVerMascotas?: (cliente: Cliente) => void;
+  onVer: (mascota: Mascota) => void;
+  onVerDueno: (mascota: Mascota) => void;
+  onEditar: (mascota: Mascota) => void;
 }
 
-const HEADERS = ["DNI", "Nombre y apellido", "Teléfono", "Mascotas", "Estado", "Acciones"];
+const HEADERS = ["Id", "Nombre", "Especie", "Estado", "Acciones"];
 
-export function ClientesTable({
-  clientes,
-  mascotasPorCliente,
+export function MascotasTable({
+  mascotas,
+  clientePorId = {},
   loading = false,
   hasActiveFilters,
   onClearFilters,
   onNuevo,
   onVer,
+  onVerDueno,
   onEditar,
-  onVerMascotas,
-}: ClientesTableProps) {
+}: MascotasTableProps) {
   if (loading) {
     return (
       <div className="overflow-hidden rounded-md border border-border bg-surface shadow-card">
-        <div className="hidden grid-cols-6 gap-4 border-b border-border bg-cream-50 px-4 py-3 lg:grid">
+        <div className="hidden grid-cols-5 gap-4 border-b border-border bg-cream-50 px-4 py-3 lg:grid">
           {HEADERS.map((h) => (
             <span key={h} className="text-xs font-extrabold uppercase tracking-wide text-text-secondary">
               {h}
@@ -47,12 +47,12 @@ export function ClientesTable({
             className="flex items-center gap-4 border-b border-border/60 px-4 py-3 last:border-b-0"
             aria-hidden="true"
           >
+            <div className="h-4 w-10 animate-pulse rounded bg-cream-100" />
+            <div className="h-4 w-28 animate-pulse rounded bg-cream-100" />
             <div className="h-4 w-24 animate-pulse rounded bg-cream-100" />
-            <div className="h-4 w-44 animate-pulse rounded bg-cream-100" />
-            <div className="hidden h-4 w-28 animate-pulse rounded bg-cream-100 lg:block" />
-            <div className="hidden h-4 w-32 animate-pulse rounded bg-cream-100 lg:block" />
             <div className="h-6 w-24 animate-pulse rounded-pill bg-cream-100" />
             <div className="ml-auto flex gap-1 lg:ml-0">
+              <div className="h-11 w-11 animate-pulse rounded-pill bg-cream-100" />
               <div className="h-11 w-11 animate-pulse rounded-pill bg-cream-100" />
               <div className="h-11 w-11 animate-pulse rounded-pill bg-cream-100" />
             </div>
@@ -62,20 +62,20 @@ export function ClientesTable({
     );
   }
 
-  if (clientes.length === 0) {
+  if (mascotas.length === 0) {
     return (
       <div className="flex flex-col items-center gap-4 rounded-md border border-border bg-surface px-6 py-16 text-center shadow-card">
         <span className="flex h-14 w-14 items-center justify-center rounded-md bg-brand-900/10">
-          <Users className="h-7 w-7 text-brand-900" aria-hidden="true" />
+          <PawPrint className="h-7 w-7 text-brand-900" aria-hidden="true" />
         </span>
         <div className="flex flex-col gap-1">
           <h3 className="font-display text-lg font-extrabold uppercase tracking-tight text-brand-900">
-            {hasActiveFilters ? "Sin resultados" : "No hay clientes registrados"}
+            {hasActiveFilters ? "Sin resultados" : "No hay mascotas registradas"}
           </h3>
           <p className="max-w-sm text-sm text-text-secondary">
             {hasActiveFilters
-              ? "No hay clientes que coincidan con la búsqueda o los filtros aplicados."
-              : "Registrá tu primer cliente para poder asociarlo a sus mascotas y turnos."}
+              ? "No hay mascotas que coincidan con la búsqueda o los filtros aplicados."
+              : "Registrá tu primera mascota asociada a un cliente para tener su ficha completa."}
           </p>
         </div>
         {hasActiveFilters ? (
@@ -92,7 +92,7 @@ export function ClientesTable({
             onClick={onNuevo}
             className="inline-flex h-12 cursor-pointer items-center justify-center gap-2 rounded-pill bg-accent-500 px-6 text-base font-bold text-brand-900 transition-all duration-fast ease-out hover:bg-accent-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900 focus-visible:ring-offset-2 focus-visible:ring-offset-cream-50"
           >
-            Nuevo cliente
+            Nueva mascota
           </button>
         )}
       </div>
@@ -102,9 +102,9 @@ export function ClientesTable({
   return (
     <div className="overflow-hidden rounded-md border border-border bg-surface shadow-card">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[820px] border-collapse text-left">
+        <table className="w-full min-w-[640px] border-collapse text-left">
           <caption className="sr-only">
-            Listado de clientes con sus mascotas y acciones para ver y editar
+            Listado de mascotas con su estado y acciones para ver, ver el dueño y editar
           </caption>
           <thead>
             <tr className="border-b border-border bg-cream-50">
@@ -120,76 +120,51 @@ export function ClientesTable({
             </tr>
           </thead>
           <tbody>
-            {clientes.map((cli) => {
-              const activo = cli.estado === "activo";
-              const nombreCompleto = `${cli.nombre} ${cli.apellido}`;
+            {mascotas.map((m) => {
+              const activa = m.estado === "activo";
+              const dueno = clientePorId[m.clienteId];
+              const nombreDueno = dueno ? `${dueno.nombre} ${dueno.apellido}` : "Dueño no encontrado";
               return (
                 <tr
-                  key={cli.id}
+                  key={m.id}
                   className="border-b border-border/60 transition-colors duration-fast ease-out last:border-b-0 hover:bg-cream-50/60"
                 >
-                  <td className="px-4 py-3 text-sm text-text-primary">
-                    {cli.documento}
-                  </td>
+                  <td className="px-4 py-3 text-sm text-text-primary">{m.id}</td>
                   <td className="px-4 py-3">
-                    <span className="font-bold text-brand-900">{nombreCompleto}</span>
+                    <span className="font-bold text-brand-900">{m.nombre}</span>
                   </td>
-                  <td className="px-4 py-3 text-sm text-text-primary">
-                    {cli.telefono}
-                  </td>
+                  <td className="px-4 py-3 text-sm text-text-primary">{m.especie}</td>
                   <td className="px-4 py-3">
-                    {(() => {
-                      const mascotas = mascotasPorCliente?.[cli.id] ?? [];
-                      if (mascotas.length === 0) {
-                        return (
-                          <span className="text-sm text-text-secondary">Sin mascotas</span>
-                        );
-                      }
-                      const primeras = mascotas.slice(0, 2).map((m) => m.nombre);
-                      const resto = mascotas.length - primeras.length;
-                      return (
-                        <span className="text-sm text-text-primary">
-                          {primeras.join(", ")}
-                          {resto > 0 && (
-                            <span className="font-bold text-text-secondary">+{resto}</span>
-                          )}
-                        </span>
-                      );
-                    })()}
-                  </td>
-                  <td className="px-4 py-3">
-                    <EstadoClienteBadge estado={cli.estado} />
+                    <EstadoMascotaBadge estado={m.estado} />
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
-                        onClick={() => onVer(cli)}
-                        aria-label={`Ver detalles de ${nombreCompleto}`}
+                        onClick={() => onVer(m)}
+                        aria-label={`Ver detalles de ${m.nombre}`}
                         title="Ver detalles"
                         className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-pill text-text-secondary transition-colors duration-fast ease-out hover:bg-brand-900/10 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900"
                       >
                         <Eye className="h-5 w-5" aria-hidden="true" />
                       </button>
 
-                      {/* HU-MAS-01: navega a la tab Mascotas pre-filtrada por el
-                          cliente (tabla `mascota`, /clientes?tab=mascotas&dueno=id). */}
                       <button
                         type="button"
-                        onClick={() => onVerMascotas?.(cli)}
-                        aria-label={`Ver mascotas de ${nombreCompleto}`}
-                        title="Ver mascotas"
+                        onClick={() => onVerDueno(m)}
+                        aria-label={`Ver dueño de ${m.nombre} (${nombreDueno})`}
+                        title="Ver dueño"
                         className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-pill text-text-secondary transition-colors duration-fast ease-out hover:bg-brand-900/10 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900"
                       >
-                        <PawPrint className="h-5 w-5" aria-hidden="true" />
+                        <UserRound className="h-5 w-5" aria-hidden="true" />
                       </button>
 
-                      {activo && (
+                      {activa && (
                         <button
                           type="button"
-                          onClick={() => onEditar(cli)}
-                          aria-label={`Editar cliente ${nombreCompleto}`}
-                          title="Editar cliente"
+                          onClick={() => onEditar(m)}
+                          aria-label={`Editar mascota ${m.nombre}`}
+                          title="Editar mascota"
                           className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-pill text-text-secondary transition-colors duration-fast ease-out hover:bg-brand-900/10 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900"
                         >
                           <Edit2 className="h-5 w-5" aria-hidden="true" />
