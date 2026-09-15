@@ -1,6 +1,8 @@
 # Esquema de Base de Datos — Diccionario de Datos (schema2.sql)
 
 > Diccionario de datos generado a partir del dump `schema2.sql` (PostgreSQL 18.6, dump del 2026-09-13).
+>
+> **Sprint 3 (2026-09-14):** se incorpora la sección 8 "Clientes, Mascotas y Turnos" desde el DD Sprint 3 de la DBA (HU-CLI-01, HU-CLI-02, HU-MAS-01, HU-TUR-01, HU-TUR-02). Sin triggers ni funciones; la bitácora reutiliza `public.auditoria` y el enum `estado_activo_inactivo`.
 
 ---
 
@@ -443,6 +445,115 @@ Relación 1 a muchos entre un pago y los comprobantes que cancela. Validaciones 
 
 ---
 
+## 8. Clientes, Mascotas y Turnos (Sprint 3)
+
+> Fuente: DD Sprint 3 — Front (entregable de la DBA, 2026-09-14). Este módulo NO está en `schema2.sql`; es el contrato definitivo que resuelve el pendiente D5 (clientes/mascotas) y agrega el módulo de agenda/turnos. Sin triggers ni funciones en este entregable: `updated_at` no se actualiza solo, y las validaciones de agenda (rol veterinario, rangos dentro de la franja general) se hacen en el backend.
+
+> `public.agenda` queda como la **agenda general de la sucursal** (1 fila por sucursal). Se agregan `agenda_semanal` (franjas generales de atención) y `agenda_profesional` (franja individual de cada veterinario dentro de esa franja general).
+
+### `cliente`
+| Campo | Tipo | Notas |
+|---|---|---|
+| id | serial PK | |
+| nombre | varchar NOT NULL | |
+| apellido | varchar NOT NULL | |
+| documento | varchar NOT NULL | único entre clientes activos (índice parcial) |
+| direccion | varchar (nullable) | |
+| telefono | varchar NOT NULL | |
+| email | varchar NOT NULL | único entre clientes activos (índice parcial) |
+| fecha_nacimiento | date (nullable) | |
+| estado | enum estado_activo_inactivo NOT NULL | default activo |
+| created_at | timestamp NOT NULL | default now() |
+| updated_at | timestamp NOT NULL | default now() |
+
+Índices únicos parciales (HU-CLI-01):
+- `cliente_documento_activo_uidx`: UNIQUE(documento) WHERE estado = 'activo' — el documento no se duplica entre clientes activos.
+- `cliente_email_activo_uidx`: UNIQUE(email) WHERE estado = 'activo' — mismo criterio para email.
+
+### `mascota`
+| Campo | Tipo | Notas |
+|---|---|---|
+| id | serial PK | |
+| cliente_id | int NOT NULL FK → cliente.id | |
+| nombre | varchar NOT NULL | |
+| especie | varchar NOT NULL | |
+| raza | varchar (nullable) | |
+| sexo | varchar NOT NULL | |
+| peso | numeric (nullable) | CHECK: peso IS NULL OR peso > 0 |
+| fecha_nacimiento | date (nullable) | |
+| senas_particulares | text (nullable) | |
+| estado | enum estado_activo_inactivo NOT NULL | default activo |
+| created_at | timestamp NOT NULL | default now() |
+| updated_at | timestamp NOT NULL | default now() |
+
+Mismo patrón de `created_at`/`updated_at` que `articulo`; el trigger de `updated_at` queda fuera de este entregable. Cada alta/modificación se registra en `public.auditoria` con usuario responsable, fecha/hora y valores anterior/nuevo.
+
+### `agenda_semanal`
+| Campo | Tipo | Notas |
+|---|---|---|
+| id | serial PK | |
+| agenda_id | int NOT NULL FK → agenda.id | |
+| dia_semana | smallint NOT NULL | CHECK 0–6 (0=domingo … 6=sábado) |
+| hora_inicio | time NOT NULL | |
+| hora_fin | time NOT NULL | CHECK hora_fin > hora_inicio |
+| estado | enum estado_activo_inactivo NOT NULL | default activo |
+
+UNIQUE (agenda_id, dia_semana, hora_inicio). Detalle estructurado de días/horarios de atención de la sucursal (ej. "lunes a viernes 8 a 21hs"); `sucursal.horario_atencion` (texto libre) queda como dato legado/descriptivo — el front debería usar esta tabla.
+
+### `agenda_profesional`
+| Campo | Tipo | Notas |
+|---|---|---|
+| id | serial PK | |
+| agenda_semanal_id | int NOT NULL FK → agenda_semanal.id | franja general de la sucursal a la que pertenece (ya trae el día) |
+| usuario_id | int NOT NULL FK → usuario.id | usuario con rol "veterinario"; no existe tabla "profesional" separada |
+| hora_inicio | time NOT NULL | |
+| hora_fin | time NOT NULL | CHECK hora_fin > hora_inicio |
+| estado | enum estado_activo_inactivo NOT NULL | default activo |
+
+UNIQUE (agenda_semanal_id, usuario_id, hora_inicio). Que (hora_inicio, hora_fin) caiga dentro del rango de `agenda_semanal` y que `usuario_id` tenga rol veterinario se valida en el backend (no hay trigger/función en este entregable).
+
+### `practica`
+| Campo | Tipo | Notas |
+|---|---|---|
+| id | serial PK | |
+| nombre | varchar NOT NULL UNIQUE | consulta / cirugia / control |
+| duracion_estimada_minutos | int (nullable) | CHECK: NULL o > 0 |
+| estado | enum estado_activo_inactivo NOT NULL | default activo |
+
+Subtabla de `turno`: tipo de práctica.
+
+### `estado_turno`
+| Campo | Tipo | Notas |
+|---|---|---|
+| id | serial PK | |
+| nombre | varchar NOT NULL UNIQUE | |
+| es_final | boolean NOT NULL | default false |
+
+Tabla de referencia fija (HU-TUR-02). Valores esperados (carga inicial, sin función/trigger): 1 pendiente, 2 confirmado, 3 cancelado (es_final), 4 atendido (es_final), 5 no_asistio (es_final).
+
+### `turno`
+| Campo | Tipo | Notas |
+|---|---|---|
+| id | serial PK | |
+| cliente_id | int NOT NULL FK → cliente.id | |
+| mascota_id | int NOT NULL FK → mascota.id | |
+| sucursal_id | int NOT NULL FK → sucursal.id | redundante respecto de agenda_profesional → agenda_semanal → agenda, pero evita 3 JOINs en la consulta más frecuente y preserva el historial si el veterinario cambia de sucursal; el backend debe completarlo derivándolo de agenda_profesional_id al insertar |
+| agenda_profesional_id | int NOT NULL FK → agenda_profesional.id | trae implícito el veterinario (usuario) + franja + sucursal |
+| practica_id | int NOT NULL FK → practica.id | |
+| estado_id | smallint FK → estado_turno.id NOT NULL | default 1 |
+| fecha | date NOT NULL | |
+| hora_inicio | time NOT NULL | |
+| hora_fin | time NOT NULL | CHECK hora_fin > hora_inicio |
+| notas | text (nullable) | |
+| usuario_id | int NOT NULL FK → usuario.id | quien cargó el turno (recepcionista), no el profesional que atiende |
+| fecha_creacion | timestamp NOT NULL | default now() |
+
+Índice `turno_sucursal_fecha_idx` (sucursal_id, fecha): apoyo a la consulta más común ("turnos de esta sucursal en una fecha").
+
+HU-TUR-01 — no superposición: `EXCLUDE USING gist` (requiere extensión `btree_gist`) sobre (agenda_profesional_id WITH =, fecha WITH =, rango de tiempo hora_inicio–hora_fin WITH &&), aplicado `WHERE estado_id <> 3` (un turno cancelado libera el hueco). Garantiza a nivel de base que un mismo profesional no tenga dos turnos superpuestos el mismo día, incluso ante requests concurrentes. El backend igual debe validar con una consulta `OVERLAPS` antes del INSERT para mostrar un mensaje de error claro.
+
+---
+
 ## Relaciones (FKs) — resumen
 
 ```
@@ -511,4 +622,20 @@ pago.anula_pago_id → pago.id (nullable)
 pago.usuario_id → usuario.id
 pago_imputacion.pago_id → pago.id (ON DELETE CASCADE)
 pago_imputacion.comprobante_proveedor_id → comprobante_proveedor.id
+
+-- Sprint 3 (Clientes, Mascotas y Turnos)
+mascota.cliente_id → cliente.id
+
+agenda_semanal.agenda_id → agenda.id
+
+agenda_profesional.agenda_semanal_id → agenda_semanal.id
+agenda_profesional.usuario_id → usuario.id
+
+turno.cliente_id → cliente.id
+turno.mascota_id → mascota.id
+turno.sucursal_id → sucursal.id
+turno.agenda_profesional_id → agenda_profesional.id
+turno.practica_id → practica.id
+turno.estado_id → estado_turno.id
+turno.usuario_id → usuario.id
 ```
