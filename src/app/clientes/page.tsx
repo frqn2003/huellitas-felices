@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, CalendarDays, Plus, RotateCcw } from "lucide-react";
+import { AlertTriangle, Plus, RotateCcw } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 import type { ClienteModalMode } from "@/components/clientes/ClienteFormModal";
@@ -17,6 +17,7 @@ import { MascotaFormModal } from "@/components/mascotas/MascotaFormModal";
 import { MascotasTable } from "@/components/mascotas/MascotasTable";
 import type { TabRecepcion } from "@/components/recepcion/RecepcionTabs";
 import { RecepcionTabs } from "@/components/recepcion/RecepcionTabs";
+import { TurnosContent } from "@/components/turnos/TurnosContent";
 import { Button } from "@/components/ui/Button";
 import { Pagination } from "@/components/ui/Pagination";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
@@ -28,11 +29,22 @@ import {
   SIMULAR_ERROR as SIMULAR_ERROR_MASCOTA,
   SIMULAR_VACIO as SIMULAR_VACIO_MASCOTA,
 } from "@/data/mascotas";
+import type { Turno } from "@/data/turnos";
+import { turnosIniciales } from "@/data/turnos";
 
 function ClientesScreen() {
   const { showToast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
+  // El CTA "Nuevo turno" del header abre el wizard que vive en TurnosContent.
+  // La apertura está controlada acá (open + remount-key por apertura, técnica de
+  // MascotaFormModal) para que cada alta arranque siempre en el Paso 1.
+  const [turnoWizardOpen, setTurnoWizardOpen] = useState(false);
+  const [turnoWizardSession, setTurnoWizardSession] = useState(0);
+  const solicitarNuevoTurno = () => {
+    setTurnoWizardSession((s) => s + 1);
+    setTurnoWizardOpen(true);
+  };
 
   // El tab y el dueño se DERIVAN de la URL (?tab= / ?dueno=): vienen de la
   // patita de ClientesTable y de la navegación interna. Cambiar de tab o quitar
@@ -89,6 +101,11 @@ function ClientesScreen() {
   const [modalMascotaOpen, setModalMascotaOpen] = useState(false);
   const [modalMascotaMode, setModalMascotaMode] = useState<MascotaModalMode>("crear");
   const [mascotaActiva, setMascotaActiva] = useState<Mascota | null>(null);
+
+  // --- Estado de la tab Turnos (HU-TUR-01) ---
+  // BACKEND: reemplazar por GET /api/turnos (tabla turno, contrato sección 8).
+  // Vive a nivel página (como clientes/mascotas) para persistir al cambiar de tab.
+  const [turnos, setTurnos] = useState<Turno[]>(turnosIniciales);
 
   // Mapa cliente por id: resuelve el dueño de cada mascota (columna "Ver dueño"
   // y el chip pre-filtrado desde la patita).
@@ -211,6 +228,10 @@ function ClientesScreen() {
     setModalMascotaOpen(true);
   };
 
+  const handleCrearTurno = (nuevo: Turno) => {
+    setTurnos((prev) => [nuevo, ...prev]);
+  };
+
   // BACKEND: los draft viajan al POST/PUT; el toggle a Inactivo → PATCH
   // /api/mascotas/:id/inactivar. El id numérico lo genera la base. Cada alta y
   // modificación registra public.auditoria (operacion INSERT/UPDATE, valores
@@ -276,11 +297,14 @@ function ClientesScreen() {
   };
 
   // El CTA del header es UNA sola acción clara por viewport (regla Pet Bliss):
-  // cambia según la tab activa (Nuevo cliente / Nueva mascota), nunca las dos.
+  // cambia según la tab activa (Nuevo cliente / Nueva mascota / Nuevo turno),
+  // nunca las dos a la vez.
   const accionPrincipal =
     tab === "clientes" ? { label: "Nuevo cliente", onOpen: () => abrirModalCliente("crear") }
     : tab === "mascotas" ? { label: "Nueva mascota", onOpen: () => abrirModalMascota("crear") }
+    : tab === "turnos" ? { label: "Nuevo turno", onOpen: solicitarNuevoTurno }
     : null;
+  const ctaDisabled = tab === "clientes" ? cargando || error : false;
 
   return (
     <div className="flex min-h-screen bg-cream-50">
@@ -298,7 +322,7 @@ function ClientesScreen() {
                 </h1>
               </div>
               {accionPrincipal && (
-                <Button size="lg" onClick={accionPrincipal.onOpen} disabled={cargando || error}>
+                <Button size="lg" onClick={accionPrincipal.onOpen} disabled={ctaDisabled}>
                   <Plus className="h-5 w-5" aria-hidden="true" />
                   {accionPrincipal.label}
                 </Button>
@@ -474,19 +498,18 @@ function ClientesScreen() {
               role="tabpanel"
               id={`panel-recepcion-${tab}`}
               aria-labelledby={`tab-recepcion-${tab}`}
-              className="flex flex-col items-center gap-4 rounded-md border border-border bg-surface px-6 py-16 text-center shadow-card"
+              className="flex flex-col gap-6"
             >
-              <span className="flex h-14 w-14 items-center justify-center rounded-md bg-brand-900/10">
-                <CalendarDays className="h-7 w-7 text-brand-900" aria-hidden="true" />
-              </span>
-              <div className="flex flex-col gap-1">
-                <h3 className="font-display text-lg font-extrabold uppercase tracking-tight text-brand-900">
-                  Turnos
-                </h3>
-                <p className="max-w-sm text-sm text-text-secondary">
-                  La agenda de turnos llega en una próxima entrega (HU-TUR).
-                </p>
-              </div>
+              <TurnosContent
+                clientes={clientes}
+                mascotas={mascotas}
+                turnos={turnos}
+                onCrearTurno={handleCrearTurno}
+                nuevoTurnoOpen={turnoWizardOpen}
+                nuevoTurnoSession={turnoWizardSession}
+                onSolicitarNuevoTurno={solicitarNuevoTurno}
+                onCerrarNuevoTurno={() => setTurnoWizardOpen(false)}
+              />
             </div>
           )}
         </div>

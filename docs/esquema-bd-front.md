@@ -493,7 +493,7 @@ Mismo patrón de `created_at`/`updated_at` que `articulo`; el trigger de `update
 |---|---|---|
 | id | serial PK | |
 | agenda_id | int NOT NULL FK → agenda.id | |
-| dia_semana | smallint NOT NULL | CHECK 0–6 (0=domingo … 6=sábado) |
+| dia_semana | smallint NOT NULL | CHECK 1–7 (1=lunes … 7=domingo, convención ISO 8601) |
 | hora_inicio | time NOT NULL | |
 | hora_fin | time NOT NULL | CHECK hora_fin > hora_inicio |
 | estado | enum estado_activo_inactivo NOT NULL | default activo |
