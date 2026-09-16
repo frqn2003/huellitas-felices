@@ -30,7 +30,8 @@ import {
   SIMULAR_VACIO as SIMULAR_VACIO_MASCOTA,
 } from "@/data/mascotas";
 import type { Turno } from "@/data/turnos";
-import { turnosIniciales } from "@/data/turnos";
+import { nombreEstado, turnosIniciales } from "@/data/turnos";
+import { AgendaSemanal } from "@/components/turnos/AgendaSemanal";
 
 function ClientesScreen() {
   const { showToast } = useToast();
@@ -61,7 +62,9 @@ function ClientesScreen() {
       ? "mascotas"
       : searchParams.get("tab") === "turnos"
         ? "turnos"
-        : "clientes";
+        : searchParams.get("tab") === "agenda"
+          ? "agenda"
+          : "clientes";
   const dueno: number | null = useMemo(() => {
     const raw = searchParams.get("dueno");
     if (!raw) return null;
@@ -230,6 +233,26 @@ function ClientesScreen() {
 
   const handleCrearTurno = (nuevo: Turno) => {
     setTurnos((prev) => [nuevo, ...prev]);
+  };
+
+  // HU-TUR-02: cambio de estado desde la agenda. Vive a nivel página para que
+  // la tab Turnos y la Agenda compartan el mismo estado (un array, no dos).
+  // BACKEND: PATCH /turnos/:id { estado_id } valida la transición permitida y
+  // registra auditoria (tabla='turno', operacion='UPDATE', registro_id,
+  // usuario_id de sesión, valores_anteriores/nuevos); el backend refresca y el
+  // front aplica el cambio local para no recargar toda la página.
+  const handleCambiarEstado = (turnoId: number, estadoId: number): boolean => {
+    const previo = turnos.find((t) => t.id === turnoId);
+    if (!previo) return false;
+    setTurnos((prev) => prev.map((t) => (t.id === turnoId ? { ...t, estadoId } : t)));
+    showToast(
+      "success",
+      `El turno #${String(turnoId).padStart(5, "0")} pasó a ${nombreEstado[estadoId] ?? "desconocido"}`,
+    );
+    // BACKEND: el backend valida que la transición sea permitida (1→2, 2→{3,4,5})
+    // y registra la auditoría del UPDATE. Si cancelado, el horario queda libre
+    // al instante (EXCLUDE estado_id <> 3).
+    return true;
   };
 
   // BACKEND: los draft viajan al POST/PUT; el toggle a Inactivo → PATCH
@@ -509,6 +532,22 @@ function ClientesScreen() {
                 nuevoTurnoSession={turnoWizardSession}
                 onSolicitarNuevoTurno={solicitarNuevoTurno}
                 onCerrarNuevoTurno={() => setTurnoWizardOpen(false)}
+              />
+            </div>
+          )}
+
+          {tab === "agenda" && (
+            <div
+              role="tabpanel"
+              id={`panel-recepcion-${tab}`}
+              aria-labelledby={`tab-recepcion-${tab}`}
+              className="flex flex-col gap-6"
+            >
+              <AgendaSemanal
+                clientes={clientes}
+                mascotas={mascotas}
+                turnos={turnos}
+                onCambiarEstado={handleCambiarEstado}
               />
             </div>
           )}

@@ -6,10 +6,7 @@ import { useRouter } from "next/navigation";
 import type { Cliente } from "@/data/clientes";
 import type { Mascota } from "@/data/mascotas";
 import {
-  formatearFechaHora,
   normalizarBusqueda,
-  practicas,
-  profesionales,
   SIMULAR_ERROR,
   SIMULAR_VACIO,
   type Turno,
@@ -24,18 +21,8 @@ import {
 } from "./FiltrosTurnos";
 import { NuevoTurnoModal } from "./NuevoTurnoModal";
 import { TurnoDetalleModal } from "./TurnoDetalleModal";
+import { construirFilaTurno } from "./turnoRow";
 import { TurnosTable, type TurnoRow } from "./TurnosTable";
-
-// JOINs de display que no dependen de props: el front resuelve los nombres con
-// los directorios (los traería el backend con JOIN en GET /turnos). La franja
-// elegida (agenda_profesional.id) mapea al profesional vía su agenda.
-const practicaPorId = Object.fromEntries(practicas.map((p) => [p.id, p]));
-const profesionalPorFranja: Record<number, { nombre: string; apellido: string; especialidad: string }> = {};
-for (const p of profesionales) {
-  for (const f of p.franjas) {
-    profesionalPorFranja[f.id] = { nombre: p.nombre, apellido: p.apellido, especialidad: p.especialidad };
-  }
-}
 
 interface TurnosContentProps {
   /** Directorio de clientes (los modales y los JOIN de display lo resuelven). */
@@ -86,26 +73,7 @@ export function TurnosContent({
     );
 
     function aRow(t: Turno): TurnoRow {
-      const cli = clientePorId[t.clienteId];
-      const mas = mascotaPorId[t.mascotaId];
-      const pro = profesionalPorFranja[t.agendaProfesionalId];
-      const pra = practicaPorId[t.practicaId];
-      return {
-        id: t.id,
-        fecha: t.fecha,
-        horaInicio: t.horaInicio,
-        horaFin: t.horaFin,
-        clienteNombre: cli ? `${cli.nombre} ${cli.apellido}` : `Cliente #${t.clienteId}`,
-        dni: cli?.documento ?? "",
-        mascotaNombre: mas?.nombre ?? `Mascota #${t.mascotaId}`,
-        especie: mas?.especie ?? "",
-        profesionalNombre: pro ? `${pro.nombre} ${pro.apellido}` : `Profesional #${t.agendaProfesionalId}`,
-        especialidad: pro?.especialidad ?? "",
-        practicaNombre: pra?.nombre ?? `Práctica #${t.practicaId}`,
-        estadoId: t.estadoId,
-        notas: t.notas,
-        fechaCreacionHora: formatearFechaHora(t.fechaCreacion),
-      };
+      return construirFilaTurno(t, clientePorId, mascotaPorId);
     }
 
     // Buscador: cliente (nombre/DNI), profesional (nombre/especialidad) y

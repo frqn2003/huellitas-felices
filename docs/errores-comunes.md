@@ -17,6 +17,7 @@ Log vivo del equipo de diseño para **no volver a cometer los mismos errores**. 
 
 - [x] Páginas con `useSearchParams` (client component) → envolver en `<Suspense fallback={null}>` (falla el prerender de `next build`).
 - [x] Siempre que un input cargue sugerencias, verificar cómo se renderizan dentro de un `Modal` animado (transform): el `datalist` nativo se posiciona mal → usar chips propios. Y si un Combobox "parece seleccionado", revisar el `value` interno: tipear sin elegir de la lista deja el value vacío.
+- [x] NO resetear estado con `useEffect` sincrónico (setState dentro del effect body → lint `react-hooks/set-state-in-effect`). Para reiniciar un select al cambiar de registro: remount-key desde el padre (`key={id}`) o ajustar estado durante render (guardar el id previo con `useState` y setear si cambió).
 
 ---
 
@@ -24,6 +25,14 @@ Log vivo del equipo de diseño para **no volver a cometer los mismos errores**. 
 
 <!-- Formato de cada entrada. Agregar entradas NUEVAS ARRIBA de las existentes (más reciente primero).
      No borrar entradas viejas: si quedó obsoleta, marcarla como [OBSOLETA] y por qué. -->
+
+### 2026-09-16 · Recepción · tab Agenda (`/clientes?tab=agenda`, HU-TUR-02)
+
+- **Qué pasó:** el lint falló con `react-hooks/set-state-in-effect` (error, no warning): `TurnoDetalleModal` reseteaba el select "Cambiar a" con `useEffect(() => { if (open) setNuevoEstadoId(""); }, [open, turno?.id])`.
+- **Cómo se detectó:** `npm run lint` (paso 6a).
+- **Causa:** llamar `setState` sincrónicamente dentro del body del effect (reset de estado al cambiar props) — React 19 lo desaconseja por renders en cascada.
+- **Regla para no repetirlo:** para reiniciar un control interno al cambiar el registro abierto usar remount-key del padre (`key={detalle?.id}`) o el patrón de "ajustar estado durante render" (guardar `prevTurnoId` en `useState` y comparar); nunca `setState` directo en el effect.
+- **Fix:** `src/components/turnos/TurnoDetalleModal.tsx` (patrón `prevTurnoId` con set condicional en el render) + remount-key con `key={detalle?.id ?? -1}` desde `AgendaSemanal`.
 
 ### 2026-09-15 · Recepción · Formulario de mascotas (`/clientes`, HU-MAS-01)
 

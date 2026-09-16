@@ -1,4 +1,4 @@
-// Datos placeholder del módulo Turnos (HU-TUR-01).
+// Datos placeholder del módulo Turnos (HU-TUR-01, HU-TUR-02).
 // Contrato real del esquema (docs/esquema-bd-front.md, sección 8 "Clientes,
 // Mascotas y Turnos" — DD Sprint 3). Cada `id` es la PK que mandará la base.
 // El estado proviene del catálogo `estado_turno` (NO es enum). `dia_semana`
@@ -23,6 +23,28 @@ export const estadosTurno: EstadoTurno[] = [
   { id: 4, nombre: "atendido", es_final: true },
   { id: 5, nombre: "no_asistio", es_final: true },
 ];
+
+// ─── Regla de transición de estados (HU-TUR-02, confirmada con el equipo) ────
+// Nunca se retrocede: pendiente → solo confirmado → solo atendido | cancelado |
+// no_asistio. Los finales (3, 4, 5) no admiten cambio.
+// BACKEND: validar en PATCH /turnos/:id que la transición sea permitida.
+export const transicionesEstado: Record<number, number[]> = {
+  1: [2], // pendiente → confirmado
+  2: [3, 4, 5], // confirmado → cancelado | atendido | no_asistio
+  3: [], // final
+  4: [], // final
+  5: [], // final
+};
+
+// Etiqueta humana del catálogo para selects y confirmaciones (la BD guarda
+// el nombre crudo: "no_asistio"). // BACKEND: poblar desde GET /api/estados-turno.
+export const nombreEstado: Record<number, string> = {
+  1: "Pendiente",
+  2: "Confirmado",
+  3: "Cancelado",
+  4: "Atendido",
+  5: "No asistió",
+};
 
 // ─── Catálogo practica (la duración determina hora_fin = hora_inicio + duración) ──
 // BACKEND: poblar desde GET /api/practicas.
@@ -106,6 +128,18 @@ export const profesionales: Profesional[] = [
     ],
   },
 ];
+
+// Mapas de display compartidos (tab Turnos y Agenda): resuelven el nombre del
+// profesional y de la práctica desde las FK del turno, sin duplicar los JOINs.
+export const profesionalPorFranja: Record<number, { nombre: string; apellido: string; especialidad: string }> = {};
+export const profesionalIdPorFranja: Record<number, number> = {};
+for (const p of profesionales) {
+  for (const f of p.franjas) {
+    profesionalPorFranja[f.id] = { nombre: p.nombre, apellido: p.apellido, especialidad: p.especialidad };
+    profesionalIdPorFranja[f.id] = p.id;
+  }
+}
+export const practicaPorId = Object.fromEntries(practicas.map((p) => [p.id, p]));
 
 // ─── Turno ───────────────────────────────────────────────────────────────────
 export interface Turno {
@@ -231,6 +265,129 @@ export const turnosIniciales: Turno[] = [
     usuarioId: RECEPCIONISTA_ID,
     fechaCreacion: "2026-09-05T10:31:00.000Z",
   },
+  // Semana de ejemplo de la agenda (HU-TUR-02): lunes 21/09 a viernes 25/09/2026.
+  // La grilla agrupa por franja (agenda_profesional.id) y fecha.
+  // BACKEND: GET /agenda/semana?fecha=&usuario_id= reemplaza el filtro local.
+  {
+    id: 10,
+    clienteId: 1, // Pablo Celaya
+    mascotaId: 3, // Poppi
+    sucursalId: 1,
+    agendaProfesionalId: 1, // Dr. Juan Pérez · lunes mañana (08-12)
+    practicaId: 1, // consulta 30'
+    estadoId: 4, // atendido
+    fecha: "2026-09-21",
+    horaInicio: "08:00",
+    horaFin: "08:30",
+    notas: null,
+    usuarioId: RECEPCIONISTA_ID,
+    fechaCreacion: "2026-09-19T10:00:00.000Z",
+  },
+  {
+    id: 11,
+    clienteId: 3, // Nicolas Celaya
+    mascotaId: 1, // Azul
+    sucursalId: 1,
+    agendaProfesionalId: 1, // Dr. Juan Pérez · lunes mañana
+    practicaId: 3, // control 15'
+    estadoId: 2, // confirmado
+    fecha: "2026-09-21",
+    horaInicio: "09:00",
+    horaFin: "09:15",
+    notas: null,
+    usuarioId: RECEPCIONISTA_ID,
+    fechaCreacion: "2026-09-18T11:20:00.000Z",
+  },
+  {
+    id: 12,
+    clienteId: 1, // Pablo Celaya
+    mascotaId: 3, // Poppi
+    sucursalId: 1,
+    agendaProfesionalId: 12, // Dra. Laura Gómez · martes tarde (14-18)
+    practicaId: 2, // cirugía 90'
+    estadoId: 2, // confirmado
+    fecha: "2026-09-22",
+    horaInicio: "14:00",
+    horaFin: "15:30",
+    notas: "Castración programada",
+    usuarioId: RECEPCIONISTA_ID,
+    fechaCreacion: "2026-09-19T09:05:00.000Z",
+  },
+  {
+    id: 13,
+    clienteId: 3, // Nicolas Celaya
+    mascotaId: 1, // Azul
+    sucursalId: 1,
+    agendaProfesionalId: 3, // Dr. Juan Pérez · martes mañana
+    practicaId: 3, // control 15'
+    estadoId: 1, // pendiente
+    fecha: "2026-09-22",
+    horaInicio: "08:00",
+    horaFin: "08:15",
+    notas: null,
+    usuarioId: RECEPCIONISTA_ID,
+    fechaCreacion: "2026-09-20T16:40:00.000Z",
+  },
+  {
+    id: 14,
+    clienteId: 1, // Pablo Celaya
+    mascotaId: 3, // Poppi
+    sucursalId: 1,
+    agendaProfesionalId: 6, // Dr. Juan Pérez · miércoles tarde
+    practicaId: 1, // consulta 30'
+    estadoId: 5, // no_asistio
+    fecha: "2026-09-23",
+    horaInicio: "15:00",
+    horaFin: "15:30",
+    notas: null,
+    usuarioId: RECEPCIONISTA_ID,
+    fechaCreacion: "2026-09-17T12:30:00.000Z",
+  },
+  {
+    id: 15,
+    clienteId: 3, // Nicolas Celaya
+    mascotaId: 1, // Azul
+    sucursalId: 1,
+    agendaProfesionalId: 7, // Dr. Juan Pérez · jueves mañana
+    practicaId: 3, // control 15'
+    estadoId: 3, // cancelado (liberó el hueco)
+    fecha: "2026-09-24",
+    horaInicio: "08:00",
+    horaFin: "08:15",
+    notas: "Cliente canceló",
+    usuarioId: RECEPCIONISTA_ID,
+    fechaCreacion: "2026-09-18T08:45:00.000Z",
+  },
+  {
+    id: 16,
+    clienteId: 1, // Pablo Celaya
+    mascotaId: 3, // Poppi
+    sucursalId: 1,
+    agendaProfesionalId: 13, // Dra. Laura Gómez · jueves mañana
+    practicaId: 2, // cirugía 90'
+    estadoId: 4, // atendido
+    fecha: "2026-09-24",
+    horaInicio: "09:00",
+    horaFin: "10:30",
+    notas: null,
+    usuarioId: RECEPCIONISTA_ID,
+    fechaCreacion: "2026-09-16T14:10:00.000Z",
+  },
+  {
+    id: 17,
+    clienteId: 3, // Nicolas Celaya
+    mascotaId: 1, // Azul
+    sucursalId: 1,
+    agendaProfesionalId: 9, // Dr. Juan Pérez · viernes mañana
+    practicaId: 3, // control 15'
+    estadoId: 2, // confirmado
+    fecha: "2026-09-25",
+    horaInicio: "09:00",
+    horaFin: "09:15",
+    notas: null,
+    usuarioId: RECEPCIONISTA_ID,
+    fechaCreacion: "2026-09-20T18:25:00.000Z",
+  },
 ];
 
 // ─── Helpers de horarios (agenda) ────────────────────────────────────────────
@@ -312,6 +469,37 @@ export function formatearFechaHora(fechaISO: string): string {
     hour12: false,
   }).format(date);
   return `${fecha} · ${hora}`;
+}
+
+// ─── Helpers de la agenda semanal (HU-TUR-02) ────────────────────────────────
+/** Suma `dias` a una fecha ISO "YYYY-MM-DD" (puede atravesar años). */
+export function sumarDias(fechaISO: string, dias: number): string {
+  const [y, m, d] = fechaISO.split("-").map(Number);
+  const cursor = new Date(y, m - 1, d);
+  cursor.setDate(cursor.getDate() + dias);
+  return aISO(cursor);
+}
+
+/** Lunes (ISO) de la semana que contiene la fecha. "2026-09-16" → "2026-09-14". */
+export function lunesDeFecha(fechaISO: string): string {
+  return sumarDias(fechaISO, 1 - diaSemanaDeFecha(fechaISO));
+}
+
+/** Las 7 fechas (lunes → domingo) de la semana cuyo lunes se pasa. */
+export function fechasDeSemana(lunesISO: string): string[] {
+  return Array.from({ length: 7 }, (_, i) => sumarDias(lunesISO, i));
+}
+
+/** "2026-09-14" → "14/09". */
+function fechaCorta(fechaISO: string): string {
+  const [, m, d] = fechaISO.split("-");
+  return `${d}/${m}`;
+}
+
+/** "Semana del 14/09 al 20/09/2026" (encabezado de la agenda). */
+export function formatearSemana(lunesISO: string): string {
+  const dias = fechasDeSemana(lunesISO);
+  return `Semana del ${fechaCorta(dias[0])} al ${fechaCorta(dias[6])}/${dias[6].split("-")[0]}`;
 }
 
 /**
