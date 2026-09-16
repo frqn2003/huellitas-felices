@@ -286,41 +286,46 @@ export function NuevoTurnoModal({
               </Button>
             </div>
           ) : (
-            <ul className="flex flex-col gap-2" aria-label="Mascotas del cliente">
-              {mascotasDelCliente.map((m) => {
-                const selected = m.id === mascotaId;
-                return (
-                  <li key={m.id}>
-                    <button
-                      type="button"
-                      onClick={() => setMascotaId(m.id)}
-                      aria-pressed={selected}
-                      className={`flex w-full cursor-pointer items-center gap-3 rounded-md border px-4 py-3 text-left transition-colors duration-fast ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900 ${
-                        selected
-                          ? "border-brand-900 bg-brand-900/5"
-                          : "border-border bg-surface hover:bg-cream-50/60"
-                      }`}
-                    >
-                      <span
-                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-pill border-2 ${
-                          selected ? "border-brand-900 bg-brand-900" : "border-border"
+            <>
+              <p className="text-sm font-bold text-text-primary">
+                Mascota<span className="text-destructive"> *</span>
+              </p>
+              <ul className="flex flex-col gap-2" aria-label="Mascotas del cliente">
+                {mascotasDelCliente.map((m) => {
+                  const selected = m.id === mascotaId;
+                  return (
+                    <li key={m.id}>
+                      <button
+                        type="button"
+                        onClick={() => setMascotaId(m.id)}
+                        aria-pressed={selected}
+                        className={`flex w-full cursor-pointer items-center gap-3 rounded-md border px-4 py-3 text-left transition-colors duration-fast ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900 ${
+                          selected
+                            ? "border-brand-900 bg-brand-900/5"
+                            : "border-border bg-surface hover:bg-cream-50/60"
                         }`}
-                        aria-hidden="true"
                       >
-                        {selected && <Check className="h-3 w-3 text-cream-50" />}
-                      </span>
-                      <span className="flex flex-col gap-0.5">
-                        <span className="text-sm font-bold text-brand-900">{m.nombre}</span>
-                        <span className="text-xs font-medium text-text-secondary">
-                          {m.especie}
-                          {m.raza ? ` · ${m.raza}` : ""}
+                        <span
+                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-pill border-2 ${
+                            selected ? "border-brand-900 bg-brand-900" : "border-border"
+                          }`}
+                          aria-hidden="true"
+                        >
+                          {selected && <Check className="h-3 w-3 text-cream-50" />}
                         </span>
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+                        <span className="flex flex-col gap-0.5">
+                          <span className="text-sm font-bold text-brand-900">{m.nombre}</span>
+                          <span className="text-xs font-medium text-text-secondary">
+                            {m.especie}
+                            {m.raza ? ` · ${m.raza}` : ""}
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
           )}
         </div>
       )}
