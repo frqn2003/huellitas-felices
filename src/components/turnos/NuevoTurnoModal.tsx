@@ -25,13 +25,12 @@ import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 
-type Paso = 1 | 2 | 3 | 4;
+type Paso = 1 | 2 | 3;
 
 const PASOS: { id: Paso; label: string }[] = [
-  { id: 1, label: "Cliente" },
-  { id: 2, label: "Mascota" },
-  { id: 3, label: "Profesional y horario" },
-  { id: 4, label: "Resumen" },
+  { id: 1, label: "Cliente y Mascota" },
+  { id: 2, label: "Profesional y horario" },
+  { id: 3, label: "Resumen" },
 ];
 
 interface NuevoTurnoModalProps {
@@ -52,17 +51,17 @@ interface NuevoTurnoModalProps {
 function StepperTurnos({ actual }: { actual: Paso }) {
   return (
     <ol
-      className="flex items-start gap-2"
+      className="flex items-start gap-2.5"
       aria-label={`Paso ${actual} de ${PASOS.length}: ${PASOS[actual - 1].label}`}
     >
       {PASOS.map((p, i) => {
         const done = p.id < actual;
         const active = p.id === actual;
         return (
-          <li key={p.id} className="flex flex-1 items-center gap-2 last:flex-none">
+          <li key={p.id} className="flex flex-1 items-center gap-2.5 last:flex-none">
             <span
               aria-current={active ? "step" : undefined}
-              className={`flex h-7 min-w-7 items-center justify-center rounded-pill text-xs font-extrabold ${
+              className={`flex h-9 min-w-9 items-center justify-center rounded-pill text-sm font-extrabold ${
                 done
                   ? "bg-brand-900 text-cream-50"
                   : active
@@ -70,17 +69,17 @@ function StepperTurnos({ actual }: { actual: Paso }) {
                     : "border border-border bg-surface text-text-secondary"
               }`}
             >
-              {done ? <Check className="h-4 w-4" aria-hidden="true" /> : p.id}
+              {done ? <Check className="h-5 w-5" aria-hidden="true" /> : p.id}
             </span>
             <span
-              className={`text-xs font-bold leading-tight ${
+              className={`text-sm font-bold leading-tight ${
                 active ? "text-brand-900" : "text-text-secondary"
               }${i === PASOS.length - 1 ? " hidden sm:inline" : ""}`}
             >
               {p.label}
             </span>
             {i < PASOS.length - 1 && (
-              <span className="h-px min-w-3 flex-1 bg-border" aria-hidden="true" />
+              <span className="h-0.5 min-w-4 flex-1 bg-border" aria-hidden="true" />
             )}
           </li>
         );
@@ -166,10 +165,14 @@ export function NuevoTurnoModal({
   }));
 
   const puedeContinuar =
-    (paso === 1 && clienteId !== "") ||
-    (paso === 2 && mascotaId !== null) ||
-    (paso === 3 &&
+    (paso === 1 && clienteId !== "" && mascotaId !== null) ||
+    (paso === 2 &&
       Boolean(profesionalId && practicaId !== "" && fecha && franjaId !== null && hora));
+
+  const elegirCliente = (value: string) => {
+    setClienteId(value);
+    setMascotaId(null);
+  };
 
   const continuar = () => {
     if (!puedeContinuar) return;
@@ -232,7 +235,7 @@ export function NuevoTurnoModal({
       setErrorDisponibilidad(
         "El profesional ya tiene un turno en ese horario. Elegí otra hora o franja.",
       );
-      setPaso(3);
+      setPaso(2);
       return;
     }
     setGuardando(false);
@@ -250,7 +253,7 @@ export function NuevoTurnoModal({
             requiredMark
             value={clienteId}
             options={clienteOptions}
-            onChange={setClienteId}
+            onChange={elegirCliente}
             placeholder="Buscar por DNI o nombre"
             noResultsText="Sin clientes que coincidan"
             maxResults={20}
@@ -263,74 +266,71 @@ export function NuevoTurnoModal({
               · DNI {clienteSeleccionado.documento}
             </p>
           )}
+
+          {clienteSeleccionado &&
+            (mascotasDelCliente.length === 0 ? (
+              <div className="flex flex-col items-center gap-4 rounded-sm border border-border bg-surface px-6 py-10 text-center">
+                <span className="flex h-12 w-12 items-center justify-center rounded-md bg-brand-900/10">
+                  <PawPrint className="h-6 w-6 text-brand-900" aria-hidden="true" />
+                </span>
+                <div className="flex flex-col gap-1">
+                  <h3 className="font-display text-base font-extrabold uppercase tracking-tight text-brand-900">
+                    Este cliente no tiene mascotas activas
+                  </h3>
+                  <p className="max-w-sm text-sm text-text-secondary">
+                    Registrá la mascota en la tab Mascotas y volvé a crear el turno.
+                  </p>
+                </div>
+                <Button variant="secondary" onClick={onRegistrarMascota}>
+                  Registrar mascota
+                </Button>
+              </div>
+            ) : (
+              <>
+                <p className="text-sm font-bold text-text-primary">
+                  Mascota<span className="text-destructive"> *</span>
+                </p>
+                <ul className="flex flex-col gap-2" aria-label="Mascotas del cliente">
+                  {mascotasDelCliente.map((m) => {
+                    const selected = m.id === mascotaId;
+                    return (
+                      <li key={m.id}>
+                        <button
+                          type="button"
+                          onClick={() => setMascotaId(m.id)}
+                          aria-pressed={selected}
+                          className={`flex w-full cursor-pointer items-center gap-3 rounded-md border px-4 py-3 text-left transition-colors duration-fast ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900 ${
+                            selected
+                              ? "border-brand-900 bg-brand-900/5"
+                              : "border-border bg-surface hover:bg-cream-50/60"
+                          }`}
+                        >
+                          <span
+                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-pill border-2 ${
+                              selected ? "border-brand-900 bg-brand-900" : "border-border"
+                            }`}
+                            aria-hidden="true"
+                          >
+                            {selected && <Check className="h-3 w-3 text-cream-50" />}
+                          </span>
+                          <span className="flex flex-col gap-0.5">
+                            <span className="text-sm font-bold text-brand-900">{m.nombre}</span>
+                            <span className="text-xs font-medium text-text-secondary">
+                              {m.especie}
+                              {m.raza ? ` · ${m.raza}` : ""}
+                            </span>
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
+            ))}
         </div>
       )}
 
       {paso === 2 && (
-        <div className="flex flex-col gap-4">
-          {mascotasDelCliente.length === 0 ? (
-            <div className="flex flex-col items-center gap-4 rounded-sm border border-border bg-surface px-6 py-10 text-center">
-              <span className="flex h-12 w-12 items-center justify-center rounded-md bg-brand-900/10">
-                <PawPrint className="h-6 w-6 text-brand-900" aria-hidden="true" />
-              </span>
-              <div className="flex flex-col gap-1">
-                <h3 className="font-display text-base font-extrabold uppercase tracking-tight text-brand-900">
-                  Este cliente no tiene mascotas activas
-                </h3>
-                <p className="max-w-sm text-sm text-text-secondary">
-                  Registrá la mascota en la tab Mascotas y volvé a crear el turno.
-                </p>
-              </div>
-              <Button variant="secondary" onClick={onRegistrarMascota}>
-                Registrar mascota
-              </Button>
-            </div>
-          ) : (
-            <>
-              <p className="text-sm font-bold text-text-primary">
-                Mascota<span className="text-destructive"> *</span>
-              </p>
-              <ul className="flex flex-col gap-2" aria-label="Mascotas del cliente">
-                {mascotasDelCliente.map((m) => {
-                  const selected = m.id === mascotaId;
-                  return (
-                    <li key={m.id}>
-                      <button
-                        type="button"
-                        onClick={() => setMascotaId(m.id)}
-                        aria-pressed={selected}
-                        className={`flex w-full cursor-pointer items-center gap-3 rounded-md border px-4 py-3 text-left transition-colors duration-fast ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900 ${
-                          selected
-                            ? "border-brand-900 bg-brand-900/5"
-                            : "border-border bg-surface hover:bg-cream-50/60"
-                        }`}
-                      >
-                        <span
-                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-pill border-2 ${
-                            selected ? "border-brand-900 bg-brand-900" : "border-border"
-                          }`}
-                          aria-hidden="true"
-                        >
-                          {selected && <Check className="h-3 w-3 text-cream-50" />}
-                        </span>
-                        <span className="flex flex-col gap-0.5">
-                          <span className="text-sm font-bold text-brand-900">{m.nombre}</span>
-                          <span className="text-xs font-medium text-text-secondary">
-                            {m.especie}
-                            {m.raza ? ` · ${m.raza}` : ""}
-                          </span>
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </>
-          )}
-        </div>
-      )}
-
-      {paso === 3 && (
         <div className="flex flex-col gap-4">
           {/* BACKEND: GET /api/profesionales (especialidad PENDIENTE DBA). */}
           <Combobox
@@ -487,7 +487,7 @@ export function NuevoTurnoModal({
         </div>
       )}
 
-      {paso === 4 && (
+      {paso === 3 && (
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-4 rounded-sm border border-border bg-cream-50 p-4">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -567,8 +567,6 @@ export function NuevoTurnoModal({
     paso === 1 ? (
       <UserCheck className="h-5 w-5 text-brand-900" aria-hidden="true" />
     ) : paso === 2 ? (
-      <PawPrint className="h-5 w-5 text-brand-900" aria-hidden="true" />
-    ) : paso === 3 ? (
       <CalendarPlus className="h-5 w-5 text-brand-900" aria-hidden="true" />
     ) : (
       <ClipboardList className="h-5 w-5 text-brand-900" aria-hidden="true" />
@@ -595,7 +593,7 @@ export function NuevoTurnoModal({
               Atrás
             </Button>
           )}
-          {paso < 4 ? (
+          {paso < 3 ? (
             <Button type="button" onClick={continuar} disabled={!puedeContinuar || guardando}>
               Continuar
             </Button>
