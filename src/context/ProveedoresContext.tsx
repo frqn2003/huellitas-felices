@@ -96,13 +96,45 @@ export function ProveedoresProvider({ children }: { children: ReactNode }) {
     [formasPago],
   );
 
+  /**
+   * El formulario → el body que espera la API.
+   *
+   * ACÁ SE ROMPÍA EL ALTA. El front habla snake_case en este módulo a propósito
+   * (ver el mapper: `razon_social`, `plazo_entrega_dias`, contrato C1), pero el
+   * BODY del POST no es el shape de lectura: `crearProveedorSchema` valida
+   * `razonSocial` y `plazoEntregaDias`, como todos los schemas del proyecto.
+   * Se mandaba `{ ...input }` crudo, así que `razonSocial` llegaba undefined y
+   * el server contestaba 422 `Required` — el "Required" rojo del modal, sin
+   * decir qué campo, porque el modal solo pinta el mensaje y descarta el
+   * `campo` que el error sí trae.
+   *
+   * Y no fallaba solo la razón social: `plazo_entrega_dias` también se perdía,
+   * y zod sin `.strict()` descarta en silencio lo que no declara. O sea que
+   * aunque el alta hubiera pasado, el plazo se guardaba en el default.
+   *
+   * La traducción va acá, en el borde, junto a la de formas de pago: es el
+   * único lugar que ya sabía que los dos vocabularios existen.
+   */
+  const aBody = useCallback(
+    (input: NuevoProveedorInput) => ({
+      razonSocial: input.razon_social,
+      cuit: input.cuit,
+      direccion: input.direccion,
+      telefono: input.telefono,
+      email: input.email,
+      contacto: input.contacto,
+      plazoEntregaDias: input.plazo_entrega_dias,
+      formaPagoIds: aIds(input.formasPago),
+      // `calificacion` NO viaja: es HU-PROV-02 y el schema todavía no la
+      // declara, así que zod la descartaría igual (ver el mapper).
+    }),
+    [aIds],
+  );
+
   const agregarProveedor = useCallback(
     async (input: NuevoProveedorInput): Promise<Resultado> => {
       try {
-        const creado = await apiSend<Proveedor>("POST", "/api/proveedores", {
-          ...input,
-          formaPagoIds: aIds(input.formasPago),
-        });
+        const creado = await apiSend<Proveedor>("POST", "/api/proveedores", aBody(input));
         // Se agrega el que devuelve la API, no el draft: trae el id real.
         setProveedores((prev) => [...prev, creado]);
         return {};
@@ -110,23 +142,24 @@ export function ProveedoresProvider({ children }: { children: ReactNode }) {
         return { error: mensajeDeError(e) };
       }
     },
-    [aIds],
+    [aBody],
   );
 
   const actualizarProveedor = useCallback(
     async (id: number, input: NuevoProveedorInput): Promise<Resultado> => {
       try {
-        const actualizado = await apiSend<Proveedor>("PUT", `/api/proveedores/${id}`, {
-          ...input,
-          formaPagoIds: aIds(input.formasPago),
-        });
+        const actualizado = await apiSend<Proveedor>(
+          "PUT",
+          `/api/proveedores/${id}`,
+          aBody(input),
+        );
         setProveedores((prev) => prev.map((p) => (p.id === id ? actualizado : p)));
         return {};
       } catch (e) {
         return { error: mensajeDeError(e) };
       }
     },
-    [aIds],
+    [aBody],
   );
 
   const darDeBaja = useCallback(async (id: number): Promise<Resultado> => {
