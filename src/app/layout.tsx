@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import { Baloo_2, Nunito } from "next/font/google";
 import { AuthProvider } from "@/context/AuthContext";
 import { CotizacionesProvider } from "@/context/CotizacionesContext";
@@ -23,7 +24,7 @@ export const metadata: Metadata = {
     "Sistema de gestión veterinaria — consultas, turnos, fichas clínicas, vacunación, stock y facturación.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
       lang="es"
