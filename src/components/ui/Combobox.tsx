@@ -23,6 +23,8 @@ interface ComboboxProps {
   placeholder?: string;
   noResultsText?: string;
   maxResults?: number;
+  /** Filtro de caracteres al tipear (ej. solo letras): se descartan los no permitidos. */
+  sanitize?: (value: string) => string;
 }
 
 export function Combobox({
@@ -39,6 +41,7 @@ export function Combobox({
   placeholder = "",
   noResultsText = "Sin resultados",
   maxResults = 8,
+  sanitize,
 }: ComboboxProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState<string | null>(null);
@@ -172,7 +175,7 @@ export function Combobox({
           disabled={disabled}
           placeholder={placeholder}
           onChange={(e) => {
-            const nuevo = e.target.value;
+            const nuevo = sanitize ? sanitize(e.target.value) : e.target.value;
             setQuery(nuevo === "" ? null : nuevo);
             setActiveIndex(-1);
             setOpen(true);

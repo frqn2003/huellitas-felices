@@ -33,6 +33,15 @@ const PASOS: { id: Paso; label: string }[] = [
   { id: 3, label: "Resumen" },
 ];
 
+// Bloqueo de caracteres al tipear (misma clase de bloqueo que el campo nombre
+// del formulario de cliente): los caracteres no permitidos se descartan on type.
+// Cliente: solo letras y números (se busca por DNI y nombre). Profesional: solo
+// letras. En ambos se permite espacio por los nombres compuestos y apellidos.
+const SOLO_LETRAS_Y_NUMEROS = /[^a-zA-Z0-9áéíóúüÁÉÍÓÚÜñÑ ]/g;
+const SOLO_LETRAS = /[^a-zA-ZáéíóúüÁÉÍÓÚÜñÑ ]/g;
+const soloLetrasYNumeros = (v: string) => v.replace(SOLO_LETRAS_Y_NUMEROS, "");
+const soloLetras = (v: string) => v.replace(SOLO_LETRAS, "");
+
 interface NuevoTurnoModalProps {
   open: boolean;
   onClose: () => void;
@@ -257,6 +266,7 @@ export function NuevoTurnoModal({
             placeholder="Buscar por DNI o nombre"
             noResultsText="Sin clientes que coincidan"
             maxResults={20}
+            sanitize={soloLetrasYNumeros}
           />
           {clienteSeleccionado && (
             <p className="rounded-sm bg-cream-50 px-4 py-3 text-sm font-medium text-text-secondary">
@@ -343,6 +353,7 @@ export function NuevoTurnoModal({
             placeholder="Buscar por nombre o especialidad"
             noResultsText="Sin profesionales que coincidan"
             maxResults={20}
+            sanitize={soloLetras}
           />
 
           <Select
