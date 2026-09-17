@@ -12,7 +12,6 @@ import type { Cliente } from "@/data/clientes";
 import type { Mascota } from "@/data/mascotas";
 import {
   diaSemanaDeFecha,
-  estadosTurno,
   fechasDeSemana,
   formatearSemana,
   lunesDeFecha,
@@ -31,6 +30,7 @@ import { EstadoTurnoBadge } from "./EstadoTurnoBadge";
 import {
   FILTROS_AGENDA_VACIOS,
   FiltrosAgenda,
+  FiltrosAgendaChips,
   type FiltrosAgendaValues,
 } from "./FiltrosAgenda";
 import { TurnoDetalleModal } from "./TurnoDetalleModal";
@@ -134,6 +134,17 @@ export function AgendaSemanal({
       .filter((t) => t.fecha === fecha && `${t.horaInicio.slice(0, 2)}:00` === banda)
       .sort((a, b) => (a.horaInicio < b.horaInicio ? -1 : 1));
 
+  // Turnos de la semana visible SIN los filtros del usuario: sirve para no
+  // marcar "Libre" una celda que tiene turno pero quedó oculto por un filtro
+  // (ej: rango desde/hasta). Esa celda muestra "—" como si no estuviera libre.
+  const semanaTodos = useMemo(() => {
+    if (SIMULAR_VACIO) return [];
+    return turnos.filter((t) => t.fecha >= primero && t.fecha <= ultimo);
+  }, [turnos, primero, ultimo]);
+
+  const celdaConTurnoOculto = (fecha: string, banda: string) =>
+    semanaTodos.some((t) => t.fecha === fecha && `${t.horaInicio.slice(0, 2)}:00` === banda);
+
   // "—" (sin franja del profesional ese día/hora) vs "Libre" (franja sin turno).
   const franjaCubre = (dia: number, banda: string) =>
     franjas.some((f) => f.diaSemana === dia && f.horaInicio <= banda && banda < f.horaFin);
@@ -147,8 +158,6 @@ export function AgendaSemanal({
 
   return (
     <div className="flex flex-col gap-6">
-      <FiltrosAgenda filtros={filtros} onChange={setFiltros} />
-
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           <CalendarRange className="h-5 w-5 text-brand-900" aria-hidden="true" />
@@ -189,6 +198,13 @@ export function AgendaSemanal({
           >
             <ChevronRight className="h-4 w-4" aria-hidden="true" />
           </Button>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-4">
+        <FiltrosAgendaChips filtros={filtros} onChange={setFiltros} />
+        <div className="ml-auto">
+          <FiltrosAgenda filtros={filtros} onChange={setFiltros} />
         </div>
       </div>
 
@@ -270,11 +286,7 @@ export function AgendaSemanal({
                             <div className="flex min-h-12 items-center justify-center rounded-sm text-xs font-semibold text-text-secondary/40">
                               —
                             </div>
-                          ) : turnosCelda.length === 0 ? (
-                            <div className="flex min-h-12 items-center justify-center rounded-sm text-xs font-semibold text-text-secondary/40">
-                              Libre
-                            </div>
-                          ) : (
+                          ) : turnosCelda.length > 0 ? (
                             <div className="flex flex-col gap-1.5">
                               {turnosCelda.map((t) => {
                                 const cli = clientePorId[t.clienteId];
@@ -306,6 +318,14 @@ export function AgendaSemanal({
                                 );
                               })}
                             </div>
+                          ) : celdaConTurnoOculto(fecha, banda) ? (
+                            <div className="flex min-h-12 items-center justify-center rounded-sm text-xs font-semibold text-text-secondary/40">
+                              —
+                            </div>
+                          ) : (
+                            <div className="flex min-h-12 items-center justify-center rounded-sm text-xs font-semibold text-text-secondary/40">
+                              Libre
+                            </div>
                           )}
                         </td>
                       );
@@ -314,15 +334,6 @@ export function AgendaSemanal({
                 ))}
               </tbody>
             </table>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wide text-text-secondary">
-              Leyenda
-            </span>
-            {estadosTurno.map((e) => (
-              <EstadoTurnoBadge key={e.id} estadoId={e.id} />
-            ))}
           </div>
         </div>
       )}
