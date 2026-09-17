@@ -2,7 +2,6 @@
 
 import {
   AlertTriangle,
-  CalendarRange,
   ChevronLeft,
   ChevronRight,
   RotateCcw,
@@ -160,7 +159,6 @@ export function AgendaSemanal({
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-2">
-          <CalendarRange className="h-5 w-5 text-brand-900" aria-hidden="true" />
           <div className="flex flex-col gap-0.5">
             <h2 className="font-display text-lg font-extrabold uppercase tracking-tight text-brand-900">
               Agenda semanal
@@ -171,7 +169,9 @@ export function AgendaSemanal({
           </div>
         </div>
 
-        <div className="flex items-center gap-2" role="group" aria-label="Navegación de semanas">
+        <div className="flex flex-wrap items-center gap-2">
+          <FiltrosAgenda filtros={filtros} onChange={setFiltros} />
+          <div className="flex items-center gap-2" role="group" aria-label="Navegación de semanas">
           <Button
             variant="outline"
             size="md"
@@ -198,14 +198,12 @@ export function AgendaSemanal({
           >
             <ChevronRight className="h-4 w-4" aria-hidden="true" />
           </Button>
+          </div>
         </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-4">
         <FiltrosAgendaChips filtros={filtros} onChange={setFiltros} />
-        <div className="ml-auto">
-          <FiltrosAgenda filtros={filtros} onChange={setFiltros} />
-        </div>
       </div>
 
       {error ? (

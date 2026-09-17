@@ -373,14 +373,14 @@ function MascotaFormFields({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Input
             id="mas-peso"
-            label="Peso"
+            label="Peso (kg)"
             inputMode="decimal"
             value={draft.peso}
             onChange={(e) => setField("peso", e.target.value)}
             onBlur={() => setTouched((t) => ({ ...t, peso: true }))}
             error={showError("peso")}
             readOnly={isLectura}
-            hint={isLectura ? undefined : "kg · opcional"}
+            hint={isLectura ? undefined : "Opcional"}
           />
           <Input
             id="mas-fecha-nacimiento"
