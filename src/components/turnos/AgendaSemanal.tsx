@@ -176,18 +176,18 @@ export function AgendaSemanal({
             variant="outline"
             size="md"
             type="button"
-            aria-label="Semana anterior"
-            onClick={() => setLunes((l) => sumarDias(l, -7))}
+            onClick={() => setLunes(lunesDeFecha(hoyISO))}
           >
-            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+            Hoy
           </Button>
           <Button
             variant="outline"
             size="md"
             type="button"
-            onClick={() => setLunes(lunesDeFecha(hoyISO))}
+            aria-label="Semana anterior"
+            onClick={() => setLunes((l) => sumarDias(l, -7))}
           >
-            Hoy
+            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
           </Button>
           <Button
             variant="outline"
