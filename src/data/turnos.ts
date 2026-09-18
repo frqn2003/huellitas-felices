@@ -496,10 +496,10 @@ function fechaCorta(fechaISO: string): string {
   return `${d}/${m}`;
 }
 
-/** "Semana del 14/09 al 20/09/2026" (encabezado de la agenda). */
+/** "del 14/09 al 20/09/2026" (rango de la semana, encabezado de la agenda). */
 export function formatearSemana(lunesISO: string): string {
   const dias = fechasDeSemana(lunesISO);
-  return `Semana del ${fechaCorta(dias[0])} al ${fechaCorta(dias[6])}/${dias[6].split("-")[0]}`;
+  return `del ${fechaCorta(dias[0])} al ${fechaCorta(dias[6])}/${dias[6].split("-")[0]}`;
 }
 
 /**
