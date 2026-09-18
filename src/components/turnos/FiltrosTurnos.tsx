@@ -6,7 +6,7 @@ import { estadosTurno } from "@/data/turnos";
 import { Button } from "@/components/ui/Button";
 
 export interface FiltrosTurnosValues {
-  /** Busca por cliente (nombre/DNI), profesional (nombre/especialidad) y práctica. */
+  /** Busca por cliente (nombre/DNI), profesional (nombre) y práctica. */
   busqueda: string;
   /** "" = todos; resto = id del catálogo estado_turno. */
   estadoId: string;
@@ -134,8 +134,8 @@ export function FiltrosTurnos({ filtros, onChange }: FiltrosTurnosProps) {
             type="search"
             value={filtros.busqueda}
             onChange={(e) => onChange({ ...filtros, busqueda: e.target.value })}
-            placeholder="Buscar por cliente, profesional, especialidad o práctica..."
-            aria-label="Buscar turnos por cliente, profesional, especialidad o práctica"
+            placeholder="Buscar por cliente, profesional o práctica..."
+            aria-label="Buscar turnos por cliente, profesional o práctica"
             className="h-11 w-full cursor-text rounded-pill border border-border bg-surface pl-12 pr-4 text-base text-text-primary transition-colors duration-fast ease-out placeholder:text-text-secondary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
           />
         </div>

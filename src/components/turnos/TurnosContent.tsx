@@ -76,8 +76,8 @@ export function TurnosContent({
       return construirFilaTurno(t, clientePorId, mascotaPorId);
     }
 
-    // Buscador: cliente (nombre/DNI), profesional (nombre/especialidad) y
-    // práctica (nombre), sin distinguir mayúsculas ni acentos. Cálculo directo
+    // Buscador: cliente (nombre/DNI), profesional (nombre) y práctica (nombre),
+    // sin distinguir mayúsculas ni acentos. Cálculo directo
     // por render (datos de demo; sin memo, aRow cierra sobre los mapas y
     // cambiarían en cada render).
     const base = SIMULAR_VACIO ? [] : turnos.map(aRow);
@@ -92,7 +92,6 @@ export function TurnosContent({
           en(r.clienteNombre) ||
           en(r.dni) ||
           en(r.profesionalNombre) ||
-          en(r.especialidad) ||
           en(r.practicaNombre)
         );
       }

@@ -67,7 +67,7 @@ Pantalla de **agenda semanal** (RECEPCIÓN - AGENDA) con la grilla de turnos de 
 │  🐾 MASCOTA                                                         │
 │     Nombre: Poppi  •  Especie: Perro  •  Raza: Labrador            │
 │  👨‍⚕️ PROFESIONAL                                                     │
-│     Nombre: Dr. Juan Pérez  •  Especialidad: Médico                │
+│     Nombre: Dr. Juan Pérez                                         │
 │                                                                     │
 │  CAMBIAR ESTADO DEL TURNO                                          │
 │                                                                     │

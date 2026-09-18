@@ -137,7 +137,6 @@ export function TurnoDetalleModal({
               valor={`${formatearFecha(turno.fecha)} · ${turno.horaInicio} – ${turno.horaFin}`}
             />
             <DatoDetalle label="Profesional" valor={turno.profesionalNombre} />
-            <DatoDetalle label="Especialidad" valor={turno.especialidad} />
             <DatoDetalle
               label="Práctica"
               valor={turno.practicaNombre}

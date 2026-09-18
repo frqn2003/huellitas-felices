@@ -62,9 +62,6 @@ export const practicas: Practica[] = [
 ];
 
 // ─── Profesionales (usuario con rol Veterinario) ─────────────────────────────
-// PENDIENTE DBA: `usuario` no modela la especialidad (el wireframe muestra
-// "Médico/Cirujano"). El front la muestra como dato de demo hasta que la DBA
-// agregue la columna o la tabla `especialidad`.
 // BACKEND: reemplazar por GET /api/profesionales (JOIN usuario_rol =
 // Veterinario + agenda_profesional).
 export interface FranjaProfesional {
@@ -82,12 +79,6 @@ export interface Profesional {
   nombre: string;
   apellido: string;
   dni: string;
-  /** PENDIENTE DBA — no está en `usuario` del esquema. */
-  especialidad: string;
-  /** Prácticas que puede realizar (médico → consulta/control; cirujano → cirugía).
-      BACKEND: GET /api/profesionales/:id/practicas — PENDIENTE DBA: tabla
-      profesional_practica o columna `profesion_habilitada` en practica. */
-  practicasPermitidas: number[];
   /** Franjas semanales del profesional (agenda_profesional, dentro de agenda_semanal). */
   franjas: FranjaProfesional[];
 }
@@ -98,8 +89,6 @@ export const profesionales: Profesional[] = [
     nombre: "Dr. Juan",
     apellido: "Pérez",
     dni: "32456789",
-    especialidad: "Médico",
-    practicasPermitidas: [1, 3], // consulta + control
     franjas: [
       { id: 1, diaSemana: 1, horaInicio: "08:00", horaFin: "12:00" },
       { id: 2, diaSemana: 1, horaInicio: "14:00", horaFin: "18:00" },
@@ -118,8 +107,6 @@ export const profesionales: Profesional[] = [
     nombre: "Dra. Laura",
     apellido: "Gómez",
     dni: "29876123",
-    especialidad: "Cirujana",
-    practicasPermitidas: [2], // cirugía
     franjas: [
       { id: 11, diaSemana: 2, horaInicio: "08:00", horaFin: "12:00" },
       { id: 12, diaSemana: 2, horaInicio: "14:00", horaFin: "18:00" },
@@ -131,11 +118,11 @@ export const profesionales: Profesional[] = [
 
 // Mapas de display compartidos (tab Turnos y Agenda): resuelven el nombre del
 // profesional y de la práctica desde las FK del turno, sin duplicar los JOINs.
-export const profesionalPorFranja: Record<number, { nombre: string; apellido: string; especialidad: string }> = {};
+export const profesionalPorFranja: Record<number, { nombre: string; apellido: string }> = {};
 export const profesionalIdPorFranja: Record<number, number> = {};
 for (const p of profesionales) {
   for (const f of p.franjas) {
-    profesionalPorFranja[f.id] = { nombre: p.nombre, apellido: p.apellido, especialidad: p.especialidad };
+    profesionalPorFranja[f.id] = { nombre: p.nombre, apellido: p.apellido };
     profesionalIdPorFranja[f.id] = p.id;
   }
 }
@@ -225,7 +212,7 @@ export const turnosIniciales: Turno[] = [
     clienteId: 1, // Pablo Celaya
     mascotaId: 3, // Poppi
     sucursalId: 1,
-    agendaProfesionalId: 12, // Dra. Laura Gómez · martes tarde (cirujana)
+    agendaProfesionalId: 12, // Dra. Laura Gómez · martes tarde
     practicaId: 2, // cirugía 90'
     estadoId: 4, // atendido
     fecha: "2026-09-08",
@@ -428,9 +415,9 @@ export function sumarMinutos(hora: string, minutos: number): string {
 }
 
 /**
- * Normaliza texto para búsqueda: sin mayúsculas ni acentos ("Médico" → "medico").
- * El buscador de turnos la usa para que "medico" encuentre "Médico" y
- * "cirugia" encuentre "Cirugía".
+ * Normaliza texto para búsqueda: sin mayúsculas ni acentos.
+ * El buscador de turnos la usa para que "cirugia" encuentre "Cirugía" (práctica)
+ * y "perez" encuentre "Pérez" (cliente o profesional).
  */
 export function normalizarBusqueda(texto: string): string {
   return texto
