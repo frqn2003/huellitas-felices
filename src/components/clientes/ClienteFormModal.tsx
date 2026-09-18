@@ -9,8 +9,21 @@ import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Switch } from "@/components/ui/Switch";
 import { Textarea } from "@/components/ui/Textarea";
+import { useCamposSecuenciales } from "@/hooks/useCamposSecuenciales";
 import type { Cliente, ClienteDraft, EstadoCliente, Mascota } from "@/data/clientes";
 import { validaciones } from "@/data/clientes";
+
+// Secuencia de desbloqueo de obligatorios SOLO en el alta (crear), en orden
+// visual: nombre → apellido → documento → teléfono → email. Los opcionales
+// (fecha de nacimiento, dirección, estado) quedan siempre habilitados.
+const CLIENTE_SECUENCIA = ["nombre", "apellido", "documento", "telefono", "email"] as const;
+const CLIENTE_ETIQUETA: Record<(typeof CLIENTE_SECUENCIA)[number], string> = {
+  nombre: "Nombre",
+  apellido: "Apellido",
+  documento: "Documento",
+  telefono: "Teléfono",
+  email: "Email",
+};
 
 /** Fecha máxima de nacimiento: hoy menos 18 años (mayor de 18). */
 function fechaMaxima18Anios(): string {
@@ -234,6 +247,19 @@ function ClienteFormFields({
   // Confirmación de baja lógica al guardar con el toggle en inactivo.
   const [confirmandoBaja, setConfirmandoBaja] = useState(false);
 
+  // Desbloqueo progresivo de obligatorios: solo en ALTA (crear). Los campos
+  // bloqueados llevan disabled + hint "Completá primero: X"; una vez
+  // desbloqueado, un campo queda habilitado para siempre (corregir es posible).
+  const secuencial = useCamposSecuenciales(CLIENTE_SECUENCIA, draft);
+  const secuencialActivo = modo === "crear";
+  const bloqueado = (campo: (typeof CLIENTE_SECUENCIA)[number]) =>
+    secuencialActivo && secuencial.bloqueado(campo);
+  const pendienteCampo = secuencial.pendiente;
+  const hintBloqueado = (campo: (typeof CLIENTE_SECUENCIA)[number]) =>
+    bloqueado(campo) && pendienteCampo
+      ? `Completá primero: ${CLIENTE_ETIQUETA[pendienteCampo]}`
+      : undefined;
+
   const showError = (field: keyof ClienteFormValues) => (touched[field] ? errors[field] : undefined);
 
   const setField = <K extends keyof ClienteFormValues>(field: K, value: ClienteFormValues[K]) => {
@@ -347,6 +373,8 @@ function ClienteFormFields({
             onBlur={() => setTouched((t) => ({ ...t, nombre: true }))}
             error={showError("nombre")}
             readOnly={isLectura}
+            disabled={bloqueado("nombre")}
+            hint={hintBloqueado("nombre")}
           />
           <Input
             id="cli-apellido"
@@ -357,6 +385,8 @@ function ClienteFormFields({
             onBlur={() => setTouched((t) => ({ ...t, apellido: true }))}
             error={showError("apellido")}
             readOnly={isLectura}
+            disabled={bloqueado("apellido")}
+            hint={hintBloqueado("apellido")}
           />
         </div>
 
@@ -370,7 +400,10 @@ function ClienteFormFields({
             onBlur={() => setTouched((t) => ({ ...t, documento: true }))}
             error={showError("documento")}
             readOnly={isLectura}
-            hint={isLectura ? undefined : "Ej: 45115839"}
+            disabled={bloqueado("documento")}
+            hint={
+              hintBloqueado("documento") ?? (!isLectura ? "Ej: 45115839" : undefined)
+            }
           />
           <Input
             id="cli-fecha-nacimiento"
@@ -396,7 +429,10 @@ function ClienteFormFields({
             onBlur={() => setTouched((t) => ({ ...t, telefono: true }))}
             error={showError("telefono")}
             readOnly={isLectura}
-            hint={isLectura ? undefined : "Ej: 3875122693"}
+            disabled={bloqueado("telefono")}
+            hint={
+              hintBloqueado("telefono") ?? (!isLectura ? "Ej: 3875122693" : undefined)
+            }
           />
           <Input
             id="cli-email"
@@ -408,6 +444,8 @@ function ClienteFormFields({
             onBlur={() => setTouched((t) => ({ ...t, email: true }))}
             error={showError("email")}
             readOnly={isLectura}
+            disabled={bloqueado("email")}
+            hint={hintBloqueado("email")}
           />
         </div>
 
