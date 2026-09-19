@@ -2,7 +2,7 @@
 
 import { AlertTriangle, Plus, RotateCcw } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import type { ClienteModalMode } from "@/components/clientes/ClienteFormModal";
 import { ClienteFormModal } from "@/components/clientes/ClienteFormModal";
 import { ClientesTable } from "@/components/clientes/ClientesTable";
@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/Button";
 import { Pagination } from "@/components/ui/Pagination";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
 import type { Cliente, ClienteDraft } from "@/data/clientes";
-import { clientesIniciales, mascotasPorCliente } from "@/data/clientes";
+import { mascotasPorCliente } from "@/data/clientes";
 import type { Mascota, MascotaDraft } from "@/data/mascotas";
 import {
   mascotasIniciales,
@@ -32,6 +32,7 @@ import {
 import type { Turno } from "@/data/turnos";
 import { nombreEstado, turnosIniciales } from "@/data/turnos";
 import { AgendaSemanal } from "@/components/turnos/AgendaSemanal";
+import { apiGet, apiSend, ApiError, mensajeDeError } from "@/lib/api-client";
 
 function ClientesScreen() {
   const { showToast } = useToast();
@@ -73,19 +74,47 @@ function ClientesScreen() {
   }, [searchParams]);
   const busquedaClientes = searchParams.get("busqueda") ?? "";
 
-  // BACKEND: reemplazar por GET /api/clientes (con su estado de carga/error
-  // compartido); el alta/edición/baja pasan a POST/PUT/PATCH en ClientesContext.
-  const [clientes, setClientes] = useState<Cliente[]>(clientesIniciales);
-  const [cargando, setCargando] = useState(false);
+  const [estadoFiltroClientes, setEstadoFiltroClientes] = useState<FiltroEstadoCliente>("Activo");
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(false);
+  const [recargaClientes, setRecargaClientes] = useState(0);
+
+  const recargarClientes = useCallback(() => {
+    setCargando(true);
+    setError(false);
+    setRecargaClientes((prev) => prev + 1);
+  }, []);
+
+  useEffect(() => {
+    let cancelado = false;
+    const params = new URLSearchParams();
+    if (busquedaClientes) params.set("busqueda", busquedaClientes);
+    if (estadoFiltroClientes !== "Todos") params.set("estado", estadoFiltroClientes.toLowerCase());
+
+    apiGet<Cliente[]>(`/api/clientes?${params.toString()}`)
+      .then((data) => {
+        if (cancelado) return;
+        setClientes(data);
+        setCargando(false);
+      })
+      .catch((e) => {
+        if (cancelado) return;
+        setError(true);
+        setCargando(false);
+        showToast("error", mensajeDeError(e));
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [busquedaClientes, estadoFiltroClientes, recargaClientes, showToast]);
 
   // --- Estado de la tab Mascotas (HU-MAS-01) ---
   // BACKEND: reemplazar por GET /api/mascotas (tabla mascota, contrato sección 8).
   const [mascotas, setMascotas] = useState<Mascota[]>(mascotasIniciales);
   const [cargandoMascotas, setCargandoMascotas] = useState(false);
   const [errorMascotas, setErrorMascotas] = useState(SIMULAR_ERROR_MASCOTA);
-
-  const [estadoFiltroClientes, setEstadoFiltroClientes] = useState<FiltroEstadoCliente>("Activo");
 
   const [busquedaMascotas, setBusquedaMascotas] = useState("");
   const [estadoFiltroMascotas, setEstadoFiltroMascotas] = useState<FiltroEstadoCliente>("Activo");
@@ -255,27 +284,49 @@ function ClientesScreen() {
     return true;
   };
 
-  // BACKEND: los draft viajan al POST/PUT; el toggle a Inactivo → PATCH
-  // /api/mascotas/:id/inactivar. El id numérico lo genera la base. Cada alta y
-  // modificación registra public.auditoria (operacion INSERT/UPDATE, valores
-  // anterior y nuevo en jsonb).
-  const handleSaveCliente = async (draft: ClienteDraft): Promise<{ error?: string }> => {
-    if (modalClienteMode === "crear") {
-      const nuevo: Cliente = { ...draft, id: Math.max(0, ...clientes.map((c) => c.id)) + 1 };
-      setClientes((prev) => [...prev, nuevo]);
-      showToast("success", "Cliente creado correctamente");
-      return {};
-    }
-    if (modalClienteMode === "editar" && clienteActivo) {
-      const actualizado: Cliente = { ...draft, id: clienteActivo.id };
-      setClientes((prev) => prev.map((c) => (c.id === clienteActivo.id ? actualizado : c)));
-      showToast(
-        "success",
-        actualizado.estado === "inactivo"
-          ? `${actualizado.nombre} ${actualizado.apellido} fue dado de baja correctamente`
-          : "Cliente guardado correctamente",
-      );
-      return {};
+  const handleSaveCliente = async (
+    draft: ClienteDraft,
+    reactivarId?: number,
+  ): Promise<{ error?: string; campo?: string }> => {
+    try {
+      if (reactivarId) {
+        const actualizado = await apiSend<Cliente>(
+          "PUT",
+          `/api/clientes/${reactivarId}`,
+          { ...draft, estado: "activo" },
+        );
+        showToast("success", `${actualizado.nombre} ${actualizado.apellido} fue reactivado correctamente`);
+        recargarClientes();
+        return {};
+      }
+      if (modalClienteMode === "crear") {
+        await apiSend<Cliente>("POST", "/api/clientes", draft);
+        showToast("success", "Cliente creado correctamente");
+        recargarClientes();
+        return {};
+      }
+      if (modalClienteMode === "editar" && clienteActivo) {
+        const actualizado = await apiSend<Cliente>(
+          "PUT",
+          `/api/clientes/${clienteActivo.id}`,
+          draft,
+        );
+        showToast(
+          "success",
+          actualizado.estado === "inactivo"
+            ? `${actualizado.nombre} ${actualizado.apellido} fue dado de baja correctamente`
+            : "Cliente guardado correctamente",
+        );
+        recargarClientes();
+        return {};
+      }
+    } catch (e) {
+      if (e instanceof ApiError) {
+        return { error: e.message, campo: e.campo };
+      }
+      const msg = mensajeDeError(e);
+      showToast("error", msg);
+      return { error: msg };
     }
     return {};
   };
@@ -302,12 +353,7 @@ function ClientesScreen() {
   };
 
   const handleReintentar = () => {
-    setError(false);
-    setCargando(true);
-    // BACKEND: acá iría el fetch real (recargar() del context).
-    window.setTimeout(() => {
-      setCargando(false);
-    }, 400);
+    recargarClientes();
   };
 
   const handleReintentarMascotas = () => {
