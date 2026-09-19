@@ -84,10 +84,25 @@ export async function parseBody<T extends z.ZodTypeAny>(
   const resultado = schema.safeParse(json);
   if (!resultado.success) {
     const primero = resultado.error.issues[0];
+    const campo = primero?.path.join(".") || undefined;
+
+    // Un campo AUSENTE no usa el mensaje custom del schema: los `.min(1, "...")`
+    // solo corren si el valor llegó. zod emite su default en inglés, "Required",
+    // y así salía tal cual al cartel rojo del formulario — sin decir cuál campo
+    // ni en qué idioma. Un usuario no puede hacer nada con eso, y quien
+    // desarrolla tampoco: es el síntoma típico de que el front manda una clave
+    // con otro nombre (fue exactamente el bug de `razon_social` vs `razonSocial`
+    // en el alta de proveedores).
+    const falta =
+      primero?.code === "invalid_type" &&
+      (primero as { received?: string }).received === "undefined";
+
     throw new ValidationError(
       "DATOS_INVALIDOS",
-      primero?.message ?? "Los datos enviados no son válidos.",
-      primero?.path.join(".") || undefined,
+      falta
+        ? `Falta el campo obligatorio "${campo ?? "desconocido"}".`
+        : (primero?.message ?? "Los datos enviados no son válidos."),
+      campo,
     );
   }
 

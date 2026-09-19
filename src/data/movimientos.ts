@@ -145,13 +145,13 @@ export const origenesMovimiento: { id: number; nombre: string }[] = [
 
 // Orígenes válidos según el tipo de movimiento (combos inválidos no se ofrecen).
 // Los ids referencian `origenesMovimiento`:
-// - Ingreso: recepción de compra o ajuste manual que SUMA stock.
+// - Ingreso: ajuste manual que SUMA stock (la recepción de compra es automática vía su módulo).
 // - Egreso: venta, recetas, internación, cirugías, prácticas, vacunación,
 //   desparasitación, merma, transferencia y ajuste manual que RESTA.
 // - Transferencia/Ajuste: entradas de compatibilidad con el contrato HTTP
 //   (el front las resuelve como ORIGEN, no como tipo).
 export const origenesPorTipo: Record<TipoMovimiento, number[]> = {
-  Ingreso: [7, 9],
+  Ingreso: [9],
   Egreso: [1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12],
   Transferencia: [8],
   Ajuste: [9],

@@ -491,13 +491,11 @@ function StockScreen() {
   const handleConfirmMov = async (draft: MovimientoDraft) => {
     const tipo = tiposMovimiento.find((t) => t.id === Number(draft.tipoId));
     if (!tipo) return;
-    // El token de la API es el valor crudo del enum (dict: ingreso/egreso). Los
-    // catálogos `tiposMovimiento` manejan etiquetas legibles ("Ingreso"/
-    // "Egreso"); acá se baja a minúscula para el wire. Transferencia/Ajuste ya
-    // no se emiten como tipo: el front las resuelve por ORIGEN.
+    // El token de la API coincide con el nombre del catálogo ("Ingreso" / "Egreso").
+    // Transferencia/Ajuste se resuelven por ORIGEN.
     const origen = origenesMovimiento.find((o) => o.id === Number(draft.origenId));
     const esTransferencia = origen?.nombre === "transferencia_sucursal";
-    const tipoApi = tipo.nombre.toLowerCase();
+    const tipoApi = tipo.nombre;
 
     const origenEntidadIdRaw = draft.origenEntidadId.trim();
 
