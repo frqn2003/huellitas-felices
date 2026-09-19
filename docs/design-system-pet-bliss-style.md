@@ -274,6 +274,7 @@ siguen usando verde oscuro / amarillo / destructive.
 | Pendiente / atención | Amarillo vibrante | `status-warning` `#F59E0B` | `status-warning-strong` `#B45309` | Pendiente, Bajo, Ajuste, Abierta, Recibida Parcial |
 | En proceso / tránsito | Azul | `status-info` `#2563EB` | `status-info-strong` `#1D4ED8` | Enviada, Transferencia |
 | Negativo / crítico | Rojo | `status-danger` `#DC2626` | `status-danger-strong` `#B91C1C` | Crítico, Egreso, Cancelada |
+| Género / femenino | Rosa | `status-pink` `#EC4899` | `status-pink-strong` `#BE185D` | Hembra |
 | Neutro | Gris crema | `text-secondary` | `text-secondary` | Inactivo |
 
 Reglas:
@@ -318,6 +319,8 @@ Reglas:
   --color-status-danger-strong: #B91C1C;
   --color-status-info: #2563EB;
   --color-status-info-strong: #1D4ED8;
+  --color-status-pink: #EC4899;
+  --color-status-pink-strong: #BE185D;
 }
 ```
 

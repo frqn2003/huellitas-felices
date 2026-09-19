@@ -3,7 +3,7 @@ import type { LucideIcon } from "lucide-react";
 // Etiqueta de estado del sistema (pill + punto/ícono + texto).
 // Único punto de verdad para los colores de estado (tokens status-*).
 // Regla: siempre texto + indicador visual, nunca color solo.
-export type StatusVariant = "success" | "warning" | "danger" | "info" | "neutral";
+export type StatusVariant = "success" | "warning" | "danger" | "info" | "neutral" | "pink";
 
 const variantStyles: Record<StatusVariant, { chip: string; accent: string }> = {
   success: {
@@ -21,6 +21,10 @@ const variantStyles: Record<StatusVariant, { chip: string; accent: string }> = {
   info: {
     chip: "bg-status-info/10 text-status-info-strong",
     accent: "bg-status-info",
+  },
+  pink: {
+    chip: "bg-status-pink/10 text-status-pink-strong",
+    accent: "bg-status-pink",
   },
   neutral: {
     chip: "bg-cream-100 text-text-secondary",

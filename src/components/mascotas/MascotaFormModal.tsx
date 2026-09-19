@@ -13,6 +13,18 @@ import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
 import { Switch } from "@/components/ui/Switch";
 import { Textarea } from "@/components/ui/Textarea";
+import { useCamposSecuenciales } from "@/hooks/useCamposSecuenciales";
+
+// Secuencia de desbloqueo de obligatorios SOLO en el alta (crear), en orden
+// visual: dueño → nombre → especie → sexo. Los opcionales (raza, peso, fecha
+// de nacimiento, señas, estado) quedan siempre habilitados.
+const MASCOTA_SECUENCIA = ["duenoId", "nombre", "especie", "sexo"] as const;
+const MASCOTA_ETIQUETA: Record<(typeof MASCOTA_SECUENCIA)[number], string> = {
+  duenoId: "Dueño",
+  nombre: "Nombre",
+  especie: "Especie",
+  sexo: "Sexo",
+};
 
 export type MascotaModalMode = "crear" | "editar" | "ver";
 
@@ -152,6 +164,19 @@ function MascotaFormFields({
     () => Boolean(mascota?.raza) && !razasSugeridas.includes(mascota?.raza ?? ""),
   );
 
+  // Desbloqueo progresivo de obligatorios: solo en ALTA (crear). Los campos
+  // bloqueados llevan disabled + hint "Completá primero: X"; una vez
+  // desbloqueado, un campo queda habilitado para siempre (corregir es posible).
+  const secuencial = useCamposSecuenciales(MASCOTA_SECUENCIA, draft);
+  const secuencialActivo = modo === "crear";
+  const bloqueado = (campo: (typeof MASCOTA_SECUENCIA)[number]) =>
+    secuencialActivo && secuencial.bloqueado(campo);
+  const pendienteCampo = secuencial.pendiente;
+  const hintBloqueado = (campo: (typeof MASCOTA_SECUENCIA)[number]) =>
+    bloqueado(campo) && pendienteCampo
+      ? `Completá primero: ${MASCOTA_ETIQUETA[pendienteCampo]}`
+      : undefined;
+
   // Opciones del buscador de dueño: label compuesto `documento · nombre apellido`
   // (el Combobox filtra por substring del label → matchea DNI y nombre).
   // BACKEND: poblar desde GET /api/clientes (clientes activos para titular).
@@ -263,7 +288,8 @@ function MascotaFormFields({
           onChange={(value) => setField("duenoId", value)}
           onBlur={() => setTouched((t) => ({ ...t, duenoId: true }))}
           error={showError("duenoId")}
-          disabled={isLectura}
+          disabled={isLectura || bloqueado("duenoId")}
+          hint={hintBloqueado("duenoId")}
           placeholder="Buscar por DNI o nombre"
           maxResults={20}
         />
@@ -278,6 +304,8 @@ function MascotaFormFields({
             onBlur={() => setTouched((t) => ({ ...t, nombre: true }))}
             error={showError("nombre")}
             readOnly={isLectura}
+            disabled={bloqueado("nombre")}
+            hint={hintBloqueado("nombre")}
           />
           <Select
             id="mas-especie"
@@ -287,7 +315,8 @@ function MascotaFormFields({
             onChange={(e) => setField("especie", e.target.value)}
             onBlur={() => setTouched((t) => ({ ...t, especie: true }))}
             error={showError("especie")}
-            disabled={isLectura}
+            disabled={isLectura || bloqueado("especie")}
+            hint={hintBloqueado("especie")}
           >
             {/* BACKEND: sin tabla catálogo — especie es varchar NOT NULL; la UI restringe */}
             <option value="" disabled>
@@ -357,7 +386,8 @@ function MascotaFormFields({
             onChange={(e) => setField("sexo", e.target.value)}
             onBlur={() => setTouched((t) => ({ ...t, sexo: true }))}
             error={showError("sexo")}
-            disabled={isLectura}
+            disabled={isLectura || bloqueado("sexo")}
+            hint={hintBloqueado("sexo")}
           >
             <option value="" disabled>
               Seleccionar sexo

@@ -21,7 +21,7 @@ const TABS: {
   { id: "turnos", label: "Turnos", icon: CalendarDays },
   // HU-TUR-02: la agenda semanal es otra lectura de los turnos (grilla, no
   // listado). Icono distinto al de Turnos para distinguirlas en la tab.
-  { id: "agenda", label: "Agenda", icon: CalendarRange },
+  { id: "agenda", label: "Agenda semanal", icon: CalendarRange },
 ];
 
 export function RecepcionTabs({ active, onChange, disabled = false }: RecepcionTabsProps) {

@@ -39,7 +39,7 @@ Paleta semántica exclusiva para pills de estado. NUNCA para botones, fondos de
 sección ni CTAs (esos usan brand/accent/destructive). Chip: `bg-status-X/10` +
 texto `-strong` + punto sólido `status-X`. Componente único:
 `src/components/ui/StatusBadge.tsx` (variantes success/warning/danger/info/
-neutral; acepta `icon` de Lucide o punto). Siempre indicador + texto.
+neutral/pink; acepta `icon` de Lucide o punto). Siempre indicador + texto.
 
 | Variant | Dot | Chip text | Semántica | Estados típicos |
 |---------|-----|-----------|-----------|-----------------|
@@ -47,6 +47,7 @@ neutral; acepta `icon` de Lucide o punto). Siempre indicador + texto.
 | `warning` | `#F59E0B` | `#B45309` | Pendiente / atención | Pendiente, Bajo, Ajuste, Abierta, Recibida Parcial |
 | `info` | `#2563EB` | `#1D4ED8` | En proceso / tránsito | Enviada, Transferencia |
 | `danger` | `#DC2626` | `#B91C1C` | Negativo / crítico | Crítico, Egreso, Cancelada |
+| `pink` | `#EC4899` | `#BE185D` | Género / femenino | Hembra |
 | `neutral` | text-secondary | text-secondary | Neutro | Inactivo |
 
 **Nota:** el amarillo de estado (`status-warning #F59E0B`) es distinto del

@@ -137,11 +137,9 @@ export function NuevoTurnoModal({
   const mascotaSeleccionada = mascotasDelCliente.find((m) => m.id === mascotaId) ?? null;
   const profesional = profesionales.find((p) => p.id === profesionalId) ?? null;
   const practica = practicas.find((p) => p.id === Number(practicaId)) ?? null;
-  // El profesional determina qué prácticas puede realizar (médico → consulta/
-  // control; cirujano → cirugía). BACKEND: GET /api/profesionales/:id/practicas.
-  const practicasDisponibles = profesional
-    ? practicas.filter((p) => profesional.practicasPermitidas.includes(p.id))
-    : [];
+  // Todos los profesionales realizan todas las prácticas (sin restricción por
+  // profesional). BACKEND: poblar desde GET /api/practicas.
+  const practicasDisponibles = practicas;
 
   // Próximos días (desde mañana) en los que el profesional toma turnos.
   // Cálculo directo: las franjas son listas chicas y `profesional` se deriva
@@ -164,13 +162,13 @@ export function NuevoTurnoModal({
       : [];
 
   // Opciones del buscador: label compuesto para filtrar por substring (Combobox
-  // de ui/ matchea DNI, nombre y especialidad).
+  // de ui/ matchea DNI y nombre).
   const clienteOptions = clientes
     .filter((c) => c.estado === "activo")
     .map((c) => ({ value: String(c.id), label: `${c.documento} · ${c.nombre} ${c.apellido}` }));
   const profesionalOptions = profesionales.map((p) => ({
     value: String(p.id),
-    label: `${p.nombre} ${p.apellido} · ${p.especialidad}`,
+    label: `${p.nombre} ${p.apellido}`,
   }));
 
   const puedeContinuar =
@@ -342,7 +340,7 @@ export function NuevoTurnoModal({
 
       {paso === 2 && (
         <div className="flex flex-col gap-4">
-          {/* BACKEND: GET /api/profesionales (especialidad PENDIENTE DBA). */}
+          {/* BACKEND: GET /api/profesionales. */}
           <Combobox
             id="tur-profesional"
             label="Profesional"
@@ -350,7 +348,7 @@ export function NuevoTurnoModal({
             value={profesionalId ? String(profesionalId) : ""}
             options={profesionalOptions}
             onChange={(v) => elegirProfesional(v ? Number(v) : null)}
-            placeholder="Buscar por nombre o especialidad"
+            placeholder="Buscar por nombre"
             noResultsText="Sin profesionales que coincidan"
             maxResults={20}
             sanitize={soloLetras}
@@ -365,11 +363,11 @@ export function NuevoTurnoModal({
             disabled={!profesional}
             hint={
               profesional
-                ? `Según ${profesional.nombre} ${profesional.apellido} (${profesional.especialidad})`
+                ? `Según ${profesional.nombre} ${profesional.apellido}`
                 : "Elegí primero el profesional"
             }
           >
-            {/* BACKEND: poblar desde GET /api/profesionales/:id/practicas. */}
+            {/* BACKEND: poblar desde GET /api/practicas. */}
             <option value="" disabled>
               Seleccionar práctica
             </option>
@@ -535,9 +533,6 @@ export function NuevoTurnoModal({
                 </span>
                 <span className="text-sm font-bold text-brand-900">
                   {profesional ? `${profesional.nombre} ${profesional.apellido}` : ""}
-                </span>
-                <span className="text-xs text-text-secondary">
-                  {profesional?.especialidad}
                 </span>
               </div>
               <div className="flex flex-col gap-1">

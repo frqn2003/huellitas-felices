@@ -2,6 +2,7 @@
 
 import {
   AlertTriangle,
+  CalendarRange,
   ChevronLeft,
   ChevronRight,
   RotateCcw,
@@ -158,16 +159,14 @@ export function AgendaSemanal({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <div className="flex flex-col gap-0.5">
-            <h2 className="font-display text-lg font-extrabold uppercase tracking-tight text-brand-900">
-              Agenda semanal
-            </h2>
-            <p className="text-sm font-bold text-text-secondary">
-              {formatearSemana(lunes)} · {semanaTurnos.length} turno{semanaTurnos.length === 1 ? "" : "s"}
-            </p>
-          </div>
-        </div>
+        <h2 className="flex items-center gap-2 text-xl text-brand-900">
+          <CalendarRange className="h-5 w-5 shrink-0" aria-hidden="true" />
+          <span>
+            <span className="font-extrabold">Semana</span>{" "}
+            {formatearSemana(lunes)} ·{" "}
+            {semanaTurnos.length} turno{semanaTurnos.length === 1 ? "" : "s"}
+          </span>
+        </h2>
 
         <div className="flex flex-wrap items-center gap-2">
           <FiltrosAgenda filtros={filtros} onChange={setFiltros} />
@@ -176,18 +175,18 @@ export function AgendaSemanal({
             variant="outline"
             size="md"
             type="button"
-            aria-label="Semana anterior"
-            onClick={() => setLunes((l) => sumarDias(l, -7))}
+            onClick={() => setLunes(lunesDeFecha(hoyISO))}
           >
-            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+            Hoy
           </Button>
           <Button
             variant="outline"
             size="md"
             type="button"
-            onClick={() => setLunes(lunesDeFecha(hoyISO))}
+            aria-label="Semana anterior"
+            onClick={() => setLunes((l) => sumarDias(l, -7))}
           >
-            Hoy
+            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
           </Button>
           <Button
             variant="outline"

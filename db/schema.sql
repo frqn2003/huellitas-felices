@@ -30,21 +30,27 @@ CREATE TYPE tipo_recepcion AS ENUM ('parcial', 'total');
 -- =========================================================
 
 CREATE SEQUENCE IF NOT EXISTS agenda_id_seq;
+CREATE SEQUENCE IF NOT EXISTS agenda_profesional_id_seq;
+CREATE SEQUENCE IF NOT EXISTS agenda_semanal_id_seq;
 CREATE SEQUENCE IF NOT EXISTS articulo_cod_seq;
 CREATE SEQUENCE IF NOT EXISTS articulo_id_seq;
 CREATE SEQUENCE IF NOT EXISTS auditoria_id_seq;
 CREATE SEQUENCE IF NOT EXISTS auditoria_sesion_id_seq;
 CREATE SEQUENCE IF NOT EXISTS caja_id_seq;
 CREATE SEQUENCE IF NOT EXISTS categoria_id_seq;
+CREATE SEQUENCE IF NOT EXISTS cliente_id_seq;
 CREATE SEQUENCE IF NOT EXISTS comprobante_proveedor_detalle_id_seq;
 CREATE SEQUENCE IF NOT EXISTS comprobante_proveedor_id_seq;
 CREATE SEQUENCE IF NOT EXISTS cotizacion_detalle_id_seq;
 CREATE SEQUENCE IF NOT EXISTS cotizacion_id_seq;
 CREATE SEQUENCE IF NOT EXISTS deposito_id_seq;
 CREATE SEQUENCE IF NOT EXISTS estado_orden_compra_id_seq;
+CREATE SEQUENCE IF NOT EXISTS estado_turno_id_seq;
 CREATE SEQUENCE IF NOT EXISTS fabricante_id_seq;
 CREATE SEQUENCE IF NOT EXISTS ficha_stock_id_seq;
 CREATE SEQUENCE IF NOT EXISTS forma_pago_id_seq;
+CREATE SEQUENCE IF NOT EXISTS lote_vencimiento_id_seq;
+CREATE SEQUENCE IF NOT EXISTS mascota_id_seq;
 CREATE SEQUENCE IF NOT EXISTS movimiento_numero_seq;
 CREATE SEQUENCE IF NOT EXISTS movimiento_stock_cab_id_seq;
 CREATE SEQUENCE IF NOT EXISTS movimiento_stock_det_id_seq;
@@ -55,6 +61,7 @@ CREATE SEQUENCE IF NOT EXISTS orden_compra_id_seq;
 CREATE SEQUENCE IF NOT EXISTS origen_movimiento_id_seq;
 CREATE SEQUENCE IF NOT EXISTS pago_id_seq;
 CREATE SEQUENCE IF NOT EXISTS pago_imputacion_id_seq;
+CREATE SEQUENCE IF NOT EXISTS practica_id_seq;
 CREATE SEQUENCE IF NOT EXISTS presentacion_id_seq;
 CREATE SEQUENCE IF NOT EXISTS proveedor_id_seq;
 CREATE SEQUENCE IF NOT EXISTS rol_id_seq;
@@ -62,6 +69,7 @@ CREATE SEQUENCE IF NOT EXISTS solicitud_cotizacion_id_seq;
 CREATE SEQUENCE IF NOT EXISTS solicitud_detalle_id_seq;
 CREATE SEQUENCE IF NOT EXISTS sucursal_id_seq;
 CREATE SEQUENCE IF NOT EXISTS tipo_comprobante_id_seq;
+CREATE SEQUENCE IF NOT EXISTS turno_id_seq;
 CREATE SEQUENCE IF NOT EXISTS unidad_medida_id_seq;
 CREATE SEQUENCE IF NOT EXISTS usuario_id_seq;
 
@@ -78,6 +86,24 @@ CREATE TABLE agenda (
   created_at timestamp without time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE agenda_profesional (
+  id integer(32,0) NOT NULL,
+  agenda_semanal_id integer(32,0) NOT NULL,
+  usuario_id integer(32,0) NOT NULL,
+  hora_inicio time without time zone NOT NULL,
+  hora_fin time without time zone NOT NULL,
+  estado estado_activo_inactivo DEFAULT 'activo'::estado_activo_inactivo NOT NULL
+);
+
+CREATE TABLE agenda_semanal (
+  id integer(32,0) NOT NULL,
+  agenda_id integer(32,0) NOT NULL,
+  dia_semana smallint(16,0) NOT NULL,
+  hora_inicio time without time zone NOT NULL,
+  hora_fin time without time zone NOT NULL,
+  estado estado_activo_inactivo DEFAULT 'activo'::estado_activo_inactivo NOT NULL
+);
+
 CREATE TABLE articulo (
   id integer(32,0) DEFAULT nextval('articulo_id_seq'::regclass) NOT NULL,
   categoria_id integer(32,0) NOT NULL,
@@ -86,8 +112,6 @@ CREATE TABLE articulo (
   nombre character varying(150) NOT NULL,
   descripcion text,
   estado estado_activo_inactivo DEFAULT 'activo'::estado_activo_inactivo NOT NULL,
-  numero_lote character varying(60),
-  fecha_vencimiento date,
   fabricante_id integer(32,0) NOT NULL,
   imagen_url character varying(255),
   created_at timestamp without time zone DEFAULT now() NOT NULL,
@@ -129,6 +153,20 @@ CREATE TABLE categoria (
   id integer(32,0) DEFAULT nextval('categoria_id_seq'::regclass) NOT NULL,
   nombre character varying(100) NOT NULL,
   prefijo character varying(5) DEFAULT 'ART'::character varying NOT NULL
+);
+
+CREATE TABLE cliente (
+  id integer(32,0) NOT NULL,
+  nombre character varying NOT NULL,
+  apellido character varying NOT NULL,
+  documento character varying NOT NULL,
+  direccion character varying,
+  telefono character varying NOT NULL,
+  email character varying NOT NULL,
+  fecha_nacimiento date,
+  estado estado_activo_inactivo DEFAULT 'activo'::estado_activo_inactivo NOT NULL,
+  created_at timestamp without time zone DEFAULT now() NOT NULL,
+  updated_at timestamp without time zone DEFAULT now() NOT NULL
 );
 
 CREATE TABLE comprobante_proveedor (
@@ -186,6 +224,12 @@ CREATE TABLE estado_orden_compra (
   es_final boolean DEFAULT false NOT NULL
 );
 
+CREATE TABLE estado_turno (
+  id integer(32,0) NOT NULL,
+  nombre character varying NOT NULL,
+  es_final boolean DEFAULT false NOT NULL
+);
+
 CREATE TABLE fabricante (
   id integer(32,0) DEFAULT nextval('fabricante_id_seq'::regclass) NOT NULL,
   nombre character varying(100) NOT NULL,
@@ -205,6 +249,30 @@ CREATE TABLE ficha_stock (
 CREATE TABLE forma_pago (
   id integer(32,0) DEFAULT nextval('forma_pago_id_seq'::regclass) NOT NULL,
   nombre character varying(100) NOT NULL
+);
+
+CREATE TABLE lote_vencimiento (
+  id integer(32,0) DEFAULT nextval('lote_vencimiento_id_seq'::regclass) NOT NULL,
+  ficha_stock_id integer(32,0) NOT NULL,
+  numero_lote character varying NOT NULL,
+  fecha_vencimiento date,
+  cantidad numeric DEFAULT 0 NOT NULL,
+  created_at timestamp without time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE mascota (
+  id integer(32,0) NOT NULL,
+  cliente_id integer(32,0) NOT NULL,
+  nombre character varying NOT NULL,
+  especie character varying NOT NULL,
+  raza character varying,
+  sexo character varying NOT NULL,
+  peso numeric,
+  fecha_nacimiento date,
+  senas_particulares text,
+  estado estado_activo_inactivo DEFAULT 'activo'::estado_activo_inactivo NOT NULL,
+  created_at timestamp without time zone DEFAULT now() NOT NULL,
+  updated_at timestamp without time zone DEFAULT now() NOT NULL
 );
 
 CREATE TABLE movimiento_stock_cab (
@@ -292,6 +360,13 @@ CREATE TABLE pago_imputacion (
   monto_imputado numeric(12,2) NOT NULL
 );
 
+CREATE TABLE practica (
+  id integer(32,0) NOT NULL,
+  nombre character varying NOT NULL,
+  duracion_estimada_minutos integer(32,0),
+  estado estado_activo_inactivo DEFAULT 'activo'::estado_activo_inactivo NOT NULL
+);
+
 CREATE TABLE presentacion (
   id integer(32,0) DEFAULT nextval('presentacion_id_seq'::regclass) NOT NULL,
   nombre character varying(50) NOT NULL
@@ -358,6 +433,22 @@ CREATE TABLE tipo_comprobante (
   prefijo character varying(5) DEFAULT 'COM'::character varying NOT NULL
 );
 
+CREATE TABLE turno (
+  id integer(32,0) NOT NULL,
+  cliente_id integer(32,0) NOT NULL,
+  mascota_id integer(32,0) NOT NULL,
+  sucursal_id integer(32,0) NOT NULL,
+  agenda_profesional_id integer(32,0) NOT NULL,
+  practica_id integer(32,0) NOT NULL,
+  estado_id smallint(16,0) DEFAULT 1 NOT NULL,
+  fecha date NOT NULL,
+  hora_inicio time without time zone NOT NULL,
+  hora_fin time without time zone NOT NULL,
+  notas text,
+  usuario_id integer(32,0) NOT NULL,
+  fecha_creacion timestamp without time zone DEFAULT now() NOT NULL
+);
+
 CREATE TABLE unidad_medida (
   id integer(32,0) DEFAULT nextval('unidad_medida_id_seq'::regclass) NOT NULL,
   nombre character varying(50) NOT NULL
@@ -384,6 +475,13 @@ CREATE TABLE usuario (
 -- =========================================================
 
 ALTER TABLE agenda ADD CONSTRAINT agenda_pkey PRIMARY KEY (id);
+ALTER TABLE agenda_profesional ADD CONSTRAINT agenda_profesional_check CHECK ((hora_fin > hora_inicio));
+ALTER TABLE agenda_profesional ADD CONSTRAINT agenda_profesional_pkey PRIMARY KEY (id);
+ALTER TABLE agenda_profesional ADD CONSTRAINT agenda_profesional_uk UNIQUE (agenda_semanal_id, usuario_id, hora_inicio);
+ALTER TABLE agenda_semanal ADD CONSTRAINT agenda_semanal_check CHECK ((hora_fin > hora_inicio));
+ALTER TABLE agenda_semanal ADD CONSTRAINT agenda_semanal_dia_semana_check CHECK (((dia_semana >= 1) AND (dia_semana <= 7)));
+ALTER TABLE agenda_semanal ADD CONSTRAINT agenda_semanal_pkey PRIMARY KEY (id);
+ALTER TABLE agenda_semanal ADD CONSTRAINT agenda_semanal_uk UNIQUE (agenda_id, dia_semana, hora_inicio);
 ALTER TABLE articulo ADD CONSTRAINT ck_articulo_contenido_neto CHECK ((contenido_neto > (0)::numeric));
 ALTER TABLE articulo ADD CONSTRAINT articulo_pkey PRIMARY KEY (id);
 ALTER TABLE articulo ADD CONSTRAINT articulo_codigo_key UNIQUE (codigo);
@@ -394,6 +492,7 @@ ALTER TABLE caja ADD CONSTRAINT caja_pkey PRIMARY KEY (id);
 ALTER TABLE categoria ADD CONSTRAINT categoria_pkey PRIMARY KEY (id);
 ALTER TABLE categoria ADD CONSTRAINT categoria_nombre_key UNIQUE (nombre);
 ALTER TABLE categoria ADD CONSTRAINT categoria_prefijo_key UNIQUE (prefijo);
+ALTER TABLE cliente ADD CONSTRAINT cliente_pkey PRIMARY KEY (id);
 ALTER TABLE comprobante_proveedor ADD CONSTRAINT ck_cp_fecha_vencimiento CHECK ((fecha_vencimiento >= fecha_emision));
 ALTER TABLE comprobante_proveedor ADD CONSTRAINT ck_cp_no_autoanulado CHECK (((anula_comprobante_id IS NULL) OR (anula_comprobante_id <> id)));
 ALTER TABLE comprobante_proveedor ADD CONSTRAINT ck_cp_no_autocorregido CHECK (((comprobante_corregido_id IS NULL) OR (comprobante_corregido_id <> id)));
@@ -411,6 +510,8 @@ ALTER TABLE cotizacion_detalle ADD CONSTRAINT uq_cd_cotizacion_articulo UNIQUE (
 ALTER TABLE deposito ADD CONSTRAINT deposito_pkey PRIMARY KEY (id);
 ALTER TABLE estado_orden_compra ADD CONSTRAINT estado_orden_compra_pkey PRIMARY KEY (id);
 ALTER TABLE estado_orden_compra ADD CONSTRAINT estado_orden_compra_nombre_key UNIQUE (nombre);
+ALTER TABLE estado_turno ADD CONSTRAINT estado_turno_pkey PRIMARY KEY (id);
+ALTER TABLE estado_turno ADD CONSTRAINT estado_turno_nombre_key UNIQUE (nombre);
 ALTER TABLE fabricante ADD CONSTRAINT fabricante_pkey PRIMARY KEY (id);
 ALTER TABLE fabricante ADD CONSTRAINT fabricante_nombre_key UNIQUE (nombre);
 ALTER TABLE ficha_stock ADD CONSTRAINT ck_ficha_critico_menor CHECK (((stock_critico IS NULL) OR (stock_critico <= stock_minimo)));
@@ -419,6 +520,11 @@ ALTER TABLE ficha_stock ADD CONSTRAINT ficha_stock_pkey PRIMARY KEY (id);
 ALTER TABLE ficha_stock ADD CONSTRAINT ficha_stock_articulo_id_deposito_id_key UNIQUE (articulo_id, deposito_id);
 ALTER TABLE forma_pago ADD CONSTRAINT forma_pago_pkey PRIMARY KEY (id);
 ALTER TABLE forma_pago ADD CONSTRAINT forma_pago_nom_forma_key UNIQUE (nombre);
+ALTER TABLE lote_vencimiento ADD CONSTRAINT lote_vencimiento_cantidad_check CHECK ((cantidad >= (0)::numeric));
+ALTER TABLE lote_vencimiento ADD CONSTRAINT lote_vencimiento_pkey PRIMARY KEY (id);
+ALTER TABLE lote_vencimiento ADD CONSTRAINT lote_vencimiento_ficha_lote_unique UNIQUE (ficha_stock_id, numero_lote);
+ALTER TABLE mascota ADD CONSTRAINT mascota_peso_check CHECK (((peso IS NULL) OR (peso > (0)::numeric)));
+ALTER TABLE mascota ADD CONSTRAINT mascota_pkey PRIMARY KEY (id);
 ALTER TABLE movimiento_stock_cab ADD CONSTRAINT ck_mov_no_autovinculado CHECK (((movimiento_vinculado_id IS NULL) OR (movimiento_vinculado_id <> id)));
 ALTER TABLE movimiento_stock_cab ADD CONSTRAINT movimiento_stock_cab_pkey PRIMARY KEY (id);
 ALTER TABLE movimiento_stock_cab ADD CONSTRAINT movimiento_stock_cab_numero_key UNIQUE (numero);
@@ -443,6 +549,9 @@ ALTER TABLE pago ADD CONSTRAINT pago_pkey PRIMARY KEY (id);
 ALTER TABLE pago ADD CONSTRAINT pago_numero_comprobante_key UNIQUE (numero_comprobante);
 ALTER TABLE pago_imputacion ADD CONSTRAINT pago_imputacion_monto_imputado_check CHECK ((monto_imputado > (0)::numeric));
 ALTER TABLE pago_imputacion ADD CONSTRAINT pago_imputacion_pkey PRIMARY KEY (id);
+ALTER TABLE practica ADD CONSTRAINT practica_duracion_estimada_minutos_check CHECK (((duracion_estimada_minutos IS NULL) OR (duracion_estimada_minutos > 0)));
+ALTER TABLE practica ADD CONSTRAINT practica_pkey PRIMARY KEY (id);
+ALTER TABLE practica ADD CONSTRAINT practica_nombre_key UNIQUE (nombre);
 ALTER TABLE presentacion ADD CONSTRAINT presentacion_pkey PRIMARY KEY (id);
 ALTER TABLE presentacion ADD CONSTRAINT presentacion_nombre_key UNIQUE (nombre);
 ALTER TABLE proveedor ADD CONSTRAINT proveedor_pkey PRIMARY KEY (id);
@@ -459,6 +568,9 @@ ALTER TABLE tipo_comprobante ADD CONSTRAINT tipo_comprobante_afecta_saldo_check 
 ALTER TABLE tipo_comprobante ADD CONSTRAINT tipo_comprobante_pkey PRIMARY KEY (id);
 ALTER TABLE tipo_comprobante ADD CONSTRAINT tipo_comprobante_nombre_key UNIQUE (nombre);
 ALTER TABLE tipo_comprobante ADD CONSTRAINT tipo_comprobante_prefijo_key UNIQUE (prefijo);
+ALTER TABLE turno ADD CONSTRAINT turno_check CHECK ((hora_fin > hora_inicio));
+ALTER TABLE turno ADD CONSTRAINT turno_pkey PRIMARY KEY (id);
+ALTER TABLE turno ADD CONSTRAINT turno_sin_superposicion_excl EXCLUDE USING gist (agenda_profesional_id WITH =, fecha WITH =, tsrange((fecha + hora_inicio), (fecha + hora_fin)) WITH &&) WHERE ((estado_id <> 3));
 ALTER TABLE unidad_medida ADD CONSTRAINT unidad_medida_pkey PRIMARY KEY (id);
 ALTER TABLE unidad_medida ADD CONSTRAINT unidad_medida_unidad_key UNIQUE (nombre);
 ALTER TABLE usuario ADD CONSTRAINT ck_usuario_intentos_fallidos CHECK (((intentos_fallidos >= 0) AND (intentos_fallidos <= 3)));
@@ -471,6 +583,9 @@ ALTER TABLE usuario ADD CONSTRAINT usuario_auth_id_key UNIQUE (auth_id);
 -- =========================================================
 
 ALTER TABLE agenda ADD CONSTRAINT agenda_sucursal_id_fkey FOREIGN KEY (sucursal_id) REFERENCES sucursal(id);
+ALTER TABLE agenda_profesional ADD CONSTRAINT agenda_profesional_agenda_semanal_id_fkey FOREIGN KEY (agenda_semanal_id) REFERENCES agenda_semanal(id);
+ALTER TABLE agenda_profesional ADD CONSTRAINT agenda_profesional_usuario_id_fkey FOREIGN KEY (usuario_id) REFERENCES usuario(id);
+ALTER TABLE agenda_semanal ADD CONSTRAINT agenda_semanal_agenda_id_fkey FOREIGN KEY (agenda_id) REFERENCES agenda(id);
 ALTER TABLE articulo ADD CONSTRAINT articulo_categoria_id_fkey FOREIGN KEY (categoria_id) REFERENCES categoria(id);
 ALTER TABLE articulo ADD CONSTRAINT articulo_fabricante_id_fkey FOREIGN KEY (fabricante_id) REFERENCES fabricante(id);
 ALTER TABLE articulo ADD CONSTRAINT articulo_presentacion_id_fkey FOREIGN KEY (presentacion_id) REFERENCES presentacion(id);
@@ -494,6 +609,8 @@ ALTER TABLE cotizacion_detalle ADD CONSTRAINT cotizacion_detalle_cotizacion_id_f
 ALTER TABLE deposito ADD CONSTRAINT deposito_sucursal_id_fkey FOREIGN KEY (sucursal_id) REFERENCES sucursal(id);
 ALTER TABLE ficha_stock ADD CONSTRAINT ficha_stock_articulo_id_fkey FOREIGN KEY (articulo_id) REFERENCES articulo(id);
 ALTER TABLE ficha_stock ADD CONSTRAINT ficha_stock_deposito_id_fkey FOREIGN KEY (deposito_id) REFERENCES deposito(id);
+ALTER TABLE lote_vencimiento ADD CONSTRAINT lote_vencimiento_ficha_stock_id_fkey FOREIGN KEY (ficha_stock_id) REFERENCES ficha_stock(id);
+ALTER TABLE mascota ADD CONSTRAINT mascota_cliente_id_fkey FOREIGN KEY (cliente_id) REFERENCES cliente(id);
 ALTER TABLE movimiento_stock_cab ADD CONSTRAINT movimiento_stock_cab_deposito_id_fkey FOREIGN KEY (deposito_id) REFERENCES deposito(id);
 ALTER TABLE movimiento_stock_cab ADD CONSTRAINT movimiento_stock_cab_movimiento_vinculado_id_fkey FOREIGN KEY (movimiento_vinculado_id) REFERENCES movimiento_stock_cab(id);
 ALTER TABLE movimiento_stock_cab ADD CONSTRAINT movimiento_stock_cab_origen_id_fkey FOREIGN KEY (origen_id) REFERENCES origen_movimiento(id);
@@ -521,6 +638,13 @@ ALTER TABLE proveedor_forma_pago ADD CONSTRAINT proveedor_forma_pago_proveedor_i
 ALTER TABLE solicitud_cotizacion ADD CONSTRAINT solicitud_cotizacion_usuario_id_fkey FOREIGN KEY (usuario_id) REFERENCES usuario(id);
 ALTER TABLE solicitud_detalle ADD CONSTRAINT solicitud_detalle_articulo_id_fkey FOREIGN KEY (articulo_id) REFERENCES articulo(id);
 ALTER TABLE solicitud_detalle ADD CONSTRAINT solicitud_detalle_solicitud_id_fkey FOREIGN KEY (solicitud_id) REFERENCES solicitud_cotizacion(id) ON DELETE CASCADE;
+ALTER TABLE turno ADD CONSTRAINT turno_agenda_profesional_id_fkey FOREIGN KEY (agenda_profesional_id) REFERENCES agenda_profesional(id);
+ALTER TABLE turno ADD CONSTRAINT turno_cliente_id_fkey FOREIGN KEY (cliente_id) REFERENCES cliente(id);
+ALTER TABLE turno ADD CONSTRAINT turno_estado_id_fkey FOREIGN KEY (estado_id) REFERENCES estado_turno(id);
+ALTER TABLE turno ADD CONSTRAINT turno_mascota_id_fkey FOREIGN KEY (mascota_id) REFERENCES mascota(id);
+ALTER TABLE turno ADD CONSTRAINT turno_practica_id_fkey FOREIGN KEY (practica_id) REFERENCES practica(id);
+ALTER TABLE turno ADD CONSTRAINT turno_sucursal_id_fkey FOREIGN KEY (sucursal_id) REFERENCES sucursal(id);
+ALTER TABLE turno ADD CONSTRAINT turno_usuario_id_fkey FOREIGN KEY (usuario_id) REFERENCES usuario(id);
 ALTER TABLE usuario ADD CONSTRAINT fk_usuario_auth_id FOREIGN KEY (auth_id) REFERENCES auth.users(id) ON DELETE CASCADE;
 ALTER TABLE usuario ADD CONSTRAINT usuario_rol_id_fkey FOREIGN KEY (rol_id) REFERENCES rol(id);
 ALTER TABLE usuario ADD CONSTRAINT usuario_sucursal_id_fkey FOREIGN KEY (sucursal_id) REFERENCES sucursal(id);
@@ -539,6 +663,8 @@ CREATE INDEX idx_auditoria_usuario ON public.auditoria USING btree (usuario_id);
 CREATE INDEX idx_auditoria_sesion_fecha ON public.auditoria_sesion USING btree (fecha_hora);
 CREATE INDEX idx_auditoria_sesion_usuario ON public.auditoria_sesion USING btree (usuario_id);
 CREATE INDEX idx_caja_sucursal ON public.caja USING btree (sucursal_id);
+CREATE UNIQUE INDEX cliente_documento_uidx ON public.cliente USING btree (documento);
+CREATE UNIQUE INDEX cliente_email_uidx ON public.cliente USING btree (email);
 CREATE INDEX idx_cp_fecha ON public.comprobante_proveedor USING btree (fecha_emision);
 CREATE INDEX idx_cp_oc ON public.comprobante_proveedor USING btree (orden_compra_id);
 CREATE INDEX idx_cp_proveedor ON public.comprobante_proveedor USING btree (proveedor_id);
@@ -551,6 +677,7 @@ CREATE INDEX idx_cd_cotizacion ON public.cotizacion_detalle USING btree (cotizac
 CREATE INDEX idx_deposito_sucursal ON public.deposito USING btree (sucursal_id);
 CREATE INDEX idx_ficha_articulo ON public.ficha_stock USING btree (articulo_id);
 CREATE INDEX idx_ficha_deposito ON public.ficha_stock USING btree (deposito_id);
+CREATE INDEX idx_lote_vencimiento_fecha ON public.lote_vencimiento USING btree (fecha_vencimiento);
 CREATE INDEX idx_mov_cab_deposito ON public.movimiento_stock_cab USING btree (deposito_id);
 CREATE INDEX idx_mov_cab_fecha ON public.movimiento_stock_cab USING btree (fecha_hora DESC);
 CREATE INDEX idx_mov_cab_origen_entidad ON public.movimiento_stock_cab USING btree (origen_id, origen_entidad_id);
@@ -573,6 +700,7 @@ CREATE UNIQUE INDEX uq_proveedor_cuit_activo ON public.proveedor USING btree (cu
 CREATE INDEX idx_pfp_forma_pago ON public.proveedor_forma_pago USING btree (forma_pago_id);
 CREATE INDEX idx_sd_solicitud ON public.solicitud_detalle USING btree (solicitud_id);
 CREATE UNIQUE INDEX uq_sucursal_nombre_activa ON public.sucursal USING btree (lower((nombre)::text)) WHERE (estado = 'activo'::estado_activo_inactivo);
+CREATE INDEX turno_sucursal_fecha_idx ON public.turno USING btree (sucursal_id, fecha);
 CREATE INDEX idx_usuario_sucursal ON public.usuario USING btree (sucursal_id);
 CREATE UNIQUE INDEX uq_usuario_dni_activo ON public.usuario USING btree (dni) WHERE (estado = 'activo'::estado_activo_inactivo);
 CREATE UNIQUE INDEX uq_usuario_email_activo ON public.usuario USING btree (lower((email)::text)) WHERE (estado = 'activo'::estado_activo_inactivo);
@@ -628,10 +756,81 @@ SELECT cp.id AS comprobante_id,
           GROUP BY pi_1.comprobante_proveedor_id) pi ON ((pi.comprobante_proveedor_id = cp.id)))
   WHERE (cp.estado = 'vigente'::estado_documento);
 
+CREATE OR REPLACE VIEW vw_huecos_disponibles AS
+WITH fechas AS (
+         SELECT (generate_series((CURRENT_DATE)::timestamp with time zone, ((CURRENT_DATE + 60))::timestamp with time zone, '1 day'::interval))::date AS fecha
+        ), franjas_fecha AS (
+         SELECT ap.id AS agenda_profesional_id,
+            ap.usuario_id,
+            ap.hora_inicio AS franja_inicio,
+            ap.hora_fin AS franja_fin,
+            d.fecha
+           FROM ((agenda_profesional ap
+             JOIN agenda_semanal ags ON ((ags.id = ap.agenda_semanal_id)))
+             JOIN fechas d ON (((EXTRACT(isodow FROM d.fecha))::smallint = ags.dia_semana)))
+          WHERE ((ap.estado = 'activo'::estado_activo_inactivo) AND (ags.estado = 'activo'::estado_activo_inactivo))
+        ), turnos_bordes AS (
+         SELECT ff.agenda_profesional_id,
+            ff.usuario_id,
+            ff.fecha,
+            ff.franja_inicio,
+            ff.franja_fin,
+            t.hora_inicio,
+            t.hora_fin,
+            lag(t.hora_fin) OVER (PARTITION BY ff.agenda_profesional_id, ff.fecha ORDER BY t.hora_inicio) AS fin_anterior
+           FROM (franjas_fecha ff
+             LEFT JOIN turno t ON (((t.agenda_profesional_id = ff.agenda_profesional_id) AND (t.fecha = ff.fecha) AND (t.estado_id <> 3))))
+        )
+ SELECT turnos_bordes.agenda_profesional_id,
+    turnos_bordes.usuario_id,
+    turnos_bordes.fecha,
+    COALESCE(turnos_bordes.fin_anterior, turnos_bordes.franja_inicio) AS hueco_inicio,
+    COALESCE(turnos_bordes.hora_inicio, turnos_bordes.franja_fin) AS hueco_fin
+   FROM turnos_bordes
+  WHERE (COALESCE(turnos_bordes.fin_anterior, turnos_bordes.franja_inicio) < COALESCE(turnos_bordes.hora_inicio, turnos_bordes.franja_fin))
+UNION ALL
+ SELECT ff.agenda_profesional_id,
+    ff.usuario_id,
+    ff.fecha,
+    max(t.hora_fin) AS hueco_inicio,
+    ff.franja_fin AS hueco_fin
+   FROM (franjas_fecha ff
+     JOIN turno t ON (((t.agenda_profesional_id = ff.agenda_profesional_id) AND (t.fecha = ff.fecha) AND (t.estado_id <> 3))))
+  GROUP BY ff.agenda_profesional_id, ff.usuario_id, ff.fecha, ff.franja_fin
+ HAVING (max(t.hora_fin) < ff.franja_fin);
+
 
 -- =========================================================
 -- FUNCIONES
 -- =========================================================
+
+CREATE OR REPLACE FUNCTION public.cash_dist(money, money)
+ RETURNS money
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$cash_dist$function$
+;
+
+CREATE OR REPLACE FUNCTION public.date_dist(date, date)
+ RETURNS integer
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$date_dist$function$
+;
+
+CREATE OR REPLACE FUNCTION public.float4_dist(real, real)
+ RETURNS real
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$float4_dist$function$
+;
+
+CREATE OR REPLACE FUNCTION public.float8_dist(double precision, double precision)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$float8_dist$function$
+;
 
 CREATE OR REPLACE FUNCTION public.fn_abm_sucursal(p_modo modo_abm, p_id integer DEFAULT NULL::integer, p_nombre character varying DEFAULT NULL::character varying, p_direccion character varying DEFAULT NULL::character varying, p_telefono character varying DEFAULT NULL::character varying, p_horario_atencion character varying DEFAULT NULL::character varying, p_razon_social character varying DEFAULT NULL::character varying, p_cuit character varying DEFAULT NULL::character varying, p_condicion_iva character varying DEFAULT NULL::character varying, p_ingresos_brutos character varying DEFAULT NULL::character varying)
  RETURNS SETOF sucursal
@@ -915,6 +1114,64 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.fn_agenda_profesional_validar_rango()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  v_franja_inicio time without time zone;
+  v_franja_fin    time without time zone;
+BEGIN
+  SELECT ags.hora_inicio, ags.hora_fin
+  INTO v_franja_inicio, v_franja_fin
+  FROM public.agenda_semanal ags
+  WHERE ags.id = NEW.agenda_semanal_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION
+      'La franja semanal indicada (id=%) no existe.', NEW.agenda_semanal_id;
+  END IF;
+
+  IF NEW.hora_inicio < v_franja_inicio OR NEW.hora_fin > v_franja_fin THEN
+    RAISE EXCEPTION
+      'El horario del profesional (% - %) debe estar dentro del rango de la franja general de la sucursal (% - %).',
+      NEW.hora_inicio, NEW.hora_fin, v_franja_inicio, v_franja_fin;
+  END IF;
+
+  RETURN NEW;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.fn_agenda_profesional_validar_rol()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  v_rol_nombre character varying;
+BEGIN
+  SELECT r.nombre
+  INTO v_rol_nombre
+  FROM public.usuario u
+  JOIN public.rol r ON r.id = u.rol_id
+  WHERE u.id = NEW.usuario_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION
+      'El usuario indicado (id=%) no existe.', NEW.usuario_id;
+  END IF;
+
+  IF lower(v_rol_nombre) <> 'veterinario' THEN
+    RAISE EXCEPTION
+      'El usuario (id=%) no puede asignarse a agenda_profesional: su rol es "%", se requiere "Veterinario".',
+      NEW.usuario_id, v_rol_nombre;
+  END IF;
+
+  RETURN NEW;
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.fn_anula_comprobante_proveedor()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -1155,6 +1412,46 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.fn_cliente_validar_duplicados()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  v_estado public.estado_activo_inactivo;
+BEGIN
+  -- Documento duplicado
+  SELECT c.estado INTO v_estado
+  FROM public.cliente c
+  WHERE c.documento = NEW.documento
+    AND c.id IS DISTINCT FROM NEW.id
+  LIMIT 1;
+
+  IF FOUND THEN
+    RAISE EXCEPTION
+      'No se puede registrar: el documento "%" ya pertenece a un cliente % existente.',
+      NEW.documento, v_estado
+      USING ERRCODE = 'unique_violation';
+  END IF;
+
+  -- Email duplicado
+  SELECT c.estado INTO v_estado
+  FROM public.cliente c
+  WHERE c.email = NEW.email
+    AND c.id IS DISTINCT FROM NEW.id
+  LIMIT 1;
+
+  IF FOUND THEN
+    RAISE EXCEPTION
+      'No se puede registrar: el email "%" ya pertenece a un cliente % existente.',
+      NEW.email, v_estado
+      USING ERRCODE = 'unique_violation';
+  END IF;
+
+  RETURN NEW;
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.fn_generar_cod_articulo()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -1199,6 +1496,23 @@ BEGIN
   IF NEW.numero IS NULL OR NEW.numero = '' THEN
     NEW.numero := 'MOV-' || LPAD(nextval('movimiento_numero_seq')::text, 6, '0');
   END IF;
+  RETURN NEW;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.fn_mascota_validar_fecha_nacimiento()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+  IF NEW.fecha_nacimiento IS NOT NULL AND NEW.fecha_nacimiento > CURRENT_DATE THEN
+    RAISE EXCEPTION
+      'La fecha de nacimiento de la mascota (%) no puede ser posterior a hoy (%).',
+      NEW.fecha_nacimiento, CURRENT_DATE
+      USING ERRCODE = 'check_violation';
+  END IF;
+
   RETURN NEW;
 END;
 $function$
@@ -1341,6 +1655,177 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.fn_turno_sincronizar_sucursal()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  v_sucursal_id integer;
+BEGIN
+  SELECT a.sucursal_id
+  INTO v_sucursal_id
+  FROM public.agenda_profesional ap
+  JOIN public.agenda_semanal ags ON ags.id = ap.agenda_semanal_id
+  JOIN public.agenda a          ON a.id  = ags.agenda_id
+  WHERE ap.id = NEW.agenda_profesional_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION
+      'La agenda profesional indicada (id=%) no existe.', NEW.agenda_profesional_id;
+  END IF;
+
+  NEW.sucursal_id := v_sucursal_id;
+
+  RETURN NEW;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.fn_turno_validar_estados_activos()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  v_estado_cliente  public.estado_activo_inactivo;
+  v_estado_mascota  public.estado_activo_inactivo;
+  v_estado_practica public.estado_activo_inactivo;
+BEGIN
+  SELECT c.estado INTO v_estado_cliente
+  FROM public.cliente c WHERE c.id = NEW.cliente_id;
+
+  IF v_estado_cliente IS DISTINCT FROM 'activo'::public.estado_activo_inactivo THEN
+    RAISE EXCEPTION
+      'No se puede registrar el turno: el cliente (id=%) está %.',
+      NEW.cliente_id, v_estado_cliente;
+  END IF;
+
+  SELECT m.estado INTO v_estado_mascota
+  FROM public.mascota m WHERE m.id = NEW.mascota_id;
+
+  IF v_estado_mascota IS DISTINCT FROM 'activo'::public.estado_activo_inactivo THEN
+    RAISE EXCEPTION
+      'No se puede registrar el turno: la mascota (id=%) está %.',
+      NEW.mascota_id, v_estado_mascota;
+  END IF;
+
+  SELECT p.estado INTO v_estado_practica
+  FROM public.practica p WHERE p.id = NEW.practica_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION
+      'La práctica indicada (id=%) no existe.', NEW.practica_id;
+  END IF;
+
+  IF v_estado_practica IS DISTINCT FROM 'activo'::public.estado_activo_inactivo THEN
+    RAISE EXCEPTION
+      'No se puede registrar el turno: la práctica (id=%) está dada de baja.',
+      NEW.practica_id;
+  END IF;
+
+  RETURN NEW;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.fn_turno_validar_fecha_no_pasada()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+  IF NEW.fecha < CURRENT_DATE THEN
+    RAISE EXCEPTION
+      'No se puede registrar un turno con fecha pasada (%). La fecha actual es %.',
+      NEW.fecha, CURRENT_DATE
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  RETURN NEW;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.fn_turno_validar_horario()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  v_dia_semana        smallint;
+  v_franja_inicio     time without time zone;
+  v_franja_fin        time without time zone;
+  v_estado_ap         public.estado_activo_inactivo;
+  v_estado_ags        public.estado_activo_inactivo;
+BEGIN
+  SELECT ags.dia_semana, ap.hora_inicio, ap.hora_fin, ap.estado, ags.estado
+  INTO v_dia_semana, v_franja_inicio, v_franja_fin, v_estado_ap, v_estado_ags
+  FROM public.agenda_profesional ap
+  JOIN public.agenda_semanal ags ON ags.id = ap.agenda_semanal_id
+  WHERE ap.id = NEW.agenda_profesional_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION
+      'La agenda profesional indicada (id=%) no existe.', NEW.agenda_profesional_id;
+  END IF;
+
+  -- 0) La franja (individual y/o general de sucursal) tiene que estar activa
+  IF v_estado_ap IS DISTINCT FROM 'activo'::public.estado_activo_inactivo THEN
+    RAISE EXCEPTION
+      'No se puede registrar el turno: la agenda del profesional (id=%) está %.',
+      NEW.agenda_profesional_id, v_estado_ap;
+  END IF;
+
+  IF v_estado_ags IS DISTINCT FROM 'activo'::public.estado_activo_inactivo THEN
+    RAISE EXCEPTION
+      'No se puede registrar el turno: la franja general de la sucursal para ese día está %.',
+      v_estado_ags;
+  END IF;
+
+  -- 1) El día del turno tiene que coincidir con el día que trabaja esa franja
+  IF EXTRACT(ISODOW FROM NEW.fecha)::smallint <> v_dia_semana THEN
+    RAISE EXCEPTION
+      'El profesional no atiende esta agenda el día correspondiente a %  (día semana ISO: %, esperado: %).',
+      NEW.fecha, EXTRACT(ISODOW FROM NEW.fecha)::smallint, v_dia_semana;
+  END IF;
+
+  -- 2) El turno tiene que caer dentro del horario de atención del profesional
+  IF NEW.hora_inicio < v_franja_inicio OR NEW.hora_fin > v_franja_fin THEN
+    RAISE EXCEPTION
+      'El turno (% - %) está fuera del horario de atención del profesional para esta agenda (% - %).',
+      NEW.hora_inicio, NEW.hora_fin, v_franja_inicio, v_franja_fin;
+  END IF;
+
+  RETURN NEW;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.fn_turno_validar_mascota_cliente()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  v_cliente_id_real integer;
+BEGIN
+  SELECT m.cliente_id
+  INTO v_cliente_id_real
+  FROM public.mascota m
+  WHERE m.id = NEW.mascota_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION
+      'La mascota indicada (id=%) no existe.', NEW.mascota_id;
+  END IF;
+
+  IF v_cliente_id_real IS DISTINCT FROM NEW.cliente_id THEN
+    RAISE EXCEPTION
+      'La mascota (id=%) no pertenece al cliente indicado (id=%); pertenece al cliente id=%.',
+      NEW.mascota_id, NEW.cliente_id, v_cliente_id_real;
+  END IF;
+
+  RETURN NEW;
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.fn_valida_mov_det_recepcion_compra()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -1424,6 +1909,1238 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.gbt_bit_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_bit_compress$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_bit_consistent(internal, bit, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_bit_consistent$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_bit_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_bit_penalty$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_bit_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_bit_picksplit$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_bit_same(gbtreekey_var, gbtreekey_var, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_bit_same$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_bit_union(internal, internal)
+ RETURNS gbtreekey_var
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_bit_union$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_bool_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE STRICT
+AS '$libdir/btree_gist', $function$gbt_bool_compress$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_bool_consistent(internal, boolean, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE STRICT
+AS '$libdir/btree_gist', $function$gbt_bool_consistent$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_bool_fetch(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE STRICT
+AS '$libdir/btree_gist', $function$gbt_bool_fetch$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_bool_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE STRICT
+AS '$libdir/btree_gist', $function$gbt_bool_penalty$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_bool_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE STRICT
+AS '$libdir/btree_gist', $function$gbt_bool_picksplit$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_bool_same(gbtreekey2, gbtreekey2, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE STRICT
+AS '$libdir/btree_gist', $function$gbt_bool_same$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_bool_union(internal, internal)
+ RETURNS gbtreekey2
+ LANGUAGE c
+ IMMUTABLE STRICT
+AS '$libdir/btree_gist', $function$gbt_bool_union$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_bpchar_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_bpchar_compress$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_bpchar_consistent(internal, character, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_bpchar_consistent$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_bytea_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_bytea_compress$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_bytea_consistent(internal, bytea, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_bytea_consistent$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_bytea_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_bytea_penalty$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_bytea_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_bytea_picksplit$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_bytea_same(gbtreekey_var, gbtreekey_var, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_bytea_same$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_bytea_union(internal, internal)
+ RETURNS gbtreekey_var
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_bytea_union$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_cash_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_cash_compress$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_cash_consistent(internal, money, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_cash_consistent$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_cash_distance(internal, money, smallint, oid, internal)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_cash_distance$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_cash_fetch(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_cash_fetch$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_cash_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_cash_penalty$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_cash_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_cash_picksplit$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_cash_same(gbtreekey16, gbtreekey16, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_cash_same$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_cash_union(internal, internal)
+ RETURNS gbtreekey16
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_cash_union$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_date_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_date_compress$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_date_consistent(internal, date, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_date_consistent$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_date_distance(internal, date, smallint, oid, internal)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_date_distance$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_date_fetch(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_date_fetch$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_date_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_date_penalty$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_date_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_date_picksplit$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_date_same(gbtreekey8, gbtreekey8, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_date_same$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_date_union(internal, internal)
+ RETURNS gbtreekey8
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_date_union$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_decompress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_decompress$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_enum_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_enum_compress$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_enum_consistent(internal, anyenum, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_enum_consistent$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_enum_fetch(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_enum_fetch$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_enum_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_enum_penalty$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_enum_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_enum_picksplit$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_enum_same(gbtreekey8, gbtreekey8, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_enum_same$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_enum_union(internal, internal)
+ RETURNS gbtreekey8
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_enum_union$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_float4_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_float4_compress$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_float4_consistent(internal, real, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_float4_consistent$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_float4_distance(internal, real, smallint, oid, internal)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_float4_distance$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_float4_fetch(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_float4_fetch$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_float4_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_float4_penalty$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_float4_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_float4_picksplit$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_float4_same(gbtreekey8, gbtreekey8, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_float4_same$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_float4_union(internal, internal)
+ RETURNS gbtreekey8
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_float4_union$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_float8_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_float8_compress$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_float8_consistent(internal, double precision, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_float8_consistent$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_float8_distance(internal, double precision, smallint, oid, internal)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_float8_distance$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_float8_fetch(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_float8_fetch$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_float8_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_float8_penalty$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_float8_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_float8_picksplit$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_float8_same(gbtreekey16, gbtreekey16, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_float8_same$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_float8_union(internal, internal)
+ RETURNS gbtreekey16
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_float8_union$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_inet_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_inet_compress$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_inet_consistent(internal, inet, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_inet_consistent$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_inet_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_inet_penalty$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_inet_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_inet_picksplit$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_inet_same(gbtreekey16, gbtreekey16, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_inet_same$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_inet_union(internal, internal)
+ RETURNS gbtreekey16
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_inet_union$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_int2_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int2_compress$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_int2_consistent(internal, smallint, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int2_consistent$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_int2_distance(internal, smallint, smallint, oid, internal)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int2_distance$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_int2_fetch(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int2_fetch$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_int2_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int2_penalty$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_int2_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int2_picksplit$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_int2_same(gbtreekey4, gbtreekey4, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int2_same$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_int2_union(internal, internal)
+ RETURNS gbtreekey4
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int2_union$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_int4_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int4_compress$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_int4_consistent(internal, integer, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int4_consistent$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_int4_distance(internal, integer, smallint, oid, internal)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int4_distance$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_int4_fetch(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int4_fetch$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_int4_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int4_penalty$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_int4_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int4_picksplit$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_int4_same(gbtreekey8, gbtreekey8, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int4_same$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_int4_union(internal, internal)
+ RETURNS gbtreekey8
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int4_union$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_int8_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int8_compress$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_int8_consistent(internal, bigint, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int8_consistent$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_int8_distance(internal, bigint, smallint, oid, internal)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int8_distance$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_int8_fetch(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int8_fetch$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_int8_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int8_penalty$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_int8_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int8_picksplit$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_int8_same(gbtreekey16, gbtreekey16, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int8_same$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_int8_union(internal, internal)
+ RETURNS gbtreekey16
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int8_union$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_intv_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_intv_compress$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_intv_consistent(internal, interval, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_intv_consistent$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_intv_decompress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_intv_decompress$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_intv_distance(internal, interval, smallint, oid, internal)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_intv_distance$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_intv_fetch(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_intv_fetch$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_intv_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_intv_penalty$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_intv_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_intv_picksplit$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_intv_same(gbtreekey32, gbtreekey32, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_intv_same$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_intv_union(internal, internal)
+ RETURNS gbtreekey32
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_intv_union$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_macad8_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_macad8_compress$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_macad8_consistent(internal, macaddr8, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_macad8_consistent$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_macad8_fetch(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_macad8_fetch$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_macad8_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_macad8_penalty$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_macad8_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_macad8_picksplit$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_macad8_same(gbtreekey16, gbtreekey16, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_macad8_same$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_macad8_union(internal, internal)
+ RETURNS gbtreekey16
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_macad8_union$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_macad_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_macad_compress$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_macad_consistent(internal, macaddr, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_macad_consistent$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_macad_fetch(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_macad_fetch$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_macad_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_macad_penalty$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_macad_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_macad_picksplit$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_macad_same(gbtreekey16, gbtreekey16, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_macad_same$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_macad_union(internal, internal)
+ RETURNS gbtreekey16
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_macad_union$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_numeric_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_numeric_compress$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_numeric_consistent(internal, numeric, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_numeric_consistent$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_numeric_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_numeric_penalty$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_numeric_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_numeric_picksplit$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_numeric_same(gbtreekey_var, gbtreekey_var, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_numeric_same$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_numeric_union(internal, internal)
+ RETURNS gbtreekey_var
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_numeric_union$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_oid_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_oid_compress$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_oid_consistent(internal, oid, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_oid_consistent$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_oid_distance(internal, oid, smallint, oid, internal)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_oid_distance$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_oid_fetch(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_oid_fetch$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_oid_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_oid_penalty$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_oid_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_oid_picksplit$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_oid_same(gbtreekey8, gbtreekey8, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_oid_same$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_oid_union(internal, internal)
+ RETURNS gbtreekey8
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_oid_union$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_text_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_text_compress$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_text_consistent(internal, text, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_text_consistent$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_text_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_text_penalty$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_text_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_text_picksplit$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_text_same(gbtreekey_var, gbtreekey_var, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_text_same$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_text_union(internal, internal)
+ RETURNS gbtreekey_var
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_text_union$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_time_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_time_compress$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_time_consistent(internal, time without time zone, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_time_consistent$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_time_distance(internal, time without time zone, smallint, oid, internal)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_time_distance$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_time_fetch(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_time_fetch$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_time_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_time_penalty$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_time_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_time_picksplit$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_time_same(gbtreekey16, gbtreekey16, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_time_same$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_time_union(internal, internal)
+ RETURNS gbtreekey16
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_time_union$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_timetz_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_timetz_compress$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_timetz_consistent(internal, time with time zone, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_timetz_consistent$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_ts_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_ts_compress$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_ts_consistent(internal, timestamp without time zone, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_ts_consistent$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_ts_distance(internal, timestamp without time zone, smallint, oid, internal)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_ts_distance$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_ts_fetch(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_ts_fetch$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_ts_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_ts_penalty$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_ts_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_ts_picksplit$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_ts_same(gbtreekey16, gbtreekey16, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_ts_same$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_ts_union(internal, internal)
+ RETURNS gbtreekey16
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_ts_union$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_tstz_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_tstz_compress$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_tstz_consistent(internal, timestamp with time zone, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_tstz_consistent$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_tstz_distance(internal, timestamp with time zone, smallint, oid, internal)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_tstz_distance$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_uuid_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_uuid_compress$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_uuid_consistent(internal, uuid, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_uuid_consistent$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_uuid_fetch(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_uuid_fetch$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_uuid_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_uuid_penalty$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_uuid_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_uuid_picksplit$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_uuid_same(gbtreekey32, gbtreekey32, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_uuid_same$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_uuid_union(internal, internal)
+ RETURNS gbtreekey32
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_uuid_union$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_var_decompress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_var_decompress$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbt_var_fetch(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_var_fetch$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbtreekey16_in(cstring)
+ RETURNS gbtreekey16
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbtreekey_in$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbtreekey16_out(gbtreekey16)
+ RETURNS cstring
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbtreekey_out$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbtreekey2_in(cstring)
+ RETURNS gbtreekey2
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbtreekey_in$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbtreekey2_out(gbtreekey2)
+ RETURNS cstring
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbtreekey_out$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbtreekey32_in(cstring)
+ RETURNS gbtreekey32
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbtreekey_in$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbtreekey32_out(gbtreekey32)
+ RETURNS cstring
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbtreekey_out$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbtreekey4_in(cstring)
+ RETURNS gbtreekey4
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbtreekey_in$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbtreekey4_out(gbtreekey4)
+ RETURNS cstring
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbtreekey_out$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbtreekey8_in(cstring)
+ RETURNS gbtreekey8
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbtreekey_in$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbtreekey8_out(gbtreekey8)
+ RETURNS cstring
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbtreekey_out$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbtreekey_var_in(cstring)
+ RETURNS gbtreekey_var
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbtreekey_in$function$
+;
+
+CREATE OR REPLACE FUNCTION public.gbtreekey_var_out(gbtreekey_var)
+ RETURNS cstring
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbtreekey_out$function$
+;
+
 CREATE OR REPLACE FUNCTION public.handle_new_user()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -1455,19 +3172,81 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.int2_dist(smallint, smallint)
+ RETURNS smallint
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$int2_dist$function$
+;
+
+CREATE OR REPLACE FUNCTION public.int4_dist(integer, integer)
+ RETURNS integer
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$int4_dist$function$
+;
+
+CREATE OR REPLACE FUNCTION public.int8_dist(bigint, bigint)
+ RETURNS bigint
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$int8_dist$function$
+;
+
+CREATE OR REPLACE FUNCTION public.interval_dist(interval, interval)
+ RETURNS interval
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$interval_dist$function$
+;
+
+CREATE OR REPLACE FUNCTION public.oid_dist(oid, oid)
+ RETURNS oid
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$oid_dist$function$
+;
+
+CREATE OR REPLACE FUNCTION public.time_dist(time without time zone, time without time zone)
+ RETURNS interval
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$time_dist$function$
+;
+
+CREATE OR REPLACE FUNCTION public.ts_dist(timestamp without time zone, timestamp without time zone)
+ RETURNS interval
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$ts_dist$function$
+;
+
+CREATE OR REPLACE FUNCTION public.tstz_dist(timestamp with time zone, timestamp with time zone)
+ RETURNS interval
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$tstz_dist$function$
+;
+
 
 -- =========================================================
 -- TRIGGERS
 -- =========================================================
 
+CREATE TRIGGER trg_agenda_profesional_validar_rango BEFORE INSERT OR UPDATE ON public.agenda_profesional FOR EACH ROW EXECUTE FUNCTION fn_agenda_profesional_validar_rango();
+CREATE TRIGGER trg_agenda_profesional_validar_rol BEFORE INSERT OR UPDATE ON public.agenda_profesional FOR EACH ROW EXECUTE FUNCTION fn_agenda_profesional_validar_rol();
 CREATE TRIGGER trg_articulo_updated_at BEFORE UPDATE ON public.articulo FOR EACH ROW EXECUTE FUNCTION fn_touch_updated_at();
 CREATE TRIGGER trg_auditoria_articulo AFTER INSERT OR DELETE OR UPDATE ON public.articulo FOR EACH ROW EXECUTE FUNCTION fn_auditoria();
 CREATE TRIGGER trg_generar_cod_articulo BEFORE INSERT ON public.articulo FOR EACH ROW EXECUTE FUNCTION fn_generar_cod_articulo();
+CREATE TRIGGER trg_auditoria_cliente AFTER INSERT OR UPDATE ON public.cliente FOR EACH ROW EXECUTE FUNCTION fn_auditoria();
+CREATE TRIGGER trg_cliente_validar_duplicados BEFORE INSERT OR UPDATE ON public.cliente FOR EACH ROW EXECUTE FUNCTION fn_cliente_validar_duplicados();
 CREATE TRIGGER trg_auditoria_comprobante_proveedor AFTER INSERT ON public.comprobante_proveedor FOR EACH ROW EXECUTE FUNCTION fn_auditoria();
 CREATE TRIGGER trg_bloquea_update_comprobante_proveedor BEFORE UPDATE ON public.comprobante_proveedor FOR EACH ROW EXECUTE FUNCTION fn_bloquea_update_comprobante_proveedor();
 CREATE TRIGGER trg_cp_anula_comprobante AFTER INSERT ON public.comprobante_proveedor FOR EACH ROW WHEN ((new.anula_comprobante_id IS NOT NULL)) EXECUTE FUNCTION fn_anula_comprobante_proveedor();
 CREATE TRIGGER trg_auditoria_cotizacion AFTER INSERT ON public.cotizacion FOR EACH ROW EXECUTE FUNCTION fn_auditoria();
 CREATE TRIGGER trg_auditoria_deposito AFTER INSERT OR UPDATE ON public.deposito FOR EACH ROW EXECUTE FUNCTION fn_auditoria();
+CREATE TRIGGER trg_auditoria_mascota AFTER INSERT OR UPDATE ON public.mascota FOR EACH ROW EXECUTE FUNCTION fn_auditoria();
+CREATE TRIGGER trg_mascota_validar_fecha_nacimiento BEFORE INSERT OR UPDATE ON public.mascota FOR EACH ROW EXECUTE FUNCTION fn_mascota_validar_fecha_nacimiento();
 CREATE TRIGGER trg_auditoria_movimiento_stock_cab AFTER INSERT ON public.movimiento_stock_cab FOR EACH ROW EXECUTE FUNCTION fn_auditoria();
 CREATE TRIGGER trg_generar_numero_movimiento BEFORE INSERT ON public.movimiento_stock_cab FOR EACH ROW EXECUTE FUNCTION fn_generar_numero_movimiento();
 CREATE TRIGGER trg_valida_mov_recepcion_compra BEFORE INSERT ON public.movimiento_stock_cab FOR EACH ROW EXECUTE FUNCTION fn_valida_mov_recepcion_compra();
@@ -1492,6 +3271,13 @@ CREATE TRIGGER trg_auditoria_proveedor AFTER INSERT OR DELETE OR UPDATE ON publi
 CREATE TRIGGER trg_auditoria_solicitud_cotizacion AFTER INSERT OR UPDATE ON public.solicitud_cotizacion FOR EACH ROW EXECUTE FUNCTION fn_auditoria();
 CREATE TRIGGER trg_auditoria_sucursal AFTER INSERT OR UPDATE ON public.sucursal FOR EACH ROW EXECUTE FUNCTION fn_auditoria();
 CREATE TRIGGER trg_sucursal_updated_at BEFORE UPDATE ON public.sucursal FOR EACH ROW EXECUTE FUNCTION fn_touch_updated_at();
+CREATE TRIGGER trg_auditoria_turno_alta AFTER INSERT ON public.turno FOR EACH ROW EXECUTE FUNCTION fn_auditoria();
+CREATE TRIGGER trg_auditoria_turno_estado AFTER UPDATE ON public.turno FOR EACH ROW WHEN ((old.estado_id IS DISTINCT FROM new.estado_id)) EXECUTE FUNCTION fn_auditoria();
+CREATE TRIGGER trg_turno_sincronizar_sucursal BEFORE INSERT OR UPDATE ON public.turno FOR EACH ROW EXECUTE FUNCTION fn_turno_sincronizar_sucursal();
+CREATE TRIGGER trg_turno_validar_estados_activos BEFORE INSERT OR UPDATE ON public.turno FOR EACH ROW EXECUTE FUNCTION fn_turno_validar_estados_activos();
+CREATE TRIGGER trg_turno_validar_fecha_no_pasada BEFORE INSERT ON public.turno FOR EACH ROW EXECUTE FUNCTION fn_turno_validar_fecha_no_pasada();
+CREATE TRIGGER trg_turno_validar_horario BEFORE INSERT OR UPDATE ON public.turno FOR EACH ROW EXECUTE FUNCTION fn_turno_validar_horario();
+CREATE TRIGGER trg_turno_validar_mascota_cliente BEFORE INSERT OR UPDATE ON public.turno FOR EACH ROW EXECUTE FUNCTION fn_turno_validar_mascota_cliente();
 CREATE TRIGGER trg_auditoria_usuario AFTER INSERT OR DELETE OR UPDATE ON public.usuario FOR EACH ROW EXECUTE FUNCTION fn_auditoria();
 
 

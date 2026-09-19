@@ -6,8 +6,7 @@ import { EstadoTurnoBadge } from "./EstadoTurnoBadge";
 
 // Fila de la tabla con los campos de display ya resueltos (el front los junta
 // con los directorios; el backend los devuelve con JOIN). La columna "DNI" es
-// del cliente, "Especialidad" del profesional (PENDIENTE DBA) y alimentan el
-// buscador de FiltrosTurnos.
+// del cliente y alimenta el buscador de FiltrosTurnos.
 export interface TurnoRow {
   id: number;
   fecha: string;
@@ -18,7 +17,6 @@ export interface TurnoRow {
   mascotaNombre: string;
   especie: string;
   profesionalNombre: string;
-  especialidad: string;
   practicaNombre: string;
   estadoId: number;
   /** dict: turno.notas (nullable) — para el detalle. */
@@ -44,7 +42,6 @@ const HEADERS = [
   "Cliente",
   "Mascota",
   "Profesional",
-  "Especialidad",
   "Práctica",
   "Estado",
   "Acciones",
@@ -61,7 +58,7 @@ export function TurnosTable({
   if (loading) {
     return (
       <div className="overflow-hidden rounded-md border border-border bg-surface shadow-card">
-        <div className="hidden grid-cols-11 gap-4 border-b border-border bg-cream-50 px-4 py-3 lg:grid">
+        <div className="hidden grid-cols-10 gap-4 border-b border-border bg-cream-50 px-4 py-3 lg:grid">
           {HEADERS.map((h) => (
             <span key={h} className="text-xs font-extrabold uppercase tracking-wide text-text-secondary">
               {h}
@@ -81,7 +78,6 @@ export function TurnosTable({
             <div className="hidden h-4 w-24 animate-pulse rounded bg-cream-100 lg:block" />
             <div className="hidden h-4 w-24 animate-pulse rounded bg-cream-100 lg:block" />
             <div className="hidden h-4 w-28 animate-pulse rounded bg-cream-100 lg:block" />
-            <div className="hidden h-4 w-24 animate-pulse rounded bg-cream-100 lg:block" />
             <div className="hidden h-4 w-24 animate-pulse rounded bg-cream-100 lg:block" />
             <div className="h-6 w-24 animate-pulse rounded-pill bg-cream-100" />
             <div className="ml-auto flex gap-1 lg:ml-0">
@@ -175,7 +171,6 @@ export function TurnosTable({
                 <td className="px-4 py-3 text-sm text-text-primary">
                   {t.profesionalNombre}
                 </td>
-                <td className="px-4 py-3 text-sm text-text-secondary">{t.especialidad}</td>
                 <td className="px-4 py-3 text-sm text-text-primary">{t.practicaNombre}</td>
                 <td className="px-4 py-3">
                   <EstadoTurnoBadge estadoId={t.estadoId} />

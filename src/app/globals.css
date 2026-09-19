@@ -23,6 +23,8 @@
   --color-status-danger-strong: #b91c1c;
   --color-status-info: #2563eb;
   --color-status-info-strong: #1d4ed8;
+  --color-status-pink: #ec4899;
+  --color-status-pink-strong: #be185d;
 
   --font-display: var(--font-baloo), ui-sans-serif, system-ui, sans-serif;
   --font-sans: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;

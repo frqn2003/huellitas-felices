@@ -46,7 +46,7 @@ Requerimientos de la HU:
 
 Aclaración de búsqueda y filtros:
 
-- **[🔍] Buscador:** busca por **cliente** (nombre/DNI), **profesional** (nombre/DNI) y **especialidad**.
+- **[🔍] Buscador:** busca por **cliente** (nombre/DNI), **profesional** (nombre) y **práctica**.
 - **[⚙️ Filtros]:** filtra por **estado del turno** (pendiente, confirmado, cancelado, atendido, no asistió) y por **fecha** (rango; patrón `FiltrosMovimientos`). El switch "Activo x" de la idea aplica al filtro por defecto del módulo.
 
 ### 2. Nuevo turno — Paso 1: Cliente (buscar y seleccionar)
@@ -87,12 +87,10 @@ Aclaración de búsqueda y filtros:
 ┌────────────────────────────────────────────────────────────────────┐
 │              ➕ NUEVO TURNO - PASO 3: PROFESIONAL                  │
 ├────────────────────────────────────────────────────────────────────┤
-│  Buscar por especialidad         [🔍]                               │
+│  Buscar profesional por nombre         [🔍]                        │
 │  👨‍⚕️ Profesionales encontrados:                                     │
 │  ☑️ Julio García         DNI: 25765897                              │
-│     Especialidad: Médico                                           │
 │  ☐ Franco Giardino       DNI: 26567444                             │
-│     Especialidad: Cirujano                                         │
 │     Práctica: ☑️ Seleccionar práctica                              │
 │            • Cirugía (90 min)  • Control (15 min)                  │
 │                                                                     │
@@ -121,7 +119,7 @@ Aclaración de búsqueda y filtros:
 │     Sexo: Macho  •  Peso: 28.5 kg  •  Edad: 4 años                 │
 │  👨‍⚕️ DATOS DEL TURNO                                                │
 │     Profesional: Julio García  •  Fecha: Lunes, 23 Sept 2026       │
-│     Hora: 08:00 - 12:00  •  Especialidad: Médico                   │
+│     Hora: 08:00 - 12:00                                            │
 │     Práctica: Consulta  •  Duración: 30 min (Requiere confirmación)│
 │  📝 Notas (opcional): [ Control anual                         ]    │
 │                                    [Cancelar] [Finalizar]          │
@@ -148,7 +146,7 @@ Aclaración de búsqueda y filtros:
 │  👤 DATOS DEL CLIENTE (nombre, DNI, email, teléfono)               │
 │  🐾 DATOS DE LA MASCOTA (nombre, especie, raza, sexo, peso, edad)  │
 │  👨‍⚕️ DATOS DEL TURNO                                                │
-│     Profesional, fecha, hora, especialidad, práctica, duración     │
+│     Profesional, fecha, hora, práctica, duración                   │
 │     Estado: PENDIENTE (Requiere confirmación)                      │
 │     Creado por: Juan Martínez (Recepcionista)                      │
 │     Fecha/hora de creación: 20/09/2026 - 14:35                     │
@@ -210,7 +208,6 @@ Reglas de negocio ya modeladas en BD (para validación de disponibilidad):
 - La franja del profesional debe caer dentro de `agenda_semanal` y el usuario debe tener rol veterinario (validado en backend).
 
 > **PENDIENTE DBA:**
-> - Falta modelo de **especialidad** del veterinario (el wireframe muestra "Especialidad: Médico/Cirujano"; `usuario` no tiene ese campo ni existe tabla `especialidad`).
 > - Falta enum/CHECK para `mascota.especie` y `mascota.sexo` (hoy `varchar` sin restricción).
 > - La Sección 8 (tablas cliente, mascota, practica, estado_turno, agenda_semanal, agenda_profesional, turno) aún no está creada en BD (`schema2.sql`); el equipo de back debe crearla con índices y el EXCLUDE.
 
@@ -219,7 +216,7 @@ Reglas de negocio ya modeladas en BD (para validación de disponibilidad):
 | Pieza | Acción | Nota |
 |---|---|---|
 | `RecepcionTabs` | Reusar | la tab "turnos" ya está declarada (`TabRecepcion = "clientes" \| "mascotas" \| "turnos"`, icono CalendarDays); hoy placeholder |
-| `ui/Combobox` | Reusar | Paso 1 (buscar cliente: `documento · nombre apellido`) y Paso 3 (profesional por especialidad). Ya se usa para dueño en `MascotaFormModal` |
+| `ui/Combobox` | Reusar | Paso 1 (buscar cliente: `documento · nombre apellido`) y Paso 3 (profesional por nombre). Ya se usa para dueño en `MascotaFormModal` |
 | `ui/Modal` | Reusar | contenedor del wizard por pasos, detalle y edición; `max-h-[90vh]` + `overflow-y-auto` resuelve la edición con scroll |
 | `ui/ConfirmarDialog` | Reusar | confirmación de creación del turno (sobre Modal, botón destructive) |
 | `ui/StatusBadge` | Extender | crear wrapper `EstadoTurnoBadge` (nuevo, módulo `turnos/`): mapea estado_turno → variante (pendiente→warning, confirmado→success, cancelado→danger, atendido→info, no_asistio→neutral); nunca define colores |
@@ -228,7 +225,7 @@ Reglas de negocio ya modeladas en BD (para validación de disponibilidad):
 | `ui/Select` | Reusar | práctica, franja/hora |
 | `ui/Button`, `ui/Toast` | Reusar | acciones y feedback de creación/error de disponibilidad |
 | Stepper/wizard | **Crear** (módulo `turnos/`) | no existe wizard genérico; precedente de flujo por pasos: `comprobantes/ComprobantesContent` (estado `paso === 1/2` con `AnimatePresence mode="wait"`) |
-| Filtros de turnos | Crear/Extender | buscador por cliente/profesional/especialidad (patrón `FiltrosClientes`) + filtro por estado y fecha (patrón `FiltrosMovimientos`) |
+| Filtros de turnos | Crear/Extender | buscador por cliente/profesional/práctica (patrón `FiltrosClientes`) + filtro por estado y fecha (patrón `FiltrosMovimientos`) |
 | Empty state | Patrón inline | `{hasActiveFilters ? "Sin resultados" : "No hay turnos registrados"}` (no es componente compartido) |
 
 ## Datos hardcodeados
@@ -264,10 +261,10 @@ const mascotas = [
   { id: 2, cliente_id: 1, nombre: "Rex", especie: "Perro", raza: "Pastor alemán", sexo: "Macho", peso: 24.0, fecha_nacimiento: "2023-01-15" },
 ];
 
-// Profesionales (usuario rol Veterinario; especialidad PENDIENTE DBA)
+// Profesionales (usuario rol Veterinario)
 const profesionales = [
-  { id: 2, nombre: "Julio", apellido: "García", dni: "25765897", especialidad: "Médico" },
-  { id: 3, nombre: "Franco", apellido: "Giardino", dni: "26567444", especialidad: "Cirujano" },
+  { id: 2, nombre: "Julio", apellido: "García", dni: "25765897" },
+  { id: 3, nombre: "Franco", apellido: "Giardino", dni: "26567444" },
 ];
 
 // Franjas del profesional para la fecha elegida (agenda_profesional)
@@ -315,10 +312,10 @@ const turnos = [
 ## Criterios de aceptación
 
 - [ ] Desde la tab **Turnos** de Recepción, el recepcionista abre **Nuevo turno** y recorre el wizard: Paso 1 cliente → Paso 2 mascota → Paso 3 profesional + práctica + fecha + hora.
-- [ ] En la lista de turnos, el **buscador** encuentra por cliente (nombre/DNI), profesional (nombre/DNI) y especialidad; el **panel de filtros** permite filtrar por estado del turno (pendiente, confirmado, cancelado, atendido, no asistió) y por rango de fecha.
+- [ ] En la lista de turnos, el **buscador** encuentra por cliente (nombre/DNI), profesional (nombre) y práctica; el **panel de filtros** permite filtrar por estado del turno (pendiente, confirmado, cancelado, atendido, no asistió) y por rango de fecha.
 - [ ] Paso 1: buscador de cliente por DNI o nombre (Combobox, solo clientes `activo`); al seleccionar, avanza. No se puede crear turno sin cliente.
 - [ ] Paso 2: lista las mascotas `activo` del cliente seleccionado; al seleccionar, avanza.
-- [ ] Paso 3: buscador de profesional por especialidad; selección de práctica (consulta/cirugia/control) que determina la duración estimada; selección de fecha (días hábiles siguientes) y franja horaria del profesional (agenda_profesional).
+- [ ] Paso 3: buscador de profesional; selección de práctica (consulta/cirugia/control — catálogo universal, todas disponibles para cualquier profesional) que determina la duración estimada; selección de fecha (días hábiles siguientes) y franja horaria del profesional (agenda_profesional).
 - [ ] **Validación de disponibilidad:** antes de confirmar, valida que el profesional no tenga superposición (regla anti-solapamiento, estado <> cancelado) en la fecha/hora; si la hay, rechaza con mensaje claro y no avanza.
 - [ ] El **resumen** muestra datos del cliente, la mascota y el turno (profesional, fecha, hora, práctica, duración) con campo de notas opcional.
 - [ ] La **confirmación** es un dialog; al confirmar se crea el turno con estado `pendiente` (1) y se muestra **confirmación visual** con el resumen (detalle del turno).
