@@ -10,8 +10,8 @@ import {
   Settings,
   ShieldCheck,
   ShoppingCart,
-  Tags,
   Truck,
+  Users,
   Warehouse,
   X,
 } from "lucide-react";
@@ -33,12 +33,19 @@ interface SidebarSection {
 
 const SECCIONES: SidebarSection[] = [
   {
+    titulo: "Recepción",
+    items: [
+      // HU-CLI-01: un solo ítem lleva a /clientes; las pestañas Clientes /
+      // Mascotas / Turnos viven dentro de la pantalla (patrón Compras).
+      { label: "Recepción", href: "/clientes", icon: Users },
+    ],
+  },
+  {
     titulo: "Operaciones",
     items: [
       { label: "Artículos", href: "/articulos", icon: Package },
       { label: "Inventario", href: "/stock", icon: Warehouse },
       { label: "Compras", href: "/ordenes-compra", icon: ShoppingCart },
-      { label: "Lista de Precios", href: "#lista-precios", icon: Tags },
       { label: "Proveedores", href: "/proveedores", icon: Truck },
       { label: "Cuentas Corrientes", href: "/cuentas-corrientes", icon: Landmark },
     ],

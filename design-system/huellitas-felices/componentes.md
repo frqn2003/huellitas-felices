@@ -12,14 +12,17 @@ Usar SIEMPRE estos antes de crear un equivalente propio del módulo.
 |---|---|---|
 | `Button` | Botón pill del sistema | `variant`: primary (amarillo, solo CTAs) / secondary (verde) / outline / ghost / destructive · `size`: sm/md/lg/icon |
 | `Input` | Input de texto estándar | extiende `InputHTMLAttributes`, estilos de foco/token ya resueltos |
+| `Textarea` | Área de texto que crece hacia abajo con el contenido (hasta 192px, luego scroll) | extiende `TextareaHTMLAttributes` + `label`/`error`/`hint`. Creado para HU-CLI-01 (campo Dirección) |
 | `Select` | Select nativo estándar | extiende `SelectHTMLAttributes` |
-| `Combobox` | Select con búsqueda (catálogos largos) | `options: {value,label,tone?}[]`, integra `label`/`error`/`hint` |
+| `Combobox` | Select con búsqueda (catálogos largos) | `options: {value,label,tone?}[]`, `sanitize?` (filtro de caracteres al tipear), integra `label`/`error`/`hint` |
 | `Modal` | Modal base con overlay + cierre | `open`, `onClose`, `title`, `icon?`, `footer?`, `maxWidth?`; anima con Framer Motion y respeta `prefers-reduced-motion` |
-| `StatusBadge` | Chip de estado (pill + indicador + texto) | `variant`: success/warning/danger/info/neutral + `label`, `icon?`. Único punto de verdad de colores de estado (tokens `status-*`) |
+| `StatusBadge` | Chip de estado (pill + indicador + texto) | `variant`: success/warning/danger/info/neutral/pink + `label`, `icon?`. Único punto de verdad de colores de estado (tokens `status-*`) |
 | `Pagination` | Paginación de tablas | `page`, `totalPages`, `totalItems`, `pageStart/End`, `pageSize`, `onPageChange`, `onPageSizeChange` (tamaños 10/25/50) |
 | `OrdenamientoSelect` | Orden por fecha | `value`: "recientes"/"antiguas", `onChange` |
 | `RangoNumerico` | Filtro numérico min–max | `label`, `valor: {min,max}`, `onChange` |
+| `Switch` | Toggle de estado Activo/Inactivo | `role="switch"` + `aria-checked`, `checked`, `onChange`, `ariaLabel`; touch target ≥ 44px. Creado para HU-CLI-01 (no existía switch en ui/) | 
 | `Toast` | Notificaciones de éxito/error | `ToastProvider` + `useToast()` → `showToast("success"\|"error", msg)` |
+| `ConfirmarDialog` | Diálogo de confirmación sobre `Modal maxWidth="max-w-md"` | `open`, `title`, `description`, `confirmLabel`, `cancelLabel="Volver"`, `onClose`, `onConfirm`; `tone?: "danger" (default) \| "success" \| "neutral"` (mapea a Button variant destructive/primary/secondary + icono). Extendido en HU-TUR-02 para acciones no destructivas |
 
 ## Por módulo (`src/components/<módulo>/`)
 
@@ -30,6 +33,15 @@ Patrones recurrentes por pantalla: `<Entidad>Table`, `<Entidad>Filtros*`, `<Enti
 
 ### auth
 `LoginForm` · `TwoFactorModal` · `BlockedOverlay`
+
+### clientes
+Módulo HU-CLI-01 (ABM de clientes, `/clientes`): `ClientesTable` (extendido HU-MAS-01 con prop opcional `onVerMascotas?: (cliente) => void` — la patita navega a `/clientes?tab=mascotas&dueno=id`) · `ClienteFormModal` (paramétrico 3 modos crear/editar/ver sobre `Modal` + toggle `Switch` de baja lógica + advertencia de duplicados inactivos + validación front por campo con `errors`/`touched`; **en alta (crear)** los obligatorios se desbloquean en secuencia nombre → apellido → documento → teléfono → email vía `@/hooks/useCamposSecuenciales`, con `disabled` + hint "Completá primero: X"; opcionales siempre habilitados) · `EstadoClienteBadge` (mapea `StatusBadge`: success/neutral) · `FiltrosClientes` (búsqueda nombre/documento/teléfono + filtro estado, default Activos) · `BajaClienteModal` (confirmación de baja lógica)
+> El listado muestra por defecto solo activos (criterio HU-CLI-01); el inactivo solo ofrece Ver en Acciones (la baja se hace desde el formulario con el toggle).
+> La página `/clientes` es la del módulo **Recepción**: header "Recepción" + `recepcion/RecepcionTabs`. El tab y el dueno se **derivan de la URL** (`?tab=`/`?dueno=`): cambiar de tab o quitar el chip "Dueño" navega con `router.replace` (patrón ?tab= de Compras, sin setState-en-effect). `useSearchParams` vive bajo `<Suspense>` en el export default (bailout del prerender de Next).
+
+### mascotas
+Módulo HU-MAS-01 (ABM de mascotas, tab "Mascotas" dentro de `/clientes`): `MascotasTable` (columnas: Id, Nombre, Especie, Raza, Sexo badge, Edad, DNI dueño, Estado badge, Acciones 👁️ Ver / 👤 Ver dueño — navega a la tab Clientes con `?busqueda=<nombre completo>` pre-cargada; el icono del dueño ya NO abre un modal) · `MascotaFormModal` (espejo de `ClienteFormModal`: 3 modos crear/editar/ver, `Combobox` de dueño con label `documento · nombre apellido` filtrando solo clientes activos, `datalist` de razas, `Switch` de baja lógica con confirmación vía `ui/ConfirmarDialog`, peso con hint "kg · opcional"; **en alta (crear)** los obligatorios se desbloquean en secuencia dueño → nombre → especie → sexo vía `@/hooks/useCamposSecuenciales`, con `disabled` + hint "Completá primero: X"; opcionales siempre habilitados) · `EstadoMascotaBadge` (wrapper que delega en `EstadoClienteBadge` — mismo enum de estados, sin duplicar StatusBadge) · `SexoBadge` (mapea sobre `StatusBadge`: Macho=info azul, Hembra=pink rosa) · `FiltrosMascotas` (búsqueda por mascota/raza/DNI dueño + filtro especie/sexo + filtro estado + chip removible "Dueño: …")
+> Datos hardcodeados con tipos propios en `src/data/mascotas.ts` (`Mascota`/`MascotaDraft`, claves camelCase `clienteId`/`fechaNacimiento`/`senasParticulares` por ser placeholder front; el BACKEND las pasa a snake_case del esquema: cliente_id, fecha_nacimiento, senas_particulares).
 
 ### compras
 `ComprasTabs` (tabs compartidos Proveedores / Cotizaciones / Órdenes de compra)
@@ -52,7 +64,10 @@ Módulo global de Cuentas Corrientes (HU-FIN-03): maneja AMBOS lados, proveedore
 > Ruta nueva `/cuentas-corrientes` con ítem "Cuentas Corrientes" (`Landmark`) en la sección Operaciones de `Sidebar`.
 
 ### layout
-`Sidebar` (nav principal)
+`Sidebar` (nav principal) — sección **Recepción** con UN solo ítem "Recepción" (`/clientes`, icono `Users`): las sub-pantallas del módulo viven como pestañas dentro de la página (patrón Compras; ver `recepcion/RecepcionTabs`).
+
+### recepcion
+`RecepcionTabs` — tabs del módulo Recepción (Clientes `/clientes` + Mascotas/Turnos/Agenda en tabs), espejo de `compras/ComprasTabs` (role=tablist, navegación con ←/→). HU-TUR-02 agregó el tab `"agenda"` (icono `CalendarRange`); la unión de tabs `TabRecepcion` y el mapa `tabRefs` por id en vez de índice.
 
 ### movimientos
 `AlertaReposicionModal` · `FiltrosMovimientos` · `MovimientoFormModal` · `MovimientosTable` · `TipoMovimientoBadge`
@@ -68,6 +83,12 @@ Módulo global de Cuentas Corrientes (HU-FIN-03): maneja AMBOS lados, proveedore
 
 ### stock
 `DepositoFormModal` · `DepositosList` · `EstadoStockBadge` · `FichaFormModal` · `FichasTable` · `FiltrosStock` · `StockTabs`
+
+### turnos
+Módulo HU-TUR-01 (registro de turnos presenciales, tab "Turnos" dentro de `/clientes` — ver `recepcion/RecepcionTabs`): `TurnosContent` (estado + filtros + paginación + JOINs de display; la apertura del wizard está **controlada por la página** vía props `nuevoTurnoOpen` + `nuevoTurnoSession` — remount-key por apertura, sin ref ni effect) · `TurnosTable` (exporta `TurnoRow`: id, fecha, horaInicio/Fin, clienteNombre, dni, mascotaNombre, especie, profesionalNombre, practicaNombre, estadoId, notas, fechaCreacionHora; 10 columnas, `min-w-[1180px]`) · `FiltrosTurnos` (+ `FiltrosTurnosChips`/`buildTagsTurnos`/`FiltrosTurnosValues`/`FILTROS_TURNOS_VACIOS`: búsqueda por cliente/profesional/**práctica**, filtro estado, rango fecha `type="date"` con min/max cruzados) · `NuevoTurnoModal` (wizard 3 pasos con `StepperTurnos` grande: Cliente y Mascota → Profesional y horario → Resumen; el paso 1 combina Combobox de clientes activos + lista de mascotas del cliente (cambiar cliente resetea la mascota; los Combobox de Cliente y Profesional bloquean caracteres al tipear: Cliente solo letras+números —DNI/nombre—, Profesional solo letras), Select de profesional, Select de práctica con **todas las prácticas disponibles** (catálogo universal `practicas` consulta/cirugía/control, sin filtro por profesional), fecha como **lista vertical de días** (con las franjas del día como subtítulo), chips de franja y de horario de inicio cada 15 min con "Ocupado" deshabilitados, listo con ConfirmarDialog + toast) · `TurnoDetalleModal` (lectura con dato de auditoría "Creado por" + sección **"Cambiar estado del turno"** (HU-TUR-02): `Select` con las transiciones del estado actual vía `transicionesEstado` o "Sin cambios permitidos" si es final, confirmación con `ConfirmarDialog` de tone según destino (3 cancelado → danger con nota "el horario queda disponible"; 4/5 → success/neutral) y prop nueva `onCambiarEstado?: (turnoId, estadoId) => boolean`; `key={turno.id}` desde AgendaSemanal para remount por turno) · `EstadoTurnoBadge` (mapea `StatusBadge`: 1 pendiente=warning/Clock, 2 confirmado=success/CheckCircle2, 3 cancelado=danger/CalendarX2, 4 atendido=info/Stethoscope, 5 no_asistio=neutral/UserX — regla 4 de reuso) · **`turnoRow.ts`** (estructura compartida de fila: `construirFilaTurno(t, clientePorId, mascotaPorId)` — usada por Tabla de Turnos y Agenda; HU-TUR-02) · **`AgendaSemanal`** (HU-TUR-02, grilla semanal `<table>`: 7 columnas-día con badge "Hoy" en accent, filas = bandas horarias de 1h derivadas de las franjas visibles; celdas "—" sin cobertura / "Libre" / tarjeta-turno con #id · hora–fin · práctica + cliente · mascota + profesional si filtro "todos" + `EstadoTurnoBadge`; navegación ◀ [Hoy] ▶ con `formatearSemana`, filtros con `FiltrosAgenda` (botón único a la derecha) y `FiltrosAgendaChips` a la izquierda; estados vacío/error con Reintentar) · **`FiltrosAgenda`** (HU-TUR-02, botón único ⚙️ Filtros alineado a la derecha con panel ⚙️ desplegable que concentra profesional/estado/práctica/desde/hasta y "Limpiar filtros"; exporta `FiltrosAgendaValues`/`FILTROS_AGENDA_VACIOS`/`buildTagsAgenda`/`FiltrosAgendaChips`)
+> Datos y catálogos placeholder en `src/data/turnos.ts` (camelCase: `estadoId`, `practicaId`, `franjaId`; además de tipos `Turno`/`TurnoDraft`, `estadosTurno` 1-5, `practicas` consulta/cirugía/control, `profesionales` con franjas semanales, y helpers de agenda `generarSlots`/`haySuperposicion`/`horasOcupadas`/`proximosDiasLaborables`). El front trae `id` numérico (PK del backend); cada integración lleva comentario `// BACKEND:` con tabla+endpoint (`grep -rn "BACKEND" src/`).
+> HU-TUR-02 agregó: `transicionesEstado` (1:[2] · 2:[3,4,5] · 3/4/5:[]), `nombreEstado` (1-5), `profesionalPorFranja`/`profesionalIdPorFranja` (mapeo franja→profesional para cruzar en agenda), `practicaPorId` exportado, helpers de semana `sumarDias`/`lunesDeFecha`/`fechasDeSemana`/`formatearSemana` y turnos demo id 10-17 en la semana del 21/09/2026.
+> El anti-solapamiento **excluye los cancelados** (estado 3): un horario queda ocupado solo por turnos pendientes/confirmados/concretados (espejo del EXCLUDE del gist de agenda). El turno se crea en estado pendiente; la confirmación es HU futura.
 
 ## Reglas de reuso
 
