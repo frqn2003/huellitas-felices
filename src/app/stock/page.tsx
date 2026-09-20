@@ -7,11 +7,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { Button } from "@/components/ui/Button";
 import { Pagination } from "@/components/ui/Pagination";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
-import {
-
-  type Deposito,
-  type FichaStock,
-} from "@/data/stock";
+import type { Deposito, FichaStock, Sucursal } from "@/data/stock";
 import type { Articulo } from "@/data/articulos";
 import { apiGet, apiGetOpcional, apiSend, mensajeDeError } from "@/lib/api-client";
 import {
@@ -48,7 +44,9 @@ import {
   MovimientoFormModal,
   type MovimientoDraft,
   type MovimientoInicial,
+  type OrigenOpcion,
 } from "@/components/movimientos/MovimientoFormModal";
+import { useCatalogo } from "@/lib/use-catalogo";
 import { AlertaReposicionModal } from "@/components/movimientos/AlertaReposicionModal";
 
 function exportarCSV(fichas: FichaStock[]) {
@@ -94,7 +92,7 @@ function exportarCSVMovimientos(movimientos: MovimientoStock[]) {
     "Cantidad",
     "Origen",
     "OrigenEntidadId",
-    "Empleado",
+    "Usuario",
     "Motivo",
   ];
   const filas = movimientos.map((m) =>
@@ -107,7 +105,7 @@ function exportarCSVMovimientos(movimientos: MovimientoStock[]) {
       m.cantidad.toFixed(2),
       `"${(m.origen?.nombre ?? m.tipo).replace(/"/g, '""')}"`,
       m.origenEntidadId !== null ? m.origenEntidadId : "",
-      `"${m.empleado.nombre.replace(/"/g, '""')}"`,
+      `"${m.usuario.nombre.replace(/"/g, '""')}"`,
       `"${m.motivo.replace(/"/g, '""')}"`,
     ].join(";"),
   );
@@ -135,6 +133,11 @@ function StockScreen() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  // Catálogo `origen_movimiento`. El id elegido viaja en el POST y el back lo
+  // usa tal cual, así que tiene que salir de la tabla (antes era una lista fija
+  // con los ids corridos: las ventas se guardaban como recepciones de compra).
+  const origenesMovimiento = useCatalogo<OrigenOpcion>("/api/origenes-movimiento");
+
   const [fichas, setFichas] = useState<FichaStock[]>([]);
   const [depositos, setDepositos] = useState<Deposito[]>([]);
 
@@ -172,7 +175,7 @@ function StockScreen() {
   const [alertaFicha, setAlertaFicha] = useState<FichaStock | null>(null);
 
   const [articulosActivos, setArticulosActivos] = useState<Articulo[]>([]);
-  const [sucursales, setSucursales] = useState<{ id: number; nombre: string }[]>([]);
+  const [sucursales, setSucursales] = useState<Sucursal[]>([]);
 
   // Opciones del filtro por artículo del tab de movimientos, derivadas de las
   // fichas cargadas (antes salían de un mock a nivel de módulo).
@@ -195,7 +198,7 @@ function StockScreen() {
       apiGet<MovimientoStock[]>("/api/movimientos-stock"),
       // Catálogos: si uno falla, la pantalla sigue y solo queda vacío su select.
       apiGetOpcional<Articulo[]>("/api/articulos?estado=activo", []),
-      apiGetOpcional<{ id: number; nombre: string }[]>("/api/sucursales", []),
+      apiGetOpcional<Sucursal[]>("/api/sucursales", []),
     ])
       .then(([listaFichas, listaDepositos, listaMovimientos, listaArticulos, listaSucursales]) => {
         if (cancelado) return;
@@ -233,14 +236,27 @@ function StockScreen() {
         f.articulo.codigo.toLowerCase().includes(q) ||
         f.articulo.nombre.toLowerCase().includes(q) ||
         f.deposito.sucursal.toLowerCase().includes(q);
+      // Por ID, no por nombre.
+      //
+      // Antes esto era:
+      //   f.deposito.sucursal === SUCURSALES.find(s => s.id === ...)?.nombre
+      //
+      // O sea: comparaba el nombre real que devuelve la API contra el de un
+      // array hardcodeado del front. La base dice "Sucursal Centro" y el array
+      // decía "Centro", así que la comparación era false SIEMPRE y elegir
+      // cualquier sucursal vaciaba la lista.
+      //
+      // (Funcionaba antes por el motivo equivocado: el backend también resolvía
+      // el nombre contra ese mismo array, así que los dos lados comparaban la
+      // misma ficción. Al hacer que el backend joinee la tabla `sucursal` de
+      // verdad, quedó al descubierto.)
       const matchSucursal =
-        !filtros.sucursalId ||
-        f.deposito.sucursal ===
-        sucursales.find((s) => s.id === Number(filtros.sucursalId))?.nombre;
+        !filtros.sucursalId || f.deposito.sucursalId === Number(filtros.sucursalId);
+      const matchDeposito = !filtros.depositoId || f.depositoId === Number(filtros.depositoId);
       const matchEstado = filtros.estadoStock === "todos" || f.estadoCalculado === filtros.estadoStock;
-      return matchBusqueda && matchSucursal && matchEstado;
+      return matchBusqueda && matchSucursal && matchDeposito && matchEstado;
     });
-  }, [fichasVisibles, busqueda, filtros, sucursales]);
+  }, [fichasVisibles, busqueda, filtros]);
 
   const totalPages = Math.max(1, Math.ceil(filtradas.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -250,6 +266,7 @@ function StockScreen() {
   const hasActiveFilters =
     busqueda.trim() !== "" ||
     filtros.sucursalId !== "" ||
+    filtros.depositoId !== "" ||
     filtros.estadoStock !== "todos";
 
   const handleBusqueda = (value: string) => {
@@ -265,6 +282,16 @@ function StockScreen() {
   const limpiarTodo = () => {
     setBusqueda("");
     setFiltros(FILTROS_STOCK_VACIOS);
+  };
+
+  const verFichasDeposito = (deposito: Deposito) => {
+    setFiltros({
+      sucursalId: String(deposito.sucursalId),
+      depositoId: String(deposito.id),
+      estadoStock: "todos",
+    });
+    setPage(1);
+    setTab("fichas");
   };
 
   const openNuevaFicha = () => {
@@ -437,8 +464,9 @@ function StockScreen() {
   };
 
   // Atajo "Transferir" desde una ficha: salta al tab Movimientos y abre el modal
-  // con tipo Transferencia, depósito origen y artículo precargados (si la ficha
-  // existe en el catálogo de fichas de movimientos; si no, abre el modal vacío).
+  // con tipo Egreso + origen transferencia_sucursal, depósito origen y artículo
+  // precargados (si la ficha existe en el catálogo de fichas de movimientos;
+  // si no, abre el modal vacío).
   const abrirTransferencia = (ficha: FichaStock) => {
     const fichaMov = fichasMov.find(
       (f) => f.articuloId === ficha.articuloId && f.depositoId === ficha.depositoId,
@@ -469,19 +497,26 @@ function StockScreen() {
   const handleConfirmMov = async (draft: MovimientoDraft) => {
     const tipo = tiposMovimiento.find((t) => t.id === Number(draft.tipoId));
     if (!tipo) return;
+    // El token de la API coincide con el nombre del catálogo ("Ingreso" / "Egreso").
+    // Transferencia/Ajuste se resuelven por ORIGEN.
+    const origen = origenesMovimiento.find((o: OrigenOpcion) => o.id === Number(draft.origenId));
+    const esTransferencia = origen?.nombre === "transferencia_sucursal";
+    const tipoApi = tipo.nombre;
 
     const origenEntidadIdRaw = draft.origenEntidadId.trim();
 
     const body = {
       depositoId: Number(draft.depositoId),
-      tipo: tipo.nombre,
-      origenId: draft.origenId ? Number(draft.origenId) : undefined,
+      tipo: tipoApi,
+      // BACKEND: el dict exige origen_id NOT NULL; el formulario lo requiere.
+      origenId: Number(draft.origenId),
       origenEntidadId: origenEntidadIdRaw !== "" ? Number(origenEntidadIdRaw) : undefined,
       motivo: draft.motivo.trim() || undefined,
       fechaHora: draft.fechaHora ? new Date(draft.fechaHora).toISOString() : undefined,
-      depositoDestinoId: draft.depositoDestinoId
-        ? Number(draft.depositoDestinoId)
-        : undefined,
+      depositoDestinoId:
+        esTransferencia && draft.depositoDestinoId
+          ? Number(draft.depositoDestinoId)
+          : undefined,
       items: draft.items.map((i) => ({
         articuloId: Number(i.articuloId),
         cantidad: parseCantidad(i.cantidad),
@@ -604,13 +639,20 @@ function StockScreen() {
                   </div>
                   <FiltrosStock
                     filtros={filtros}
+                    depositos={depositos}
+                    sucursales={sucursales}
                     onChange={handleFiltros}
                     disabled={loading || error}
                     hideChips
                   />
                 </div>
                 <div className="flex flex-wrap items-center">
-                  <FiltrosStockChips filtros={filtros} onChange={handleFiltros} />
+                  <FiltrosStockChips
+                    filtros={filtros}
+                    depositos={depositos}
+                    sucursales={sucursales}
+                    onChange={handleFiltros}
+                  />
                 </div>
               </div>
             )}
@@ -688,6 +730,7 @@ function StockScreen() {
                     loading={loading}
                     onEdit={openEdicionDeposito}
                     onNew={openNuevoDeposito}
+                    onView={verFichasDeposito}
                   />
                 </div>
               )}
@@ -779,6 +822,7 @@ function StockScreen() {
       <MovimientoFormModal
         open={formOpen}
         depositos={depositos}
+        origenes={origenesMovimiento}
         fichas={fichasMov}
         numeroSiguiente={numeroSiguienteMovStr}
         inicial={movimientoInicial}

@@ -1,3 +1,5 @@
+import type { Row } from "@/lib/db/schema.types";
+
 import type { TipoMovimiento } from "@/data/movimientos";
 
 /**
@@ -5,6 +7,11 @@ import type { TipoMovimiento } from "@/data/movimientos";
  *
  * ⚠️ `id` es el id del DETALLE, no del movimiento. El movimiento (la cabecera)
  *    es `movimiento_id`: es lo que agrupa las N líneas de una misma operación.
+ *
+ * Este tipo NO se deriva del esquema generado, a diferencia de `FichaStockRow`
+ * más abajo: sale de una VISTA, y Postgres no infiere la nullability de las
+ * columnas de una vista — el generador las emite todas como `| null`. Derivarla
+ * obligaría a chequear null en columnas que nunca lo son.
  */
 export type MovimientoStockRow = {
     /** id del DETALLE (una línea = un artículo). */
@@ -43,15 +50,13 @@ export type FiltrosMovimiento = {
     hasta?: string;
 };
 
-export type FichaStockRow = {
-    id: number;
-    articulo_id: number;
+export type FichaStockRow = Pick<
+    Row<"ficha_stock">,
+    "id" | "articulo_id" | "deposito_id" | "stock_actual" | "stock_minimo" | "stock_critico"
+> & {
+    /** Del JOIN con `articulo` y `deposito`. */
     articulo_nombre: string;
-    deposito_id: number;
     deposito_nombre: string;
-    stock_actual: number | string;
-    stock_minimo: number | string;
-    stock_critico: number | string | null;
 };
 
 export type AlertaStock = {

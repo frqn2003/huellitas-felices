@@ -117,7 +117,7 @@ export function ProveedoresTable({
           </thead>
           <tbody>
             {proveedores.map((prov) => {
-              const activo = prov.estado === "Activo";
+              const activo = prov.estado === "activo";
               return (
                 <tr
                   key={prov.id}
@@ -125,7 +125,7 @@ export function ProveedoresTable({
                 >
                   <td className="px-4 py-3">
                     <span className="font-bold text-brand-900">
-                      {prov.razonSocial}
+                      {prov.razon_social}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-sm text-text-primary">
@@ -154,7 +154,7 @@ export function ProveedoresTable({
                       <button
                         type="button"
                         onClick={() => onVer(prov)}
-                        aria-label={`Ver detalles de ${prov.razonSocial}`}
+                        aria-label={`Ver detalles de ${prov.razon_social}`}
                         title="Ver detalles"
                         className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-pill text-text-secondary transition-colors duration-fast ease-out hover:bg-brand-900/10 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900"
                       >
@@ -166,7 +166,7 @@ export function ProveedoresTable({
                           <button
                             type="button"
                             onClick={() => onEditar(prov)}
-                            aria-label={`Editar proveedor ${prov.razonSocial}`}
+                            aria-label={`Editar proveedor ${prov.razon_social}`}
                             title="Editar proveedor"
                             className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-pill text-text-secondary transition-colors duration-fast ease-out hover:bg-brand-900/10 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900"
                           >
@@ -175,7 +175,7 @@ export function ProveedoresTable({
                           <button
                             type="button"
                             onClick={() => onBaja(prov)}
-                            aria-label={`Dar de baja a ${prov.razonSocial}`}
+                            aria-label={`Dar de baja a ${prov.razon_social}`}
                             title="Dar de baja"
                             className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-pill text-text-secondary transition-colors duration-fast ease-out hover:bg-status-danger/10 hover:text-status-danger-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900"
                           >

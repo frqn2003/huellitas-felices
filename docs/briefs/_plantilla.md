@@ -29,9 +29,19 @@ Dibujar en ASCII o describir qué va en cada zona. Ejemplo:
 2. ¿Qué quiere hacer?
 3. ¿A dónde quiere llegar?
 
+## Fuente de datos (BD)
+
+Tablas del esquema (`docs/esquema-bd-front.md`) que alimentan esta pantalla. Ayuda a generar datos hardcodeados correctos y comentarios `// BACKEND:` precisos.
+
+| Tabla | Campos usados | Relación clave |
+|---|---|---|
+| `ejemplo` | campo1, campo2, campo3 | FK → otra_tabla |
+
+> Si la pantalla necesita datos de tablas que no existen aún, indicarlo acá como "PENDIENTE DBA".
+
 ## Datos hardcodeados
 
-Ejemplos reales para poblar la pantalla (pacientes, veterinarios, turnos, montos, etc.):
+Ejemplos reales para poblar la pantalla, **respetando los tipos y constraints del esquema** (varchar, numeric, enum, FK):
 
 ```ts
 const turnos = [

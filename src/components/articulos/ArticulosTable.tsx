@@ -115,7 +115,7 @@ export function ArticulosTable({
                 className="border-b border-border/60 transition-colors duration-fast ease-out last:border-b-0 hover:bg-cream-50/60"
               >
                 <td className="px-4 py-3">
-                  <ArticuloThumb imagen={articulo.imagen} nombre={articulo.nombre} />
+                  <ArticuloThumb imagen_url={articulo.imagen_url} nombre={articulo.nombre} />
                 </td>
                 <td className="px-4 py-3">
                   <span className="rounded bg-brand-900/10 px-2 py-0.5 font-mono text-xs font-bold text-brand-900">

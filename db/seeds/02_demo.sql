@@ -174,3 +174,63 @@ FROM (VALUES
 JOIN orden_compra o ON o.notas   = v.nota
 JOIN articulo     a ON a.nombre  = v.articulo
 ON CONFLICT DO NOTHING;
+
+
+-- ---------------------------------------------------------
+-- ORDEN DE COMPRA PARA PROBAR HU-COMP-03
+-- ---------------------------------------------------------
+-- Las dos órdenes de arriba no sirven para demostrar la recepción: tienen UNA
+-- sola línea, así que la primera entrega ya cierra la orden y nunca se ve el
+-- estado 'Recibida Parcial'.
+--
+-- Esta tiene DOS líneas y está 'Enviada', que es el camino completo:
+--
+--   1ª recepción parcial  → 30 de 60 Amoxicilina  → OC en 'Recibida Parcial'
+--   2ª recepción          → los 30 que faltan + los 20 collares
+--                         → OC en 'Recibida Total' SIN que nadie elija "total"
+--
+-- Dos cosas más que quedan cubiertas con este dato:
+--
+--  · 'Collar antipulgas' tiene ficha de stock SOLO en el depósito 'Sur', y la
+--    orden entrega en 'Centro'. Es el caso de la decisión D-2: la recepción
+--    crea la ficha al vuelo y la devuelve en `fichasCreadas` para que la
+--    pantalla avise que hay que configurarle los umbrales.
+--
+--  · La emite Ana Martínez, así que las notificaciones por diferencia le llegan
+--    a ella (D-3: se notifica a `orden_compra.usuario_id`).
+--
+-- La guarda va por `notas` y no por `NOT EXISTS (SELECT 1 FROM orden_compra)`
+-- como el bloque de arriba: si no, esta orden no se cargaría nunca en una base
+-- que ya tiene las otras dos.
+INSERT INTO orden_compra
+  (proveedor_id, usuario_id, estado_id, forma_pago_id, deposito_id, fecha, fecha_entrega, notas, subtotal, descuento, gastos_envio, total)
+SELECT p.id, us.id, e.id, fp.id, d.id, v.fecha::timestamp, v.entrega::timestamp,
+       v.notas, v.subtotal, v.descuento, v.envio, v.total
+FROM (VALUES
+  ('30-70987654-2', '30111222', 'Enviada', 'Contado', 'Centro',
+   '2026-08-28 09:00:00', '2026-09-02 09:00:00',
+   'Pedido para probar recepción parcial (HU-COMP-03)',
+   11000.00, 0.00, 0.00, 11000.00)
+) AS v(cuit, dni, estado, forma, deposito, fecha, entrega, notas, subtotal, descuento, envio, total)
+JOIN proveedor           p  ON p.cuit    = v.cuit
+JOIN usuario             us ON us.dni    = v.dni
+JOIN estado_orden_compra e  ON e.nombre  = v.estado
+JOIN forma_pago          fp ON fp.nombre = v.forma
+JOIN deposito            d  ON d.nombre  = v.deposito
+WHERE NOT EXISTS (
+  SELECT 1 FROM orden_compra o
+  WHERE o.notas = 'Pedido para probar recepción parcial (HU-COMP-03)'
+);
+
+INSERT INTO orden_compra_detalle (orden_compra_id, articulo_id, cantidad, precio_acordado, subtotal)
+SELECT o.id, a.id, v.cantidad, v.precio, v.cantidad * v.precio
+FROM (VALUES
+  ('Amoxicilina 500mg', 60.00, 100.00),
+  ('Collar antipulgas', 20.00, 250.00)
+) AS v(articulo, cantidad, precio)
+JOIN orden_compra o ON o.notas  = 'Pedido para probar recepción parcial (HU-COMP-03)'
+JOIN articulo     a ON a.nombre = v.articulo
+WHERE NOT EXISTS (
+  SELECT 1 FROM orden_compra_detalle d
+  WHERE d.orden_compra_id = o.id AND d.articulo_id = a.id
+);

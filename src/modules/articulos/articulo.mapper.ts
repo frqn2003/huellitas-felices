@@ -1,4 +1,4 @@
-import type { Articulo, Categoria, UnidadMedida } from "@/data/articulos";
+import type { Articulo } from "@/data/articulos";
 import type { ArticuloRow } from "./articulo.types";
 
 /**
@@ -6,12 +6,15 @@ import type { ArticuloRow } from "./articulo.types";
  *
  * Cuatro traducciones, ninguna cosmética:
  *
- *  1. snake_case → camelCase (`categoria_id` → `categoriaId`).
+ *  1. Contrato mixto (C1): los catálogos conservan el camelCase histórico del
+ *     front (`categoriaId`, `unidadMedidaId`) pero los campos nuevos siguen el
+ *     dict en snake_case directo: `fabricante_id`, `imagen_url`,
+ *     `created_at`/`updated_at`.
  *
- *  2. Estado: la base usa el enum 'activo'/'inactivo' en minúscula; el front
- *     declara `estado: "Activo" | "Inactivo"` y lo muestra tal cual en
- *     EstadoBadge. Además el front tiene un `activo: boolean` redundante que se
- *     deriva del mismo dato.
+ *  2. Estado (C3): la base usa el enum 'activo'/'inactivo' en minúscula y el
+ *     front declara exactamente eso — se pasa el valor crudo, sin traducir.
+ *     Badges, filtros y CSV muestran "Activo"/"Inactivo". El booleano `activo`
+ *     ya no existe en el contrato (era una segunda fuente de verdad).
  *
  *  3. `Date` → string ISO. El driver `pg` devuelve los timestamp como objetos
  *     Date de JS. Al serializarse a JSON quedarían bien igual, pero el tipo del
@@ -28,29 +31,43 @@ export function toApi(row: ArticuloRow): Articulo {
     descripcion: row.descripcion ?? "",
 
     categoriaId: row.categoria_id,
-    // El cast es seguro mientras las categorías de la base sean las 4 del
-    // catálogo sembrado (Medicamentos, Insumos, Alimentos, Accesorios).
-    // Si alguien agrega una quinta desde el SQL Editor, el tipo del front miente
-    // y hay que ampliar la unión `Categoria` en src/data/articulos.ts.
-    categoria: row.categoria_nombre as Categoria,
+    // Sin cast: `Articulo.categoria` es `string`.
+    //
+    // Acá había un `as Categoria` contra una unión de 4 valores fijos, con un
+    // comentario que avisaba que si alguien agregaba una quinta categoría desde
+    // el SQL Editor el tipo pasaba a mentir. Eso convertía cada fila nueva de la
+    // tabla `categoria` en un cambio de código. El nombre es un dato de la base:
+    // se pasa tal cual y la lista de opciones se pide por
+    // GET /api/articulos/catalogos.
+    categoria: row.categoria_nombre,
 
     unidadMedidaId: row.unidad_medida_id,
-    unidadMedida: row.unidad_medida_nombre as UnidadMedida,
+    unidadMedida: row.unidad_medida_nombre,
 
-    fabricanteId: row.fabricante_id,
+    // C1: snake_case directo como el dict.
+    fabricante_id: row.fabricante_id,
     fabricante: row.fabricante_nombre,
+
+    // Antes no se emitían y el formulario de EDICIÓN no podía preseleccionar la
+    // presentación: abrías un artículo y el select arrancaba en la primera
+    // opción, así que guardar sin tocar nada la cambiaba.
+    presentacion_id: row.presentacion_id,
+    presentacion: row.presentacion_nombre,
+    // `numeric` llega como string desde `pg`.
+    contenido_neto: Number(row.contenido_neto),
 
     proveedorPreferido:
       row.proveedor_preferido_id && row.proveedor_preferido_nombre
         ? { id: row.proveedor_preferido_id, nombre: row.proveedor_preferido_nombre }
         : null,
 
-    estado: row.estado === "activo" ? "Activo" : "Inactivo",
-    activo: row.estado === "activo",
+    // C3: valor crudo del enum (minúscula ya). El badge traduce a
+    // "Activo"/"Inactivo" en el display.
+    estado: row.estado,
 
-    imagen: row.imagen_url ?? "",
-    createdAt: row.created_at.toISOString(),
-    updatedAt: row.updated_at.toISOString(),
+    imagen_url: row.imagen_url ?? "",
+    created_at: row.created_at.toISOString(),
+    updated_at: row.updated_at.toISOString(),
   };
 }
 

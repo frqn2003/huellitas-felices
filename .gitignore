@@ -34,6 +34,7 @@ yarn-error.log*
 .env*
 # .env.example SÍ se commitea: es la plantilla que documenta las variables.
 !.env.example
+env.download
 
 # vercel
 .vercel

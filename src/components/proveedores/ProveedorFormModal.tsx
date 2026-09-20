@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
+import { Select } from "@/components/ui/Select";
 import type { Proveedor } from "@/data/proveedores";
 import type { FormaPago, NuevoProveedorInput } from "@/context/ProveedoresContext";
 
@@ -14,14 +15,18 @@ interface ProveedorFormModalProps {
   open: boolean;
   modo: ProveedorModalMode;
   proveedor?: Proveedor | null;
-  /** Catálogo real de la base (GET /api/formas-pago), vía ProveedoresContext. */
+  /** Catálogo `forma_pago` (placeholder compartido FORMAS_PAGO, C2/D4; la API
+      lo expone por GET /api/formas-pago), vía ProveedoresContext. */
   formasPagoDisponibles: FormaPago[];
   onClose: () => void;
   onSave: (input: NuevoProveedorInput) => Promise<{ error?: string }>;
 }
 
 // La lista hardcodeada se eliminó: tenía valores que no existen en la base
-// ("Cheque a 60 días") y le faltaban otros que sí. Ahora viene del catálogo.
+// ("Cheque a 60 días") y le faltaban otros que sí. Ahora el catálogo es el
+// placeholder compartido FORMAS_PAGO (src/data/formas-pago.ts) que baja el
+// ProveedoresContext. El formulario elige UNA sola forma de pago (dict:
+// proveedor.forma_pago_id NOT NULL), reemplazando la N:M de chips.
 
 export function ProveedorFormModal({
   open,
@@ -31,14 +36,15 @@ export function ProveedorFormModal({
   onClose,
   onSave,
 }: ProveedorFormModalProps) {
-  const [razonSocial, setRazonSocial] = useState("");
+  const [razon_social, setRazonSocial] = useState("");
   const [cuit, setCuit] = useState("");
   const [direccion, setDireccion] = useState("");
   const [telefono, setTelefono] = useState("");
   const [email, setEmail] = useState("");
   const [contacto, setContacto] = useState("");
-  const [formasPago, setFormasPago] = useState<string[]>(["Contado"]);
-  const [plazoEntregaDias, setPlazoEntregaDias] = useState("1");
+  const [formaPagoId, setFormaPagoId] = useState("");
+  const [plazo_entrega_dias, setPlazoEntregaDias] = useState("1");
+  const [calificacion, setCalificacion] = useState("");
   const [errorGlobal, setErrorGlobal] = useState("");
   const [guardando, setGuardando] = useState(false);
 
@@ -47,14 +53,28 @@ export function ProveedorFormModal({
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setErrorGlobal("");
       if (proveedor && modo !== "crear") {
-        setRazonSocial(proveedor.razonSocial);
+        setRazonSocial(proveedor.razon_social);
         setCuit(proveedor.cuit);
         setDireccion(proveedor.direccion);
         setTelefono(proveedor.telefono);
         setEmail(proveedor.email);
         setContacto(proveedor.contacto);
-        setFormasPago(proveedor.formasPago);
-        setPlazoEntregaDias(String(proveedor.plazoEntregaDias));
+        // La API devuelve las formas de pago por NOMBRE (`formasPago: string[]`,
+        // resuelto por JOIN), no por id. Se resuelve el id contra el catálogo.
+        //
+        // Antes esto leía `proveedor.forma_pago_id`, un campo que la API nunca
+        // mandó: la rama `!== undefined` era inalcanzable y al editar siempre
+        // quedaba preseleccionada la PRIMERA forma de pago del catálogo, no la
+        // del proveedor.
+        const formaPagoActual = formasPagoDisponibles.find(
+          (f) => f.nombre === proveedor.formasPago[0],
+        );
+        setFormaPagoId(String(formaPagoActual?.id ?? formasPagoDisponibles[0]?.id ?? ""));
+        setPlazoEntregaDias(String(proveedor.plazo_entrega_dias));
+        // `calificacion` es HU-PROV-02: la API no la devuelve, así que no hay
+        // nada que precargar. El input queda vacío (ver la nota al pie de
+        // src/data/proveedores.ts).
+        setCalificacion("");
       } else {
         setRazonSocial("");
         setCuit("");
@@ -62,19 +82,14 @@ export function ProveedorFormModal({
         setTelefono("");
         setEmail("");
         setContacto("");
-        setFormasPago(["Contado"]);
+        setFormaPagoId(String(formasPagoDisponibles[0]?.id ?? ""));
         setPlazoEntregaDias("1");
+        setCalificacion("");
       }
     }
-  }, [open, proveedor, modo]);
+  }, [open, proveedor, modo, formasPagoDisponibles]);
 
   const soloLectura = modo === "ver";
-
-  const toggleFormaPago = (f: string) => {
-    setFormasPago((prev) =>
-      prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f],
-    );
-  };
   const title =
     modo === "crear"
       ? "Nuevo proveedor"
@@ -86,31 +101,44 @@ export function ProveedorFormModal({
     e.preventDefault();
     if (soloLectura) return;
 
-    if (!razonSocial.trim() || !cuit.trim()) {
+    if (!razon_social.trim() || !cuit.trim()) {
       setErrorGlobal("La razón social y el CUIT son obligatorios.");
       return;
     }
 
-    if (formasPago.length === 0) {
-      setErrorGlobal("Seleccioná al menos una forma de pago.");
+    if (!formaPagoId) {
+      setErrorGlobal("Seleccioná una forma de pago.");
       return;
     }
 
-    const plazo = parseInt(plazoEntregaDias, 10);
+    const plazo = parseInt(plazo_entrega_dias, 10);
     if (isNaN(plazo) || plazo < 0) {
       setErrorGlobal("El plazo de entrega debe ser un número válido.");
       return;
     }
 
+    // Calificación 0-10, opcional (dict: numeric(3,1)).
+    const nota = Number(calificacion);
+    if (calificacion.trim() !== "" && (isNaN(nota) || nota < 0 || nota > 10)) {
+      setErrorGlobal("La calificación debe ser un número entre 0 y 10.");
+      return;
+    }
+
+    // El contrato del alta/edición es `formasPago: string[]` (nombres); el
+    // context los traduce a `formaPagoIds` contra el catálogo antes del POST.
+    const formaPagoElegida = formasPagoDisponibles.find(
+      (f) => f.id === Number(formaPagoId),
+    );
+
     const input: NuevoProveedorInput = {
-      razonSocial: razonSocial.trim(),
+      razon_social: razon_social.trim(),
       cuit: cuit.trim(),
       direccion: direccion.trim(),
       telefono: telefono.trim(),
       email: email.trim(),
       contacto: contacto.trim(),
-      formasPago,
-      plazoEntregaDias: plazo,
+      formasPago: formaPagoElegida ? [formaPagoElegida.nombre] : [],
+      plazo_entrega_dias: plazo,
     };
 
     setGuardando(true);
@@ -160,11 +188,12 @@ export function ProveedorFormModal({
         )}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Input
+<Input
             id="prov-razon-social"
             label="Razón social"
             requiredMark={!soloLectura}
-            value={razonSocial}
+            placeholder="Veterinaria del Valle S.R.L."
+            value={razon_social}
             onChange={(e) => setRazonSocial(e.target.value)}
             disabled={soloLectura}
           />
@@ -218,37 +247,41 @@ export function ProveedorFormModal({
           label="Plazo de entrega (días)"
           type="number"
           min="0"
-          value={plazoEntregaDias}
+          value={plazo_entrega_dias}
           onChange={(e) => setPlazoEntregaDias(e.target.value)}
           disabled={soloLectura}
         />
 
-        <fieldset className="flex flex-col gap-1.5" disabled={soloLectura}>
-          <legend className="text-sm font-bold text-text-primary">
-            Formas de pago
-          </legend>
-          <div className="flex flex-wrap gap-2 pt-1">
-            {formasPagoDisponibles.map(({ id, nombre: f }) => {
-              const activa = formasPago.includes(f);
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => toggleFormaPago(f)}
-                  aria-pressed={activa}
-                  disabled={soloLectura}
-                  className={`inline-flex h-11 cursor-pointer items-center rounded-pill px-4 text-sm font-bold transition-all duration-fast ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed ${
-                    activa
-                      ? "bg-brand-900 text-cream-50 hover:bg-brand-700"
-                      : "border border-brand-900 bg-surface text-brand-900 hover:bg-brand-900/5"
-                  } ${soloLectura && !activa ? "opacity-45" : ""}`}
-                >
-                  {f}
-                </button>
-              );
-            })}
-          </div>
-        </fieldset>
+        <Input
+          id="prov-calificacion"
+          label="Calificación (0 a 10)"
+          type="number"
+          min="0"
+          max="10"
+          step="0.1"
+          value={calificacion}
+          onChange={(e) => setCalificacion(e.target.value)}
+          disabled={soloLectura}
+          hint="Opcional · evaluación de desempeño del proveedor"
+        />
+
+        {/* Forma de pago única (dict: proveedor.forma_pago_id NOT NULL). La N:M del
+            wire actual (`formasPago: string[]`) se conserva en el payload
+            traduciendo el nombre elegido (ver comentario en el submit). */}
+        <Select
+          id="prov-forma-pago"
+          label="Forma de pago"
+          requiredMark={!soloLectura}
+          value={formaPagoId}
+          onChange={(e) => setFormaPagoId(e.target.value)}
+          disabled={soloLectura}
+        >
+          {formasPagoDisponibles.map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.nombre}
+            </option>
+          ))}
+        </Select>
       </form>
     </Modal>
   );

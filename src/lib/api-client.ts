@@ -19,6 +19,16 @@ export class ApiError extends Error {
     mensaje: string,
     readonly campo: string | undefined,
     readonly status: number,
+    /**
+     * Datos extra que algunos errores necesitan mandar además del mensaje.
+     *
+     * Hoy lo usa uno solo: CUENTA_BLOQUEADA manda `bloqueadoHasta` para que la
+     * pantalla arme la cuenta regresiva. Podría ir en el texto del mensaje, pero
+     * entonces el front tendría que parsear castellano ("volvé en 7 minutos")
+     * para sacar un número — y ese parseo se rompe el día que alguien mejora la
+     * redacción del mensaje.
+     */
+    readonly datos?: Record<string, unknown>,
   ) {
     super(mensaje);
     this.name = "ApiError";
@@ -26,7 +36,7 @@ export class ApiError extends Error {
 }
 
 type CuerpoError = {
-  error?: { codigo?: string; mensaje?: string; campo?: string };
+  error?: { codigo?: string; mensaje?: string; campo?: string; datos?: Record<string, unknown> };
 };
 
 async function parsear<T>(res: Response): Promise<T> {
@@ -48,6 +58,7 @@ async function parsear<T>(res: Response): Promise<T> {
     cuerpo.error?.mensaje ?? `La petición falló (${res.status}).`,
     cuerpo.error?.campo,
     res.status,
+    cuerpo.error?.datos,
   );
 }
 

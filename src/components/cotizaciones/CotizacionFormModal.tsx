@@ -15,7 +15,9 @@ import type { NuevaCotizacionInput } from "@/context/CotizacionesContext";
 
 interface CotizacionFormModalProps {
   solicitud: SolicitudCotizacion | null;
-  /** Catálogo real: GET /api/condiciones-pago. El value de cada opción es el ID. */
+  /** Catálogo `forma_pago` (D4: placeholder compartido FORMAS_PAGO; la API lo
+      expone por GET /api/condiciones-pago — misma tabla). El value de cada
+      opción es el ID. */
   condicionesPago: CondicionPago[];
   /** Artículos y proveedores, desde la API. */
   catalogos: CatalogosCotizacion;
@@ -155,7 +157,7 @@ export function CotizacionFormModal({
             Solicitud
           </p>
           <p className="font-mono text-base font-bold text-brand-900">
-            {solicitud.cod_sol}
+            {solicitud.id}
           </p>
           <p className="text-xs font-medium text-text-secondary">
             Creada el {formatFecha(solicitud.fecha)} ·{" "}

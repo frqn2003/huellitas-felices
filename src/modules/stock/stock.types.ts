@@ -1,25 +1,31 @@
+import type { Row } from "@/lib/db/schema.types";
+
 import type { EstadoStock } from "@/data/stock";
 
-export type DepositoRow = {
-  id: number;
-  sucursal_id: number;
-  nombre: string;
-  ubicacion: string | null;
+export type DepositoRow = Pick<
+  Row<"deposito">,
+  "id" | "sucursal_id" | "nombre" | "ubicacion"
+> & {
+  /** Del JOIN con `sucursal`. */
+  sucursal_nombre: string;
 };
 
-export type FichaStockRow = {
-  id: number;
-  articulo_id: number;
-  deposito_id: number;
+export type FichaStockRow = Pick<
+  // Los tres `stock_*` son `numeric`, asi que el esquema los tipa como STRING:
+  // es lo que devuelve el driver `pg`. Antes estaban como `number | string`,
+  // una union defensiva que obligaba a un `Number()` en cada uso sin dejar
+  // claro cual de los dos venia en realidad.
+  Row<"ficha_stock">,
+  "id" | "articulo_id" | "deposito_id" | "stock_actual" | "stock_minimo" | "stock_critico"
+> & {
+  // Resuelto por los JOIN con deposito, sucursal y articulo.
   deposito_nombre: string;
   sucursal_id: number;
+  sucursal_nombre: string;
   articulo_codigo: string;
   articulo_nombre: string;
   unidad_medida: string;
   articulo_estado: "activo" | "inactivo";
-  stock_actual: number | string;
-  stock_minimo: number | string;
-  stock_critico: number | string | null;
 };
 
 export type FiltrosDeposito = {

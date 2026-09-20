@@ -43,6 +43,29 @@ export function withRoute<P = Record<string, never>>(
 }
 
 /**
+ * Wrapper para los endpoints que NO pueden exigir sesión: el login.
+ *
+ * `withRoute` llama a `requireSession()` antes que nada, así que envolver
+ * POST /api/auth/login con él sería pedir estar logueado para poder loguearse.
+ *
+ * Hace lo demás igual: captura errores y los mapea a HTTP. Y nada más — no hay
+ * un tercer wrapper "a veces con sesión": /api/auth/sesion llama a
+ * `getSession()` a mano, que es una línea y deja explícito que ahí el 401 no
+ * es un error sino una respuesta válida ("no hay nadie logueado").
+ */
+export function withPublicRoute<P = Record<string, never>>(
+  fn: (ctx: Omit<Ctx<P>, "session">) => Promise<Response>,
+) {
+  return async (req: Request, ctx: { params: Promise<P> }): Promise<Response> => {
+    try {
+      return await fn({ req, params: ctx.params });
+    } catch (e) {
+      return errorResponse(traducirErrorPostgres(e) ?? e);
+    }
+  };
+}
+
+/**
  * Valida el body con un schema de zod y lo devuelve tipado.
  * Un error de zod se convierte en ValidationError, que señala el primer campo
  * que falló — el front lo usa para marcar el input en rojo.
@@ -61,10 +84,25 @@ export async function parseBody<T extends z.ZodTypeAny>(
   const resultado = schema.safeParse(json);
   if (!resultado.success) {
     const primero = resultado.error.issues[0];
+    const campo = primero?.path.join(".") || undefined;
+
+    // Un campo AUSENTE no usa el mensaje custom del schema: los `.min(1, "...")`
+    // solo corren si el valor llegó. zod emite su default en inglés, "Required",
+    // y así salía tal cual al cartel rojo del formulario — sin decir cuál campo
+    // ni en qué idioma. Un usuario no puede hacer nada con eso, y quien
+    // desarrolla tampoco: es el síntoma típico de que el front manda una clave
+    // con otro nombre (fue exactamente el bug de `razon_social` vs `razonSocial`
+    // en el alta de proveedores).
+    const falta =
+      primero?.code === "invalid_type" &&
+      (primero as { received?: string }).received === "undefined";
+
     throw new ValidationError(
       "DATOS_INVALIDOS",
-      primero?.message ?? "Los datos enviados no son válidos.",
-      primero?.path.join(".") || undefined,
+      falta
+        ? `Falta el campo obligatorio "${campo ?? "desconocido"}".`
+        : (primero?.message ?? "Los datos enviados no son válidos."),
+      campo,
     );
   }
 

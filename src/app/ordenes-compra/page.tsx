@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, Download, FilePlus2, PackagePlus, RotateCcw, Search } from "lucide-react";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Button } from "@/components/ui/Button";
@@ -38,6 +38,7 @@ import type { OrdenCompra } from "@/data/ordenes-compra";
 import { formatFecha, parseImporte } from "@/data/ordenes-compra";
 import type { CatalogosOrden } from "@/components/ordenes-compra/OrdenFormModal";
 import { apiGet, apiGetOpcional, apiSend, mensajeDeError } from "@/lib/api-client";
+import type { FormaPago } from "@/data/formas-pago";
 
 const CATALOGOS_VACIOS: CatalogosOrden = {
   proveedores: [],
@@ -45,6 +46,21 @@ const CATALOGOS_VACIOS: CatalogosOrden = {
   depositos: [],
   condicionesPago: [],
 };
+import type { OrdenDisponible, Recepcion } from "@/data/recepciones";
+import {
+  FILTROS_RECEPCION_VACIOS,
+  FiltrosChipsRecepciones,
+  FiltrosRecepciones,
+  type FiltrosRecepcion,
+} from "@/components/recepciones/FiltrosRecepciones";
+import { RecepcionesTable } from "@/components/recepciones/RecepcionesTable";
+import {
+  RecepcionFormModal,
+  type CrearRecepcionPayload,
+  type DepositoOpcion,
+  type LineaPendiente,
+} from "@/components/recepciones/RecepcionFormModal";
+import { RecepcionDetalleModal } from "@/components/recepciones/RecepcionDetalleModal";
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -145,6 +161,17 @@ function ComprasScreen() {
   const [aComparar, setAComparar] = useState<SolicitudCotizacion | null>(null);
   const [aCancelarSolicitud, setACancelarSolicitud] = useState<SolicitudCotizacion | null>(null);
 
+  // ── Estado del tab "Recepciones" ─────────────────────────────────────
+  const [recepciones, setRecepciones] = useState<Recepcion[]>([]);
+  const [busquedaRec, setBusquedaRec] = useState("");
+  const [filtrosRec, setFiltrosRec] = useState<FiltrosRecepcion>(FILTROS_RECEPCION_VACIOS);
+  const [pageSizeRec, setPageSizeRec] = useState(10);
+  const [pageRec, setPageRec] = useState(1);
+  const [formRecepcionOpen, setFormRecepcionOpen] = useState(false);
+  const [aVerDetalleRec, setAVerDetalleRec] = useState<Recepcion | null>(null);
+  /** Depósitos reales (con su sucursal), para el formulario de recepción. */
+  const [depositos, setDepositos] = useState<DepositoOpcion[]>([]);
+
   const [catalogos, setCatalogos] = useState<CatalogosOrden>(CATALOGOS_VACIOS);
   const [fichas, setFichas] = useState<
     { articuloId: number; stockActual: number; estadoCalculado: string }[]
@@ -162,7 +189,7 @@ function ComprasScreen() {
     // con Promise.all, un solo catálogo caído tiraba abajo todo el listado.
     Promise.all([
       apiGet<OrdenCompra[]>("/api/ordenes-compra"),
-      apiGetOpcional<{ id: number; razonSocial: string }[]>(
+      apiGetOpcional<{ id: number; razon_social: string }[]>(
         "/api/proveedores?estado=activo",
         [],
       ),
@@ -170,28 +197,37 @@ function ComprasScreen() {
         "/api/articulos?estado=activo",
         [],
       ),
-      apiGetOpcional<{ id: number; nombre: string; sucursal: string }[]>(
-        "/api/depositos",
-        [],
-      ),
-      apiGetOpcional<{ id: number; nombre: string }[]>("/api/condiciones-pago", []),
-      // Para resaltar los artículos con stock bajo en el selector de la solicitud.
+      apiGetOpcional<DepositoOpcion[]>("/api/depositos", []),
+      // El historial de recepciones. Va con apiGetOpcional y no con apiGet
+      // porque vive en un TAB: si falla, la pantalla de órdenes —que es la
+      // principal— tiene que seguir funcionando igual.
+      apiGetOpcional<{ items: Recepcion[] }>("/api/recepciones", { items: [] }),
       apiGetOpcional<
         { articuloId: number; stockActual: number; estadoCalculado: string }[]
       >("/api/fichas-stock", []),
+      // Condiciones de pago: la MISMA tabla `forma_pago`, expuesta con el
+      // nombre que entiende esta pantalla (ver src/app/api/condiciones-pago).
+      // Antes era el array fijo FORMAS_PAGO: el id elegido viaja en el POST de
+      // la orden, así que una condición agregada en la base no se podía elegir
+      // y un id inexistente habría dado 23503 al guardar.
+      apiGetOpcional<FormaPago[]>("/api/condiciones-pago", []),
     ])
-      .then(([lista, proveedores, articulos, depositos, condicionesPago, fichas]) => {
+      .then(([lista, proveedores, articulos, depositos, recepcionesApi, fichasStock, condicionesPago]) => {
         if (cancelado) return;
         setOrdenes(lista);
+        setDepositos(depositos);
+        setRecepciones(recepcionesApi.items);
         setCatalogos({
-          // La API de proveedores usa `razonSocial`; el catálogo del modal
-          // habla de `nombre`. Se adapta acá, en el borde.
-          proveedores: proveedores.map((p) => ({ id: p.id, nombre: p.razonSocial })),
+          // La API de proveedores usa `razon_social` (dict); el catálogo del
+          // modal habla de `nombre`. Se adapta acá, en el borde.
+          proveedores: proveedores.map((p) => ({ id: p.id, nombre: p.razon_social })),
           articulos,
-          depositos,
+          // El catálogo del modal de órdenes tipa `ubicacion` como string; la
+          // columna es nullable. Se normaliza acá, en el borde.
+          depositos: depositos.map((d) => ({ ...d, ubicacion: d.ubicacion ?? "" })),
           condicionesPago,
         });
-        setFichas(fichas);
+        setFichas(fichasStock);
       })
       .catch(() => {
         if (!cancelado) setError(true);
@@ -376,9 +412,9 @@ function ComprasScreen() {
   const filtradasCot = useMemo(() => {
     const q = busquedaCot.trim().toLowerCase();
     const lista = solicitudesDemo.filter((s) => {
+      // D7: el dict no define número propio de solicitud; se busca por id.
       const matchBusqueda =
         !q ||
-        s.cod_sol.toLowerCase().includes(q) ||
         String(s.id).includes(q) ||
         s._articulos_solicitados.some((a) => {
           const nombre =
@@ -421,6 +457,143 @@ function ComprasScreen() {
     setBusquedaCot("");
     setFiltrosCot(FILTROS_SOLICITUD_VACIOS);
   };
+
+  // ── Filtrado recepciones ─────────────────────────────────────────────
+  const filtradasRec = useMemo(() => {
+    const q = busquedaRec.trim().toLowerCase();
+    const lista = recepciones.filter((r) => {
+      const matchBusqueda =
+        !q ||
+        r.numero.toLowerCase().includes(q) ||
+        r.ordenCompra.numero.toLowerCase().includes(q) ||
+        r.ordenCompra.proveedor.razonSocial.toLowerCase().includes(q);
+      const matchTipo =
+        filtrosRec.tipo === "Todas" || r.tipo_recepcion === filtrosRec.tipo;
+      const matchProveedor =
+        !filtrosRec.proveedorId ||
+        r.ordenCompra.proveedor.id === Number(filtrosRec.proveedorId);
+      return matchBusqueda && matchTipo && matchProveedor;
+    });
+    return lista.sort((a, b) =>
+      filtrosRec.ordenFecha === "antiguas"
+        ? Date.parse(a.fecha_hora) - Date.parse(b.fecha_hora)
+        : Date.parse(b.fecha_hora) - Date.parse(a.fecha_hora),
+    );
+  }, [recepciones, busquedaRec, filtrosRec]);
+
+  const totalPagesRec = Math.max(1, Math.ceil(filtradasRec.length / pageSizeRec));
+  const safePageRec = Math.min(pageRec, totalPagesRec);
+  const pageItemsRec = filtradasRec.slice(
+    (safePageRec - 1) * pageSizeRec,
+    safePageRec * pageSizeRec,
+  );
+  const pageStartRec = filtradasRec.length === 0 ? 0 : (safePageRec - 1) * pageSizeRec + 1;
+  const pageEndRec = Math.min(safePageRec * pageSizeRec, filtradasRec.length);
+  const hasActiveFiltersRec =
+    busquedaRec.trim() !== "" ||
+    filtrosRec.tipo !== FILTROS_RECEPCION_VACIOS.tipo ||
+    filtrosRec.proveedorId !== "";
+
+  const handleBusquedaRec = (value: string) => {
+    setBusquedaRec(value);
+    setPageRec(1);
+  };
+
+  const handleFiltrosRec = (next: FiltrosRecepcion) => {
+    setFiltrosRec(next);
+    setPageRec(1);
+  };
+
+  const limpiarTodoRec = () => {
+    setBusquedaRec("");
+    setFiltrosRec(FILTROS_RECEPCION_VACIOS);
+  };
+
+  /**
+   * Registra la recepción contra la API.
+   *
+   * Devuelve el mensaje de error en vez de lanzarlo: el modal lo muestra sin
+   * cerrarse, así no se pierde lo cargado.
+   *
+   * Cuando sale bien se recarga TODA la pantalla (`setRecarga`) y no solo la
+   * lista de recepciones. Es a propósito: una recepción también mueve el estado
+   * de la orden de compra (a "Recibida Parcial" o "Recibida Total") y el stock.
+   * Insertar la fila nueva en el array local dejaría el tab de órdenes
+   * mostrando el estado viejo hasta que alguien recargue.
+   */
+  const handleSaveRecepcion = async (
+    payload: CrearRecepcionPayload,
+  ): Promise<string | null> => {
+    try {
+      const res = await apiSend<{ estadoOrdenResultante: string; fichasCreadas: unknown[] }>(
+        "POST",
+        "/api/recepciones",
+        payload,
+      );
+
+      setFormRecepcionOpen(false);
+      setRecarga((n) => n + 1);
+      showToast(
+        "success",
+        `Recepción registrada. La orden quedó ${res.estadoOrdenResultante.replace(/_/g, " ")}.`,
+      );
+
+      // Aviso aparte: una ficha creada al vuelo nace con stock mínimo 0, así
+      // que nunca va a avisar cuando haya que reponer hasta que alguien
+      // configure los umbrales.
+      if (res.fichasCreadas.length > 0) {
+        // No hay un toast "info" en el sistema de diseño; va como success
+        // porque no es una falla: la recepción se registró bien, esto es un
+        // pendiente de configuración.
+        showToast(
+          "success",
+          `Se crearon ${res.fichasCreadas.length} fichas de stock nuevas: configurá sus umbrales en Stock.`,
+        );
+      }
+
+      return null;
+    } catch (e) {
+      return mensajeDeError(e);
+    }
+  };
+
+  /** Qué falta recibir de una OC. Lo pide el modal al elegir la orden. */
+  const cargarPendienteRecepcion = useCallback(
+    (ordenCompraId: number) =>
+      apiGet<LineaPendiente[]>(`/api/ordenes-compra/${ordenCompraId}/pendiente-recepcion`),
+    [],
+  );
+
+  /**
+   * Órdenes que admiten recepción.
+   *
+   * El filtro correcto es "la orden no está cerrada", no "no tiene recepciones
+   * previas" como antes: con el filtro viejo, una OC recibida parcialmente
+   * desaparecía del select y la segunda entrega era imposible de cargar — que
+   * es justo el caso de uso central de la HU.
+   *
+   * También se recibe contra una orden "pendiente": un proveedor que entrega
+   * antes de que alguien la marque como enviada es lo normal.
+   */
+  const ordenesPendientes = useMemo<OrdenDisponible[]>(
+    () =>
+      ordenes
+        .filter((o) => o.estado !== "recibida_total" && o.estado !== "cancelada")
+        .map((o) => ({
+          id: o.id,
+          numero: o.cod_ord,
+          proveedor: { id: o._proveedor.id, razonSocial: o._proveedor.razon_social },
+          estado: o.estado,
+          // Solo para preseleccionar el depósito pactado. El nombre lo resuelve
+          // el modal contra el catálogo real de depósitos.
+          deposito: { id: o.deposito_id ?? 0, nombre: "" },
+          // Las líneas ya no viajan acá: el modal las pide con
+          // `cargarPendienteRecepcion`, que devuelve el PENDIENTE y no lo
+          // pedido originalmente.
+          articulos: [],
+        })),
+    [ordenes],
+  );
 
   const handleCrearSolicitud = async (input: Parameters<typeof crearSolicitud>[0]) => {
     const res = await crearSolicitud(input);
@@ -501,6 +674,7 @@ function ComprasScreen() {
 
   const esOrdenes = tab === "ordenes";
   const esCotizaciones = tab === "cotizaciones";
+  const esRecepciones = tab === "recepciones";
 
   return (
     <div className="flex min-h-screen bg-cream-50">
@@ -544,6 +718,16 @@ function ComprasScreen() {
                     Nueva solicitud
                   </Button>
                 )}
+                {esRecepciones && (
+                  <Button
+                    onClick={() => setFormRecepcionOpen(true)}
+                    disabled={loading || error}
+                    size="lg"
+                  >
+                    <PackagePlus className="h-5 w-5" aria-hidden="true" />
+                    Nueva
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -570,12 +754,17 @@ function ComprasScreen() {
                   <FiltrosOrdenes
                     filtros={filtros}
                     onChange={handleFiltros}
+                    proveedores={catalogos.proveedores}
                     disabled={loading || error}
                     hideChips
                   />
                 </div>
                 <div className="flex flex-wrap items-center">
-                  <FiltrosChips filtros={filtros} onChange={handleFiltros} />
+                  <FiltrosChips
+                    filtros={filtros}
+                    onChange={handleFiltros}
+                    proveedores={catalogos.proveedores}
+                  />
                 </div>
               </div>
             )}
@@ -607,6 +796,42 @@ function ComprasScreen() {
                 </div>
                 <div className="flex flex-wrap items-center">
                   <FiltrosCotChips filtros={filtrosCot} onChange={handleFiltrosCot} />
+                </div>
+              </div>
+            )}
+
+            {esRecepciones && (
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <div className="relative flex-1">
+                    <Search
+                      className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-text-secondary"
+                      aria-hidden="true"
+                    />
+                    <input
+                      type="search"
+                      value={busquedaRec}
+                      onChange={(e) => handleBusquedaRec(e.target.value)}
+                      placeholder="Buscar por N° de recepción, OC o proveedor..."
+                      aria-label="Buscar por número de recepción, orden de compra o proveedor"
+                      disabled={loading || error}
+                      className="h-11 w-full cursor-text rounded-pill border border-border bg-surface pl-12 pr-4 text-base text-text-primary transition-colors duration-fast ease-out placeholder:text-text-secondary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20 disabled:cursor-not-allowed disabled:opacity-45"
+                    />
+                  </div>
+                  <FiltrosRecepciones
+                    filtros={filtrosRec}
+                    onChange={handleFiltrosRec}
+                    proveedores={catalogos.proveedores}
+                    disabled={loading || error}
+                    hideChips
+                  />
+                </div>
+                <div className="flex flex-wrap items-center">
+                  <FiltrosChipsRecepciones
+                    filtros={filtrosRec}
+                    onChange={handleFiltrosRec}
+                    proveedores={catalogos.proveedores}
+                  />
                 </div>
               </div>
             )}
@@ -708,6 +933,38 @@ function ComprasScreen() {
                   )}
                 </div>
               )}
+
+              {esRecepciones && (
+                <div
+                  id="panel-recepciones"
+                  role="tabpanel"
+                  aria-labelledby="tab-recepciones"
+                  className="flex flex-col gap-6"
+                >
+                  <RecepcionesTable
+                    recepciones={pageItemsRec}
+                    loading={loading}
+                    hasActiveFilters={hasActiveFiltersRec}
+                    onClearFilters={limpiarTodoRec}
+                    onNueva={() => setFormRecepcionOpen(true)}
+                    onView={setAVerDetalleRec}
+                  />
+                  {!loading && pageItemsRec.length > 0 && (
+                    <Pagination
+                      page={safePageRec}
+                      totalPages={totalPagesRec}
+                      totalItems={filtradasRec.length}
+                      pageStart={pageStartRec}
+                      pageEnd={pageEndRec}
+                      pageSize={pageSizeRec}
+                      onPageChange={setPageRec}
+                      onPageSizeChange={setPageSizeRec}
+                      disabled={loading || error}
+                      itemLabel="recepciones"
+                    />
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
@@ -725,7 +982,8 @@ function ComprasScreen() {
           const solicitud = solicitudes.find((s) =>
             s._cotizaciones.some((c) => c.id === formOrden.cotizacion_id),
           );
-          return solicitud ? solicitud.cod_sol : null;
+          // D7: se muestra la solicitud por su id (el dict no tiene número propio).
+          return solicitud ? String(solicitud.id) : null;
         })()}
         onClose={() => setFormOpen(false)}
         onSave={handleSave}
@@ -765,6 +1023,20 @@ function ComprasScreen() {
         solicitud={aCancelarSolicitud}
         onClose={() => setACancelarSolicitud(null)}
         onConfirm={handleCancelarSolicitud}
+      />
+
+      {/* ── Modales del tab Recepciones ── */}
+      <RecepcionFormModal
+        open={formRecepcionOpen}
+        onClose={() => setFormRecepcionOpen(false)}
+        onConfirm={handleSaveRecepcion}
+        ordenes={ordenesPendientes}
+        depositos={depositos}
+        cargarPendiente={cargarPendienteRecepcion}
+      />
+      <RecepcionDetalleModal
+        recepcion={aVerDetalleRec}
+        onClose={() => setAVerDetalleRec(null)}
       />
     </div>
   );

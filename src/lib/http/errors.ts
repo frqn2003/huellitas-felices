@@ -13,6 +13,17 @@
 export abstract class AppError extends Error {
   abstract readonly status: number;
 
+  /**
+   * Datos extra para el cuerpo de la respuesta, además de codigo/mensaje/campo.
+   *
+   * Las subclases lo sobrescriben cuando el front necesita un valor y no un
+   * texto. `CuentaBloqueadaError` manda la fecha de desbloqueo para que la
+   * pantalla arme el contador sin tener que leer el mensaje.
+   */
+  get datos(): Record<string, unknown> | undefined {
+    return undefined;
+  }
+
   constructor(
     readonly codigo: string,
     mensaje: string,
@@ -62,17 +73,85 @@ export class BusinessRuleError extends AppError {
 /**
  * 401 — sin sesión válida.
  *
- * En el Sprint 1 no hay login (HU-SIS-04 es Sprint 2), así que la sesión sale
- * del stub de lib/auth/session.ts. Si aparece este error, casi siempre es que
- * la tabla `usuario` está vacía — no un problema de permisos.
+ * Desde HU-SIS-04 esta es la respuesta normal para alguien que no inició
+ * sesión, y el front la usa para redirigir a /login. Ya no significa "algo está
+ * mal configurado" como en el Sprint 1.
  */
 export class UnauthorizedError extends AppError {
   readonly status = 401;
 
-  constructor(
-    mensaje = "No hay una sesión activa. Si es la primera vez, corré `npm run db:seed` para cargar los usuarios.",
-  ) {
+  constructor(mensaje = "Tu sesión no está activa o venció. Volvé a iniciar sesión.") {
     super("SIN_SESION", mensaje);
+  }
+}
+
+/**
+ * 401 — credenciales inválidas (HU-SIS-04).
+ *
+ * ⚠️ EL MENSAJE ES GENÉRICO A PROPÓSITO. El criterio de aceptación lo pide
+ *    textual: "si las credenciales son inválidas, muestra un mensaje de error
+ *    genérico (sin indicar cuál de los dos datos falló)".
+ *
+ *    No es una formalidad. Si el sistema contesta "ese email no existe",
+ *    cualquiera puede averiguar quién trabaja en la veterinaria probando
+ *    direcciones, y ya tiene la mitad de la credencial. Distinguir los dos
+ *    casos convierte el login en un buscador de usuarios válidos.
+ *
+ *    Por eso este error NO lleva `campo`: marcar el input de la contraseña en
+ *    rojo diría, de hecho, que el email estaba bien.
+ */
+export class CredencialesInvalidasError extends AppError {
+  readonly status = 401;
+
+  constructor() {
+    super("CREDENCIALES_INVALIDAS", "Email o contraseña incorrectos.");
+  }
+}
+
+/**
+ * 423 Locked — la cuenta está bloqueada por intentos fallidos (HU-SIS-04).
+ *
+ * 423 y no 401: el 401 significa "probá de nuevo con las credenciales
+ * correctas", y acá probar de nuevo no sirve hasta que pase el tiempo. El front
+ * necesita poder distinguirlos para mostrar el contador en vez del formulario.
+ *
+ * `minutosRestantes` viaja en el mensaje porque el criterio pide "se informa al
+ * usuario el tiempo restante", y también aparte para que el front lo use sin
+ * parsear texto.
+ */
+export class CuentaBloqueadaError extends AppError {
+  readonly status = 423;
+
+  get datos(): Record<string, unknown> {
+    return { bloqueadoHasta: this.bloqueadoHasta.toISOString() };
+  }
+
+  constructor(readonly bloqueadoHasta: Date) {
+    const minutos = Math.max(1, Math.ceil((bloqueadoHasta.getTime() - Date.now()) / 60_000));
+    super(
+      "CUENTA_BLOQUEADA",
+      `La cuenta está bloqueada por intentos fallidos. Volvé a intentar en ${minutos} ` +
+        `${minutos === 1 ? "minuto" : "minutos"}.`,
+    );
+  }
+}
+
+/**
+ * 503 — el servicio de autenticación no responde.
+ *
+ * Separado de las credenciales inválidas por una razón concreta: un intento que
+ * falla porque Supabase Auth está caído NO cuenta como intento fallido del
+ * usuario. Si contara, una caída del servicio bloquearía a todo el mundo por 15
+ * minutos.
+ */
+export class ServicioAuthNoDisponibleError extends AppError {
+  readonly status = 503;
+
+  constructor() {
+    super(
+      "AUTH_NO_DISPONIBLE",
+      "No se pudo validar el inicio de sesión en este momento. Intentá de nuevo en unos segundos.",
+    );
   }
 }
 
@@ -115,6 +194,18 @@ export function traducirErrorPostgres(e: unknown): AppError | null {
         "Ese artículo ya tiene una ficha de stock en ese depósito.",
       );
     }
+    if (constraint.includes("pago_numero_comprobante")) {
+      // ⚠️ El UNIQUE es GLOBAL, no por proveedor. El modal de cta. cte. valida
+      // la unicidad contra los pagos de ESE proveedor, así que un número
+      // reusado con otro proveedor pasa el front y llega hasta acá. Sin esta
+      // rama caía en el "El registro ya existe" genérico, que no le dice al
+      // usuario que el problema es el número de recibo que tecleó.
+      return new ConflictError(
+        "NUMERO_PAGO_DUPLICADO",
+        "Ya existe un pago registrado con ese número de comprobante.",
+        "numero_comprobante",
+      );
+    }
     if (constraint.includes("deposito_nombre")) {
       return new ConflictError("DEPOSITO_DUPLICADO", "Ya existe un depósito con ese nombre.", "nombre");
     }
@@ -129,6 +220,20 @@ export function traducirErrorPostgres(e: unknown): AppError | null {
         "La operación dejaría el stock en negativo.",
       );
     }
+    if (constraint.includes("turno_check")) {
+      return new ValidationError(
+        "HORARIO_INVALIDO",
+        "La hora de fin del turno tiene que ser posterior a la de inicio.",
+        "horaFin",
+      );
+    }
+    if (constraint.includes("mascota_peso_check")) {
+      return new ValidationError(
+        "PESO_INVALIDO",
+        "El peso de la mascota debe ser mayor a 0.",
+        "peso",
+      );
+    }
     if (constraint.includes("critico_menor")) {
       return new ValidationError(
         "UMBRAL_INVALIDO",
@@ -136,6 +241,16 @@ export function traducirErrorPostgres(e: unknown): AppError | null {
         "stockCritico",
       );
     }
+    // ⚠️ Un `RAISE EXCEPTION ... USING ERRCODE = 'check_violation'` desde un
+    //    trigger cae acá SIN nombre de constraint, así que no se puede
+    //    distinguir de qué regla se trata y sale este mensaje genérico.
+    //
+    //    Hoy le pasa a `fn_mascota_validar_fecha_nacimiento` (fecha de
+    //    nacimiento futura). No se nota porque el schema de zod ya la rechaza
+    //    antes con un mensaje que señala el campo — la base es solo la red de
+    //    seguridad. Si algún día ese camino importa, el arreglo es darle al
+    //    trigger un SQLSTATE propio (HF0xx) y mapearlo abajo, como se hizo con
+    //    los de stock e imputaciones.
     return new ValidationError("DATO_INVALIDO", "Algún valor no cumple las reglas de la base.");
   }
 
@@ -161,6 +276,52 @@ export function traducirErrorPostgres(e: unknown): AppError | null {
       "No existe la ficha de stock afectada por el movimiento.",
     );
   }
+  // ---------------------------------------------------------
+  // HF01x · imputación de pagos (HU-FIN-02)
+  // ---------------------------------------------------------
+  // Los cuatro triggers de `pago_imputacion` levantaban P0001 pelado, y el
+  // catch-all de más abajo los convertía a todos en el mismo
+  // "La operación fue rechazada por una regla de la base de datos".
+  //
+  // O sea que imputar $10.000 a una factura con $5.000 de saldo devolvía esa
+  // frase: sin el número, sin el comprobante, y sin decir cuál de las tres
+  // imputaciones falló. La corrección 17 les puso SQLSTATE propio.
+  if (codigo === "HF010") {
+    return new BusinessRuleError(
+      "IMPUTACION_EXCEDE_PAGO",
+      "Estás imputando más plata de la que suma el pago.",
+      "imputaciones",
+    );
+  }
+  if (codigo === "HF011") {
+    return new BusinessRuleError(
+      "IMPUTACION_EXCEDE_COMPROBANTE",
+      "Ese comprobante ya está cancelado por otros pagos: no admite más imputaciones.",
+      "imputaciones",
+    );
+  }
+  if (codigo === "HF012") {
+    return new BusinessRuleError(
+      "COMPROBANTE_DE_OTRO_PROVEEDOR",
+      "El comprobante no pertenece al proveedor de este pago.",
+      "imputaciones",
+    );
+  }
+  if (codigo === "HF013") {
+    return new BusinessRuleError(
+      "IMPUTACION_A_NOTA_CREDITO",
+      "A una Nota de Crédito no se le imputan pagos: su importe ya descuenta del saldo del proveedor.",
+      "imputaciones",
+    );
+  }
+  if (codigo === "HF014") {
+    return new BusinessRuleError(
+      "COMPROBANTE_ANULADO",
+      "Ese comprobante está anulado y no admite pagos.",
+      "imputaciones",
+    );
+  }
+
   if (codigo === "HF003") {
     return new BusinessRuleError(
       "MOVIMIENTO_INMUTABLE",
@@ -188,6 +349,60 @@ export function traducirErrorPostgres(e: unknown): AppError | null {
     return new BusinessRuleError(
       "REGLA_RECHAZADA",
       "La operación fue rechazada por una regla de la base de datos.",
+    );
+  }
+
+  // 23502 = not_null_violation
+  //
+  // Sin esta rama era un 500 pelado, y costó una tarde: el alta de artículos
+  // fallaba porque el INSERT omitía `presentacion_id` (NOT NULL sin default) y
+  // el usuario solo veía "Ocurrió un error inesperado".
+  //
+  // Casi siempre significa lo mismo: el front manda un campo, el schema de zod
+  // no lo declara —y un objeto sin `.strict()` lo descarta EN SILENCIO—, así
+  // que nunca llega al INSERT. El nombre de la columna va al log, no al
+  // cliente: filtra el esquema.
+  if (codigo === "23502") {
+    const columna = (e as { column?: string }).column;
+    console.error(
+      `[api] NOT NULL violado en la columna "${columna ?? "?"}". ` +
+        `Revisá que el schema de zod la declare: si no está, el valor que manda ` +
+        `el front se descarta en silencio y nunca llega al INSERT.`,
+    );
+    return new ValidationError(
+      "CAMPO_OBLIGATORIO",
+      "Falta un dato obligatorio del formulario. Revisá que estén completos todos los campos marcados con *.",
+    );
+  }
+
+  // 23P01 = exclusion_violation
+  //
+  // Lo levanta un constraint EXCLUDE. Hoy hay uno solo en el proyecto y es el
+  // que hace cumplir el criterio de HU-TUR-01 "rechaza la superposición":
+  //
+  //   turno_sin_superposicion_excl
+  //     EXCLUDE USING gist (agenda_profesional_id WITH =, fecha WITH =,
+  //                         tsrange(fecha + hora_inicio, fecha + hora_fin) WITH &&)
+  //     WHERE (estado_id <> 3)
+  //
+  // ⚠️ SIN ESTA RAMA, DOS TURNOS SUPERPUESTOS DEVOLVÍAN UN 500. El service
+  //    chequea la disponibilidad antes y da un mensaje con el horario ocupado,
+  //    pero bajo concurrencia —dos recepcionistas reservando el mismo hueco al
+  //    mismo tiempo— los dos pasan ese chequeo y uno choca contra el índice.
+  //    Ese choque es el único que garantiza que no se duplique el turno, así
+  //    que tiene que llegar al usuario como un 409 entendible y no como
+  //    "Ocurrió un error inesperado".
+  if (codigo === "23P01") {
+    if (constraint.includes("turno_sin_superposicion")) {
+      return new BusinessRuleError(
+        "TURNO_SUPERPUESTO",
+        "Ese horario se acaba de ocupar. Elegí otro y volvé a intentar.",
+        "horaInicio",
+      );
+    }
+    return new BusinessRuleError(
+      "RANGO_SUPERPUESTO",
+      "La operación se superpone con un registro existente.",
     );
   }
 

@@ -233,7 +233,7 @@ export async function editar(
     const actual = await repo.findById(id, client);
     if (!actual) throw new NotFoundError("la orden de compra", id);
 
-    if (actual.estado_nombre !== "Pendiente") {
+    if (actual.estado_nombre.toLowerCase() !== "pendiente") {
       throw new BusinessRuleError(
         "ORDEN_NO_EDITABLE",
         `Solo se puede editar una orden Pendiente. Esta está ${actual.estado_nombre}.`,

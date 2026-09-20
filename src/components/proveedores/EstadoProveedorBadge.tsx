@@ -6,7 +6,9 @@ interface EstadoProveedorBadgeProps {
 }
 
 export function EstadoProveedorBadge({ estado }: EstadoProveedorBadgeProps) {
-  return estado === "Activo" ? (
+  // El badge recibe el valor crudo del enum (C3): "activo"/"inactivo" en
+  // minúscula desde la data, y acá se mapea al label + variante de color.
+  return estado === "activo" ? (
     <StatusBadge variant="success" label="Activo" />
   ) : (
     <StatusBadge variant="neutral" label="Inactivo" />

@@ -23,6 +23,8 @@ interface ComboboxProps {
   placeholder?: string;
   noResultsText?: string;
   maxResults?: number;
+  /** Filtro de caracteres al tipear (ej. solo letras): se descartan los no permitidos. */
+  sanitize?: (value: string) => string;
 }
 
 export function Combobox({
@@ -39,6 +41,7 @@ export function Combobox({
   placeholder = "",
   noResultsText = "Sin resultados",
   maxResults = 8,
+  sanitize,
 }: ComboboxProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState<string | null>(null);
@@ -97,6 +100,24 @@ export function Combobox({
     setActiveIndex(-1);
   };
 
+  const handleBlur = () => {
+    // Auto-commit: si el usuario tipeó y dejó el campo SIN elegir de la lista
+    // (click afuera, Tab, etc.), y el texto coincide con UNA sola opción, se
+    // selecciona. Si no, se restaura el valor previo. Evita el falso "parece
+    // seleccionado pero el value quedó vacío" (bug: "dueño obligatorio").
+    if (!disabled && query !== null) {
+      const q = query.trim().toLowerCase();
+      const matches = options.filter((o) => o.label.toLowerCase().includes(q));
+      if (matches.length === 1) {
+        onChange(matches[0].value);
+      } else {
+        onChange(value);
+      }
+      setQuery(null);
+    }
+    onBlur?.();
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (disabled) return;
     if (e.key === "ArrowDown") {
@@ -111,6 +132,9 @@ export function Combobox({
       e.preventDefault();
       if (open && activeIndex >= 0 && filtered[activeIndex]) {
         seleccionar(filtered[activeIndex]);
+      } else if (filtered.length === 1) {
+        // Enter sin flechas: si quedó un único resultado, se elige directo.
+        seleccionar(filtered[0]);
       } else {
         setOpen(true);
       }
@@ -151,7 +175,7 @@ export function Combobox({
           disabled={disabled}
           placeholder={placeholder}
           onChange={(e) => {
-            const nuevo = e.target.value;
+            const nuevo = sanitize ? sanitize(e.target.value) : e.target.value;
             setQuery(nuevo === "" ? null : nuevo);
             setActiveIndex(-1);
             setOpen(true);
@@ -161,7 +185,7 @@ export function Combobox({
             if (displayValue === labelDeValue) setQuery(null);
             setOpen(true);
           }}
-          onBlur={onBlur}
+          onBlur={handleBlur}
           onKeyDown={handleKeyDown}
           className="h-11 min-h-11 w-full cursor-text rounded-sm border bg-surface px-4 pr-11 text-base text-text-primary transition-colors duration-fast ease-out placeholder:text-text-secondary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20 disabled:cursor-not-allowed disabled:bg-cream-100 disabled:opacity-70"
           style={{

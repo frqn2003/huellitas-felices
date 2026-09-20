@@ -24,7 +24,7 @@ import { apiGet } from "@/lib/api-client";
 export interface CatalogosOrden {
   proveedores: { id: number; nombre: string }[];
   articulos: { id: number; codigo: string; nombre: string }[];
-  depositos: { id: number; nombre: string; sucursal: string }[];
+  depositos: { id: number; nombre: string; ubicacion: string }[];
   condicionesPago: { id: number; nombre: string }[];
 }
 
@@ -209,22 +209,26 @@ function OrdenFormFields({
     field: K,
     value: OrdenDraft[K],
   ) => {
-    const next = { ...draft, [field]: value };
-    setDraft(next);
-    if (touched[field]) {
-      setErrors(validarDraft(next));
-    }
+    setDraft((prevDraft) => {
+      const next = { ...prevDraft, [field]: value };
+      if (touched[field]) {
+        setErrors(validarDraft(next));
+      }
+      return next;
+    });
   };
 
   const actualizarLinea = (key: string, patch: Partial<Omit<LineaDraft, "key">>) => {
-    const next = {
-      ...draft,
-      lineas: draft.lineas.map((l) => (l.key === key ? { ...l, ...patch } : l)),
-    };
-    setDraft(next);
-    if (lineasTouched[key]) {
-      setErrors(validarDraft(next));
-    }
+    setDraft((prevDraft) => {
+      const next = {
+        ...prevDraft,
+        lineas: prevDraft.lineas.map((l) => (l.key === key ? { ...l, ...patch } : l)),
+      };
+      if (lineasTouched[key]) {
+        setErrors(validarDraft(next));
+      }
+      return next;
+    });
   };
 
   const agregarLinea = () => {
@@ -235,17 +239,21 @@ function OrdenFormFields({
       cantidad: "",
       precio: "",
     };
-    const next = { ...draft, lineas: [...draft.lineas, nueva] };
-    setDraft(next);
-    setErrors(validarDraft(next));
+    setDraft((prevDraft) => {
+      const next = { ...prevDraft, lineas: [...prevDraft.lineas, nueva] };
+      setErrors(validarDraft(next));
+      return next;
+    });
   };
 
   const eliminarLinea = (key: string) => {
     // El botón se deshabilita cuando queda una sola línea, así que nunca
     // llega a cero filas (mismo comportamiento que movimientos).
-    const next = { ...draft, lineas: draft.lineas.filter((l) => l.key !== key) };
-    setDraft(next);
-    setErrors(validarDraft(next));
+    setDraft((prevDraft) => {
+      const next = { ...prevDraft, lineas: prevDraft.lineas.filter((l) => l.key !== key) };
+      setErrors(validarDraft(next));
+      return next;
+    });
   };
 
   /**
@@ -305,7 +313,7 @@ function OrdenFormFields({
 
   const depositoOptions = catalogos.depositos.map((d) => ({
     value: String(d.id),
-    label: `${d.nombre} · ${d.sucursal}`,
+    label: `${d.nombre} · ${d.ubicacion}`,
   }));
 
   const subtotal = calcularSubtotal(draft.lineas);
@@ -613,9 +621,9 @@ function OrdenFormFields({
           {(() => {
             // Por id, no comparando direcciones: la API devuelve `deposito_id`.
             const dep = catalogos.depositos.find((d) => d.id === orden?.deposito_id);
-            return dep ? `${dep.nombre} (${dep.sucursal})` : orden?.direccion_entrega || "—";
+            return dep ? `${dep.nombre} (${dep.ubicacion})` : "—";
           })()}
-          {cotizacionCodigo ? ` · Cotización: ${cotizacionCodigo}` : ""}
+          {cotizacionCodigo ? ` · Solicitud N° ${cotizacionCodigo}` : ""}
           {orden?.notas ? ` · Notas: ${orden.notas}` : ""}
         </p>
       )}
@@ -629,7 +637,8 @@ interface OrdenFormModalProps {
   orden: OrdenCompra | null;
   ordenes: OrdenCompra[];
   catalogos: CatalogosOrden;
-  /** Código SC-XXXX resuelto cuando la orden nació de una adjudicación. */
+  /** N° de solicitud (id) resuelto cuando la orden nació de una adjudicación
+      (D7: el dict no define número propio; el front muestra la solicitud por id). */
   cotizacionCodigo?: string | null;
   onClose: () => void;
   onSave: (draft: OrdenDraft) => Promise<{ error?: string }>;

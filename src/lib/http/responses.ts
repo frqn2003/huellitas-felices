@@ -25,7 +25,7 @@ export function noContent() {
 export function errorResponse(e: unknown) {
   if (e instanceof AppError) {
     return NextResponse.json(
-      { error: { codigo: e.codigo, mensaje: e.message, campo: e.campo } },
+      { error: { codigo: e.codigo, mensaje: e.message, campo: e.campo, datos: e.datos } },
       { status: e.status },
     );
   }

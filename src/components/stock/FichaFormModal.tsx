@@ -19,6 +19,9 @@ export interface FichaDraft {
   stockCritico: string;
 }
 
+/** Lo único que el select de artículo necesita mostrar. */
+type OpcionArticulo = Pick<Articulo, "id" | "codigo" | "nombre" | "unidadMedida">;
+
 interface FichaFormModalProps {
   open: boolean;
   modo: FichaFormModo;
@@ -111,28 +114,27 @@ function FichaFormFields({
     ? depositos.filter((d) => d.sucursalId === sucursalId)
     : depositos;
 
-  // En EDICION el artículo puede estar inactivo (fuera del catálogo de opciones):
-  // se agrega igual para que el select readonly muestre el valor actual.
-  const opcionesArticulo = useMemo(() => {
-    const lista = [...articulos];
+  // En EDICION el artículo puede estar inactivo (fuera del catálogo de
+  // opciones): se agrega igual para que el select readonly muestre el valor
+  // actual.
+  //
+  // El tipo es solo lo que el select necesita, NO un `Articulo` completo. Antes
+  // se construía uno entero rellenando lo que faltaba con ceros, `""` y
+  // `categoria: "Medicamentos"` — un artículo inventado que solo existía para
+  // que compilara, y que mentía en cada campo salvo los tres que se muestran.
+  const opcionesArticulo = useMemo<OpcionArticulo[]>(() => {
+    const lista: OpcionArticulo[] = articulos.map((a) => ({
+      id: a.id,
+      codigo: a.codigo,
+      nombre: a.nombre,
+      unidadMedida: a.unidadMedida,
+    }));
     if (ficha && !lista.some((a) => a.id === ficha.articuloId)) {
       lista.unshift({
         id: ficha.articuloId,
         codigo: ficha.articulo.codigo,
         nombre: ficha.articulo.nombre,
-        descripcion: "",
-        fabricanteId: 0,
-        fabricante: "",
-        unidadMedidaId: 0,
-        unidadMedida: ficha.articulo.unidadMedida as Articulo["unidadMedida"],
-        categoriaId: 0,
-        categoria: "Medicamentos",
-        proveedorPreferido: null,
-        estado: "Inactivo",
-        imagen: "",
-        createdAt: "",
-        updatedAt: "",
-        activo: false,
+        unidadMedida: ficha.articulo.unidadMedida,
       });
     }
     return lista;

@@ -11,9 +11,11 @@ export type EstadoOrden =
   | "recibida_total"
   | "cancelada";
 
-// El catálogo de condiciones de pago vive en la base (tabla `forma_pago`) y se
-// consume con GET /api/condiciones-pago. La constante que estaba acá tenía
-// valores que no existen en la base y le faltaban otros.
+// El catálogo de condiciones de pago es la tabla `forma_pago`, expuesta por
+// GET /api/condiciones-pago. El front NO cuelga de ese endpoint: usa el
+// placeholder compartido FORMAS_PAGO (src/data/formas-pago.ts, decisión D4).
+// La constante que estaba acá tenía valores que no existen en la base y le
+// faltaban otros.
 //
 // Al GUARDAR se manda el `id`; para MOSTRAR se usa `condicion_pago`, que la API
 // devuelve ya resuelto.
@@ -30,6 +32,12 @@ export interface OrdenCompraDetalle {
   precio_acordado: number;
 }
 
+// `subtotal?: number` se quitó de esta interfaz: la columna existe en la base
+// pero `toApiDetalle` (src/modules/compras/orden.mapper.ts) no la emite, así
+// que el campo valía `undefined` siempre. Nadie lo leía — el `subtotal` que sí
+// usan las pantallas es el de la CABECERA (OrdenCompra.subtotal), que el mapper
+// sí devuelve. Cuando el detalle lo emita, se agrega acá sin el `?`.
+
 export interface OrdenCompra {
   id: number;
   /** "OC-000001". Lo genera la secuencia de la base, no se deriva del id. */
@@ -44,7 +52,6 @@ export interface OrdenCompra {
   usuario_id: number;
   fecha: string;
   fecha_entrega: string | null;
-  direccion_entrega: string;
   /** Condición de pago acordada con el proveedor (catálogo fijo). */
   condicion_pago: string;
   notas: string | null;

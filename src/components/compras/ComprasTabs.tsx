@@ -1,9 +1,9 @@
 "use client";
 
-import { Scale, ShoppingCart } from "lucide-react";
+import { PackageOpen, Scale, ShoppingCart } from "lucide-react";
 import { useRef } from "react";
 
-export type TabCompras = "ordenes" | "cotizaciones";
+export type TabCompras = "ordenes" | "cotizaciones" | "recepciones";
 
 interface ComprasTabsProps {
   active: TabCompras;
@@ -18,12 +18,14 @@ const TABS: {
 }[] = [
   { id: "ordenes", label: "Órdenes de compra", icon: ShoppingCart },
   { id: "cotizaciones", label: "Cotizaciones", icon: Scale },
+  { id: "recepciones", label: "Recepciones", icon: PackageOpen },
 ];
 
 export function ComprasTabs({ active, onChange, disabled = false }: ComprasTabsProps) {
   const tabRefs = useRef<Record<TabCompras, HTMLButtonElement | null>>({
     ordenes: null,
     cotizaciones: null,
+    recepciones: null,
   });
 
   const handleKeyDown = (e: React.KeyboardEvent, index: number) => {

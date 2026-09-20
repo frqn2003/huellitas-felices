@@ -1,0 +1,15 @@
+# Página: agenda
+
+> Reglas específicas del tab "Agenda" dentro de la página `/clientes` (módulo Recepción, HU-TUR-02). Si existe este archivo, reemplaza al MASTER para esta página. Los tokens base (fondo crema, verde brand, headings Baloo 2 uppercase, radios 8/16, sombras discretas, motion 150/250/500 con `prefers-reduced-motion`) vienen del `MASTER.md` de Pet Bliss; acá van solo los matices de esta pantalla. Complementa a `turnos.md` (mismo módulo): la agenda comparte los datos y catálogos de turnos y el cambio de estado es la misma acción que en la tabla.
+
+## Desviaciones
+
+- **Contexto semanal por defecto**: la agenda abre en la semana actual del calendario real (si hoy es miércoles, la semana lunes→domingo que lo contiene), no en una fake. El encabezado muestra el rango en formato `formatearSemana` ("Semana del 14/09 al 20/09/2026") con ◀ ▶ para navegar y un botón "Hoy" que vuelve a la semana actual (accesible desde el teclado, no solo el ▶).
+- **Día actual resaltado**: la columna del día de hoy lleva un badge pill "Hoy" en amarillo `accent`. Es un HIGHLIGHT de contexto, no un CTA: no invita a ninguna acción, solo orienta. El amarillo no aparece en otro lugar de la agenda.
+- **Grilla de horarios = bandas de 1 hora**: se deriva de las franjas visibles en la semana (mínimo→máximo de las franjas de todos los profesionales), sin inventar horarios fuera de la cobertura.
+- **Celdas sin cobertura atenuadas "—"**: los días sin franjas laborales (ej. domingo) muestran "—" en toda la columna; una franja sin turnos muestra "Libre" en texto secundario suave. Ambos distinguen una agenda vacía de una franja libre.
+- **El profesional es filtro fijo**: un `Select` de profesional (incluye "Todos") siempre visible en la barra de la agenda; el filtraje afecta las tarjetas y el encabezado de franjas. Los demás filtros (estado, práctica, rango de fecha) van ocultos en un panel ⚙️ desplegable con "Limpiar filtros".
+- **El amarillo es reservado para CTAs**: en esta pantalla el único amarillo permitido es el badge "Hoy"; el botón primario contextual de la tab (Nuevo turno, del header del módulo) no aparece en la agenda (el wireframe no lo define) — no se fuerza un CTA donde el brief no lo pide.
+- **Cambio de estado con confirmación específica**: desde el detalle del turno, la sección "Cambiar estado" muestra las transiciones válidas (pendiente→confirmado; confirmado→atendido/cancelado/no asistió) y pide confirmación en un `ConfirmarDialog` cuyo `tone` depende del destino: cancelar→danger ("el horario queda disponible"), concretar/atender→success/neutral. Los estados finales (3/4/5) muestran "Sin cambios permitidos".
+- **Cards de turno comprimidas**: cada turno ocupa una celda con #id · hora–fin · práctica como línea fuerte y cliente · mascota en la siguiente; el profesional aparece solo cuando el filtro es "Todos".
+- **Leyenda de estados**: la agenda incluye la leyenda con `EstadoTurnoBadge` (mismos tokens `status-*`, sin colores propios) para no abrir un turno solo para entender su color.

@@ -3,18 +3,32 @@
 import type { ReactNode } from "react";
 import { createContext, useCallback, useEffect, useMemo, useState } from "react";
 import type { Proveedor } from "@/data/proveedores";
+import type { FormaPago } from "@/data/formas-pago";
 import { apiGet, apiSend, mensajeDeError } from "@/lib/api-client";
+// EL CONTRATO. Lo importa también el back (src/modules/proveedores/proveedor.schema.ts).
+// Tipar el body con `CrearProveedorBody` es lo que hace que escribir
+// `razon_social` acá deje de compilar en vez de devolver un 422 en runtime.
+import {
+  RUTA_PROVEEDORES,
+  rutaProveedor,
+  rutaInactivarProveedor,
+  type CrearProveedorBody,
+} from "@/contracts/proveedor";
+import { useCatalogo } from "@/lib/use-catalogo";
 
 export type NuevoProveedorInput = Omit<Proveedor, "id" | "estado">;
 
-/** Fila del catálogo `forma_pago`. GET /api/formas-pago */
-export type FormaPago = { id: number; nombre: string };
+/**
+ * Fila del catálogo `forma_pago`, que sirve GET /api/formas-pago.
+ * Re-exportado para que los componentes del módulo no importen de dos lados.
+ */
+export type { FormaPago } from "@/data/formas-pago";
 
 type Resultado = { error?: string };
 
 interface ProveedoresContextValue {
   proveedores: Proveedor[];
-  /** Catálogo real de la base: reemplaza la lista que el modal tenía hardcodeada. */
+  /** Catálogo `forma_pago`, desde GET /api/formas-pago. */
   formasPago: FormaPago[];
   loading: boolean;
   error: boolean;
@@ -35,14 +49,26 @@ export const ProveedoresContext = createContext<ProveedoresContextValue | null>(
  * mensaje del server, que además distingue el caso de la baja con órdenes
  * abiertas — algo que el front directamente no sabe.
  *
- * TRADUCCIÓN DE FORMAS DE PAGO: el formulario trabaja con nombres
- * (`formasPago: string[]`) porque así lo diseñó el equipo de front, pero la API
- * espera ids (`formaPagoIds: number[]`). La conversión se hace acá, en el
- * borde, contra el catálogo real. Así el modal no necesita saber de ids.
+ * TRADUCCIÓN DE FORMAS DE PAGO: el formulario envía el nombre elegido en
+ * `formasPago: string[]` (wire actual). La conversión nombres → ids
+ * (`formaPagoIds`) se hace acá, en el borde, contra el catálogo real que trae
+ * GET /api/formas-pago.
+ *
+ * Antes ese catálogo era el array fijo FORMAS_PAGO de src/data/formas-pago.ts
+ * (decisión "D4"). Funcionaba porque sus ids 1–5 coincidían con los del seed,
+ * pero nada lo garantizaba: agregar una forma de pago desde Supabase no la
+ * hacía aparecer en el formulario, y renombrar una rompía la traducción
+ * nombre → id en silencio (el `.filter()` de `aIds` descarta lo que no
+ * encuentra, así que el proveedor se guardaba con menos formas de pago de las
+ * que el usuario eligió).
  */
 export function ProveedoresProvider({ children }: { children: ReactNode }) {
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
-  const [formasPago, setFormasPago] = useState<FormaPago[]>([]);
+  // El catálogo real de `forma_pago`. Va por `useCatalogo` y no por el
+  // `Promise.all` del efecto de abajo porque no comparte su estado de
+  // carga/error: el listado de proveedores es lo que da sentido a la pantalla,
+  // este catálogo solo puebla dos selects.
+  const formasPago = useCatalogo<FormaPago>("/api/formas-pago");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [recarga, setRecarga] = useState(0);
@@ -50,14 +76,13 @@ export function ProveedoresProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelado = false;
 
-    Promise.all([
-      apiGet<Proveedor[]>("/api/proveedores"),
-      apiGet<FormaPago[]>("/api/formas-pago"),
-    ])
-      .then(([lista, catalogo]) => {
+    // Este efecto trae SOLO el listado, que es lo que tiene estado de
+    // carga/error propio. El catálogo de formas de pago lo resuelve
+    // `useCatalogo` arriba, con su propio ciclo.
+    apiGet<Proveedor[]>(RUTA_PROVEEDORES)
+      .then((lista) => {
         if (cancelado) return;
         setProveedores(lista);
-        setFormasPago(catalogo);
       })
       .catch(() => {
         if (!cancelado) setError(true);
@@ -86,13 +111,45 @@ export function ProveedoresProvider({ children }: { children: ReactNode }) {
     [formasPago],
   );
 
+  /**
+   * El formulario → el body que espera la API.
+   *
+   * ACÁ SE ROMPÍA EL ALTA. El front habla snake_case en este módulo a propósito
+   * (ver el mapper: `razon_social`, `plazo_entrega_dias`, contrato C1), pero el
+   * BODY del POST no es el shape de lectura: `crearProveedorSchema` valida
+   * `razonSocial` y `plazoEntregaDias`, como todos los schemas del proyecto.
+   * Se mandaba `{ ...input }` crudo, así que `razonSocial` llegaba undefined y
+   * el server contestaba 422 `Required` — el "Required" rojo del modal, sin
+   * decir qué campo, porque el modal solo pinta el mensaje y descarta el
+   * `campo` que el error sí trae.
+   *
+   * Y no fallaba solo la razón social: `plazo_entrega_dias` también se perdía,
+   * y zod sin `.strict()` descarta en silencio lo que no declara. O sea que
+   * aunque el alta hubiera pasado, el plazo se guardaba en el default.
+   *
+   * La traducción va acá, en el borde, junto a la de formas de pago: es el
+   * único lugar que ya sabía que los dos vocabularios existen.
+   */
+  const aBody = useCallback(
+    (input: NuevoProveedorInput): CrearProveedorBody => ({
+      razonSocial: input.razon_social,
+      cuit: input.cuit,
+      direccion: input.direccion,
+      telefono: input.telefono,
+      email: input.email,
+      contacto: input.contacto,
+      plazoEntregaDias: input.plazo_entrega_dias,
+      formaPagoIds: aIds(input.formasPago),
+      // `calificacion` NO viaja: es HU-PROV-02 y el schema todavía no la
+      // declara, así que zod la descartaría igual (ver el mapper).
+    }),
+    [aIds],
+  );
+
   const agregarProveedor = useCallback(
     async (input: NuevoProveedorInput): Promise<Resultado> => {
       try {
-        const creado = await apiSend<Proveedor>("POST", "/api/proveedores", {
-          ...input,
-          formaPagoIds: aIds(input.formasPago),
-        });
+        const creado = await apiSend<Proveedor>("POST", RUTA_PROVEEDORES, aBody(input));
         // Se agrega el que devuelve la API, no el draft: trae el id real.
         setProveedores((prev) => [...prev, creado]);
         return {};
@@ -100,23 +157,24 @@ export function ProveedoresProvider({ children }: { children: ReactNode }) {
         return { error: mensajeDeError(e) };
       }
     },
-    [aIds],
+    [aBody],
   );
 
   const actualizarProveedor = useCallback(
     async (id: number, input: NuevoProveedorInput): Promise<Resultado> => {
       try {
-        const actualizado = await apiSend<Proveedor>("PUT", `/api/proveedores/${id}`, {
-          ...input,
-          formaPagoIds: aIds(input.formasPago),
-        });
+        const actualizado = await apiSend<Proveedor>(
+          "PUT",
+          rutaProveedor(id),
+          aBody(input),
+        );
         setProveedores((prev) => prev.map((p) => (p.id === id ? actualizado : p)));
         return {};
       } catch (e) {
         return { error: mensajeDeError(e) };
       }
     },
-    [aIds],
+    [aBody],
   );
 
   const darDeBaja = useCallback(async (id: number): Promise<Resultado> => {
@@ -125,7 +183,7 @@ export function ProveedoresProvider({ children }: { children: ReactNode }) {
       // abiertas. Esa regla no se puede validar en el front.
       const actualizado = await apiSend<Proveedor>(
         "PATCH",
-        `/api/proveedores/${id}/inactivar`,
+        rutaInactivarProveedor(id),
       );
       setProveedores((prev) => prev.map((p) => (p.id === id ? actualizado : p)));
       return {};

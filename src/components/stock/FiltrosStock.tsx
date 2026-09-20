@@ -2,13 +2,14 @@
 
 import { SlidersHorizontal, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { SUCURSALES, type EstadoStock } from "@/data/stock";
+import type { Deposito, EstadoStock, Sucursal } from "@/data/stock";
 import { Button } from "@/components/ui/Button";
 
 export type EstadoStockFiltro = EstadoStock | "todos";
 
 export interface FiltrosStock {
   sucursalId: string;
+  depositoId: string;
   estadoStock: EstadoStockFiltro;
 }
 
@@ -19,15 +20,27 @@ const ESTADOS: { value: EstadoStockFiltro; label: string }[] = [
   { value: "critico", label: "Crítico" },
 ];
 
-export const FILTROS_STOCK_VACIOS: FiltrosStock = { sucursalId: "", estadoStock: "todos" };
+export const FILTROS_STOCK_VACIOS: FiltrosStock = { sucursalId: "", depositoId: "", estadoStock: "todos" };
 
-function buildTags(filtros: FiltrosStock, onChange: (filtros: FiltrosStock) => void) {
+function buildTags(
+  filtros: FiltrosStock,
+  depositos: Deposito[],
+  sucursales: Sucursal[],
+  onChange: (filtros: FiltrosStock) => void,
+) {
   const tags: { label: string; onRemove: () => void }[] = [];
   if (filtros.sucursalId) {
-    const sucursal = SUCURSALES.find((s) => s.id === Number(filtros.sucursalId));
+    const sucursal = sucursales.find((s) => s.id === Number(filtros.sucursalId));
     tags.push({
       label: `Sucursal: ${sucursal?.nombre ?? filtros.sucursalId}`,
       onRemove: () => onChange({ ...filtros, sucursalId: "" }),
+    });
+  }
+  if (filtros.depositoId) {
+    const deposito = depositos.find((d) => d.id === Number(filtros.depositoId));
+    tags.push({
+      label: `Depósito: ${deposito?.nombre ?? filtros.depositoId}`,
+      onRemove: () => onChange({ ...filtros, depositoId: "" }),
     });
   }
   if (filtros.estadoStock !== "todos") {
@@ -40,8 +53,18 @@ function buildTags(filtros: FiltrosStock, onChange: (filtros: FiltrosStock) => v
   return tags;
 }
 
-export function FiltrosStockChips({ filtros, onChange }: { filtros: FiltrosStock; onChange: (filtros: FiltrosStock) => void }) {
-  const tags = buildTags(filtros, onChange);
+export function FiltrosStockChips({
+  filtros,
+  depositos,
+  sucursales,
+  onChange,
+}: {
+  filtros: FiltrosStock;
+  depositos: Deposito[];
+  sucursales: Sucursal[];
+  onChange: (filtros: FiltrosStock) => void;
+}) {
+  const tags = buildTags(filtros, depositos, sucursales, onChange);
   if (tags.length === 0) return null;
   return (
     <div className="flex flex-wrap items-center gap-2" aria-label="Filtros aplicados">
@@ -67,12 +90,22 @@ export function FiltrosStockChips({ filtros, onChange }: { filtros: FiltrosStock
 
 interface FiltrosStockProps {
   filtros: FiltrosStock;
+  depositos: Deposito[];
+  /** Viene de GET /api/sucursales, que lee la tabla. */
+  sucursales: Sucursal[];
   onChange: (filtros: FiltrosStock) => void;
   disabled?: boolean;
   hideChips?: boolean;
 }
 
-export function FiltrosStock({ filtros, onChange, disabled = false, hideChips = false }: FiltrosStockProps) {
+export function FiltrosStock({
+  filtros,
+  depositos,
+  sucursales,
+  onChange,
+  disabled = false,
+  hideChips = false,
+}: FiltrosStockProps) {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -87,7 +120,7 @@ export function FiltrosStock({ filtros, onChange, disabled = false, hideChips = 
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [open]);
 
-  const tags = buildTags(filtros, onChange);
+  const tags = buildTags(filtros, depositos, sucursales, onChange);
 
   return (
     <div className="flex flex-col gap-2">
@@ -112,7 +145,14 @@ export function FiltrosStock({ filtros, onChange, disabled = false, hideChips = 
         {open && (
           <div className="absolute right-0 top-[calc(100%+8px)] z-20 w-64 rounded-md border border-border bg-surface p-4 shadow-card">
             <div className="flex flex-col gap-4">
-              {/* BACKEND: poblar desde GET /api/sucursales (id + nombre). */}
+              {/*
+                Las opciones vienen por prop desde GET /api/sucursales, que
+                ahora lee la tabla. Antes salían del array hardcodeado
+                SUCURSALES de src/data/stock.ts, con nombres inventados
+                ("Centro") que no coincidían con los de la base
+                ("Sucursal Centro") — y el filtro comparaba esos nombres, así
+                que no devolvía nunca nada.
+              */}
               <label className="flex flex-col gap-1.5 text-sm font-bold text-text-primary">
                 Sucursal
                 <select
@@ -121,9 +161,25 @@ export function FiltrosStock({ filtros, onChange, disabled = false, hideChips = 
                   className="h-11 cursor-pointer rounded-sm border border-border bg-surface px-3 text-base font-normal text-text-primary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
                 >
                   <option value="">Todas</option>
-                  {SUCURSALES.map((s) => (
+                  {sucursales.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.nombre}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1.5 text-sm font-bold text-text-primary">
+                Depósito
+                <select
+                  value={filtros.depositoId}
+                  onChange={(e) => onChange({ ...filtros, depositoId: e.target.value })}
+                  aria-label="Filtrar por depósito"
+                  className="h-11 cursor-pointer rounded-sm border border-border bg-surface px-3 text-base font-normal text-text-primary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
+                >
+                  <option value="">Todos</option>
+                  {depositos.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.nombre}
                     </option>
                   ))}
                 </select>
@@ -149,7 +205,12 @@ export function FiltrosStock({ filtros, onChange, disabled = false, hideChips = 
           </div>
         )}
       </div>
-      {!hideChips && <FiltrosStockChips filtros={filtros} onChange={onChange} />}
+      {!hideChips && <FiltrosStockChips
+          filtros={filtros}
+          depositos={depositos}
+          sucursales={sucursales}
+          onChange={onChange}
+        />}
     </div>
   );
 }

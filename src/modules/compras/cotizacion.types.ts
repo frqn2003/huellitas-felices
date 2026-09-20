@@ -1,3 +1,5 @@
+import type { Row } from "@/lib/db/schema.types";
+
 /**
  * HU-COMP-02 — tipos del módulo Compras (lado cotizaciones).
  *
@@ -11,46 +13,45 @@
  */
 
 /** Fila de `solicitud_cotizacion` con el usuario resuelto por JOIN. */
-export type SolicitudRow = {
-  id: number;
+export type SolicitudRow = Pick<
+  Row<"solicitud_cotizacion">,
+  "id" | "usuario_id" | "fecha" | "notas"
+> & {
   /** Numero del documento (SC-000001), generado por la base. */
   cod_sol: string;
-  usuario_id: number;
+  /** Del JOIN con `usuario`. */
   usuario_nombre: string;
   usuario_apellido: string;
-  fecha: Date;
+  /**
+   * La columna es `varchar` libre en la base; el modulo la estrecha a los tres
+   * valores que realmente usa. Es un estrechamiento deliberado, no una copia
+   * del esquema.
+   */
   estado: "Abierta" | "Adjudicada" | "Cancelada";
-  notas: string | null;
 };
 
 /** Fila de `solicitud_detalle`. */
-export type SolicitudDetalleRow = {
-  id: number;
-  solicitud_id: number;
-  articulo_id: number;
-  cantidad_estimada: string;
-  nota: string | null;
-};
+export type SolicitudDetalleRow = Pick<
+  Row<"solicitud_detalle">,
+  "id" | "solicitud_id" | "articulo_id" | "cantidad_estimada" | "nota"
+>;
 
 /** Fila de `cotizacion` con proveedor y forma de pago resueltos. */
-export type CotizacionRow = {
-  id: number;
-  solicitud_id: number;
-  proveedor_id: number;
+export type CotizacionRow = Pick<
+  Row<"cotizacion">,
+  "id" | "solicitud_id" | "proveedor_id" | "forma_pago_id" | "fecha_recepcion"
+> & {
+  /** Resuelto por los JOIN. */
   proveedor_razon_social: string;
   proveedor_estado: "activo" | "inactivo";
-  forma_pago_id: number;
   forma_pago_nombre: string;
-  fecha_recepcion: Date;
 };
 
 /** Fila de `cotizacion_detalle`. */
-export type CotizacionDetalleRow = {
-  id: number;
-  cotizacion_id: number;
-  articulo_id: number;
-  precio: string;
-};
+export type CotizacionDetalleRow = Pick<
+  Row<"cotizacion_detalle">,
+  "id" | "cotizacion_id" | "articulo_id" | "precio"
+>;
 
 /** Filtros del listado. Salen de FiltrosCotizaciones.tsx y del buscador. */
 export type FiltrosSolicitud = {

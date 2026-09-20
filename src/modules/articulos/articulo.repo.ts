@@ -64,6 +64,9 @@ const SELECT_BASE = `
     um.nombre AS unidad_medida_nombre,
     a.fabricante_id,
     f.nombre  AS fabricante_nombre,
+    a.presentacion_id,
+    pr.nombre AS presentacion_nombre,
+    a.contenido_neto,
     prov.id            AS proveedor_preferido_id,
     prov.razon_social  AS proveedor_preferido_nombre,
     a.estado,
@@ -74,6 +77,7 @@ const SELECT_BASE = `
   JOIN categoria      c  ON c.id  = a.categoria_id
   JOIN unidad_medida  um ON um.id = a.unidad_medida_id
   JOIN fabricante     f  ON f.id  = a.fabricante_id
+  JOIN presentacion   pr ON pr.id = a.presentacion_id
   ${LATERAL_PROVEEDOR}
 `;
 
@@ -155,7 +159,7 @@ export async function findActivoByNombre(
 
 /** Catálogos del formulario, en una sola ida a la base. */
 export async function catalogos(): Promise<CatalogosArticulo> {
-  const [categorias, unidadesMedida, fabricantes, proveedores] = await Promise.all([
+  const [categorias, unidadesMedida, fabricantes, presentaciones, proveedores] = await Promise.all([
     query<{ id: number; nombre: string }>(
       "SELECT id, nombre FROM categoria ORDER BY nombre",
     ),
@@ -165,13 +169,16 @@ export async function catalogos(): Promise<CatalogosArticulo> {
     query<{ id: number; nombre: string }>(
       "SELECT id, nombre FROM fabricante WHERE estado = 'activo' ORDER BY nombre",
     ),
+    query<{ id: number; nombre: string }>(
+      "SELECT id, nombre FROM presentacion ORDER BY nombre",
+    ),
     // Solo proveedores ACTIVOS: uno inactivo no puede elegirse (HU-PROV-01).
     query<{ id: number; nombre: string }>(
       "SELECT id, razon_social AS nombre FROM proveedor WHERE estado = 'activo' ORDER BY razon_social",
     ),
   ]);
 
-  return { categorias, unidadesMedida, fabricantes, proveedores };
+  return { categorias, unidadesMedida, fabricantes, presentaciones, proveedores };
 }
 
 // ---------------------------------------------------------
@@ -193,10 +200,15 @@ export async function insert(
   client: PoolClient,
 ): Promise<number> {
   const { rows } = await client.query<{ id: number }>(
+    // ⚠️ `presentacion_id` es NOT NULL y SIN DEFAULT. Omitirlo acá era el 500
+    //    del alta: Postgres devolvía un 23502 que nadie traducía.
+    //
+    //    `contenido_neto` sí tiene DEFAULT 1, pero el formulario lo pide, así
+    //    que se persiste: antes se tecleaba "500" y se guardaba 1, en silencio.
     `INSERT INTO articulo
        (nombre, descripcion, categoria_id, unidad_medida_id, fabricante_id,
-        imagen_url, estado)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+        presentacion_id, contenido_neto, imagen_url, estado)
+     VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, 1), $8, $9)
      RETURNING id`,
     [
       data.nombre,
@@ -204,6 +216,8 @@ export async function insert(
       data.categoriaId,
       data.unidadMedidaId,
       data.fabricanteId,
+      data.presentacionId,
+      data.contenidoNeto ?? null,
       data.imagenUrl ?? null,
       data.activo === false ? "inactivo" : "activo",
     ],
@@ -223,8 +237,10 @@ export async function update(
          categoria_id = $4,
          unidad_medida_id = $5,
          fabricante_id = $6,
-         imagen_url = $7,
-         estado = $8
+         presentacion_id = $7,
+         contenido_neto = COALESCE($8, contenido_neto),
+         imagen_url = $9,
+         estado = $10
      WHERE id = $1`,
     [
       id,
@@ -233,6 +249,8 @@ export async function update(
       data.categoriaId,
       data.unidadMedidaId,
       data.fabricanteId,
+      data.presentacionId,
+      data.contenidoNeto ?? null,
       data.imagenUrl ?? null,
       data.activo === false ? "inactivo" : "activo",
     ],

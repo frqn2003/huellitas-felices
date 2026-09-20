@@ -36,7 +36,7 @@ export function BajaProveedorModal({ proveedor, onClose, onConfirm }: BajaProvee
         <div className="flex flex-col gap-3">
           <p className="text-base font-bold text-text-primary">
             ¿Está seguro que desea dar de baja al proveedor{" "}
-            <span className="text-brand-900">“{proveedor.razonSocial}”</span>?
+            <span className="text-brand-900">“{proveedor.razon_social}”</span>?
           </p>
           <p className="text-sm leading-relaxed text-text-secondary">
             El proveedor quedará inactivo y no podrá seleccionarse en nuevas órdenes de compra ni

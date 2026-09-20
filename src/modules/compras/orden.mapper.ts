@@ -22,9 +22,9 @@ import type { OrdenDetalleRow, OrdenRow } from "./orden.types";
  *  3. estado_id → nombre del estado. El front muestra el string
  *     ("Pendiente", "Enviada"...); la base guarda la FK a estado_orden_compra.
  *
- *  4. deposito.ubicacion → `direccion_entrega`. El front espera la dirección ya
- *     resuelta; la base guarda la FK al depósito. Ver la divergencia anotada
- *     abajo.
+ *  4. deposito_id. La base guarda la FK al depósito y el FRONT resuelve la
+ *     dirección desde el catálogo (`deposito.ubicacion`, decisión D3). El campo
+ *     `direccion_entrega` ya no existe en el contrato del front.
  */
 
 /**
@@ -47,8 +47,9 @@ import type { OrdenDetalleRow, OrdenRow } from "./orden.types";
  *    entrega, en vez de adivinarlo comparando direcciones
  *    (`depositoPorDireccion()` en OrdenFormModal).
  *
- * `condicion_pago` y `direccion_entrega` se siguen mandando resueltos: la tabla
- * los muestra tal cual y no tiene por qué resolver ids para leer una fila.
+ * `condicion_pago` se sigue mandando resuelto: la tabla lo muestra tal cual y
+ * no tiene por qué resolver ids para leer una fila. `direccion_entrega` NO se
+ * manda más: el front la resuelve desde `deposito_id` + catálogo (decisión D3).
  */
 export type OrdenCompraApi = OrdenCompra & {
   cod_ord: string;
@@ -88,13 +89,10 @@ export function toApi(row: OrdenRow, detalles: OrdenDetalleRow[]): OrdenCompraAp
     fecha: row.fecha.toISOString(),
     fecha_entrega: row.fecha_entrega ? row.fecha_entrega.toISOString() : null,
 
-    // DIVERGENCIA ASUMIDA: `src/data/ordenes-compra.ts` dice que la base guarda
-    // un varchar `direccion_entrega` sin FK. El DER real hace lo contrario y es
-    // lo correcto: guarda `deposito_id` y la dirección sale de
-    // `deposito.ubicacion`. Así, si el depósito se muda, las órdenes viejas no
-    // quedan con una dirección que ya no existe. El front recibe el mismo
-    // string de siempre y no se entera.
-    direccion_entrega: row.deposito_ubicacion ?? "",
+    // D3: el contrato ya no lleva `direccion_entrega` — la base guarda
+    // `deposito_id` y el front resuelve `deposito.ubicacion` contra el
+    // catálogo (OrdenFormModal). Así, si el depósito se muda, las órdenes
+    // viejas no quedan con una dirección que ya no existe.
     deposito_id: row.deposito_id,
 
     forma_pago_id: row.forma_pago_id,

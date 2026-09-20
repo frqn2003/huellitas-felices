@@ -1,6 +1,6 @@
 # Página: Compras · tab Órdenes de compra (`/ordenes-compra`)
 
-> HU-COMP-01 / HU-COMP-02 · Extiende `../MASTER.md` (Pet Bliss). Los tokens base
+> HU-COMP-02 (v2, brief `docs/briefs/HU-COMP-02-02.md`) · Extiende `../MASTER.md` (Pet Bliss). Los tokens base
 > NO cambian; este archivo documenta las decisiones específicas de esta pantalla.
 > Desde la consolidación del módulo, `/ordenes-compra` es el host del módulo
 > **Compras** con 2 tabs ("Órdenes de compra" y "Cotizaciones", componente
