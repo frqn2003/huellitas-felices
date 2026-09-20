@@ -549,6 +549,31 @@ export function horaDentroDeTurno(turno: Turno, horaInicio: string): boolean {
  * dos turnos se solapan si cada uno empieza antes de que termine el otro.
  * Es espejo del EXCLUDE USING gist de BD; el backend también valida con OVERLAPS.
  */
+/**
+ * Igual que `haySuperposicion` pero para un turno que TODAVÍA NO EXISTE.
+ *
+ * El draft no tiene `id`, así que no hay nada que excluir de la comparación:
+ * antes se pasaba `id: 0`, que funcionaba de casualidad (ningún turno guardado
+ * tiene id 0) y escondía que el caso era distinto.
+ *
+ * ⚠️ Es feedback de UI, no la garantía. El backend revalida contra la base y,
+ *    bajo concurrencia, el constraint `turno_sin_superposicion_excl` es lo
+ *    único que impide el turno duplicado.
+ */
+export function haySuperposicionDraft(
+  draft: Pick<Turno, "agendaProfesionalId" | "fecha" | "horaInicio" | "horaFin">,
+  existentes: Turno[],
+): boolean {
+  return existentes.some(
+    (t) =>
+      t.agendaProfesionalId === draft.agendaProfesionalId &&
+      t.fecha === draft.fecha &&
+      t.estadoId !== 3 && // cancelado liberó el hueco
+      draft.horaInicio < t.horaFin &&
+      t.horaInicio < draft.horaFin,
+  );
+}
+
 export function haySuperposicion(turno: Pick<Turno, "id" | "agendaProfesionalId" | "fecha" | "horaInicio" | "horaFin">, existentes: Turno[]): boolean {
   return existentes.some(
     (t) =>

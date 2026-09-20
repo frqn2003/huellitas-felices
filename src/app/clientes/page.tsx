@@ -25,9 +25,16 @@ import type { Cliente, ClienteDraft } from "@/data/clientes";
 import { mascotasPorCliente } from "@/data/clientes";
 import type { Mascota, MascotaDraft } from "@/data/mascotas";
 import type { Turno } from "@/data/turnos";
-import { nombreEstado, turnosIniciales } from "@/data/turnos";
+import {
+  nombreEstado,
+  type EstadoTurno,
+  type Practica,
+  type Profesional,
+  type TurnoDraft,
+} from "@/data/turnos";
 import { AgendaSemanal } from "@/components/turnos/AgendaSemanal";
 import { apiGet, apiSend, ApiError, mensajeDeError } from "@/lib/api-client";
+import { useCatalogo } from "@/lib/use-catalogo";
 
 function ClientesScreen() {
   const { showToast } = useToast();
@@ -175,7 +182,35 @@ function ClientesScreen() {
   // --- Estado de la tab Turnos (HU-TUR-01) ---
   // BACKEND: reemplazar por GET /api/turnos (tabla turno, contrato sección 8).
   // Vive a nivel página (como clientes/mascotas) para persistir al cambiar de tab.
-  const [turnos, setTurnos] = useState<Turno[]>(turnosIniciales);
+  const [turnos, setTurnos] = useState<Turno[]>([]);
+
+  // Catálogos del wizard. Van por `useCatalogo` (apiGetOpcional) y no dentro del
+  // Promise.all del listado: si un catálogo falla, la tab de turnos sigue
+  // mostrando la agenda; lo único que queda vacío es su select.
+  //
+  // ⚠️ Los dos SON tablas: las franjas de `profesionales` traen el
+  //    `agendaProfesionalId` que viaja en el POST, y la duración de `practicas`
+  //    define la hora de fin. Con las constantes que había en src/data/turnos.ts
+  //    el alta fallaba con un 23503 (esas franjas no existen en la base).
+  const profesionales = useCatalogo<Profesional>("/api/profesionales");
+  const practicas = useCatalogo<Practica>("/api/practicas");
+  const estadosTurnoCat = useCatalogo<EstadoTurno>("/api/estados-turno");
+
+  useEffect(() => {
+    let cancelado = false;
+
+    apiGet<Turno[]>("/api/turnos")
+      .then((data) => {
+        if (!cancelado) setTurnos(data);
+      })
+      .catch((e) => {
+        if (!cancelado) showToast("error", mensajeDeError(e));
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [showToast]);
 
   // Mapa cliente por id: resuelve el dueño de cada mascota (columna "Ver dueño"
   // y el chip pre-filtrado desde la patita).
@@ -298,8 +333,26 @@ function ClientesScreen() {
     setModalMascotaOpen(true);
   };
 
-  const handleCrearTurno = (nuevo: Turno) => {
-    setTurnos((prev) => [nuevo, ...prev]);
+  /**
+   * Alta de turno (HU-TUR-01).
+   *
+   * Devuelve el turno que respondió el servidor para que el wizard pueda armar
+   * el resumen de confirmación con los datos REALES: el id que generó la base,
+   * la sucursal que derivó el trigger y el estado inicial (pendiente).
+   *
+   * El `usuarioId` (la recepcionista que carga) NO se manda: lo toma el backend
+   * de la sesión.
+   */
+  const handleCrearTurno = async (
+    draft: TurnoDraft,
+  ): Promise<{ turno?: Turno; error?: string }> => {
+    try {
+      const turno = await apiSend<Turno>("POST", "/api/turnos", draft);
+      setTurnos((prev) => [turno, ...prev]);
+      return { turno };
+    } catch (e) {
+      return { error: mensajeDeError(e) };
+    }
   };
 
   // HU-TUR-02: cambio de estado desde la agenda. Vive a nivel página para que
@@ -308,18 +361,36 @@ function ClientesScreen() {
   // registra auditoria (tabla='turno', operacion='UPDATE', registro_id,
   // usuario_id de sesión, valores_anteriores/nuevos); el backend refresca y el
   // front aplica el cambio local para no recargar toda la página.
-  const handleCambiarEstado = (turnoId: number, estadoId: number): boolean => {
-    const previo = turnos.find((t) => t.id === turnoId);
-    if (!previo) return false;
-    setTurnos((prev) => prev.map((t) => (t.id === turnoId ? { ...t, estadoId } : t)));
-    showToast(
-      "success",
-      `El turno #${String(turnoId).padStart(5, "0")} pasó a ${nombreEstado[estadoId] ?? "desconocido"}`,
-    );
-    // BACKEND: el backend valida que la transición sea permitida (1→2, 2→{3,4,5})
-    // y registra la auditoría del UPDATE. Si cancelado, el horario queda libre
-    // al instante (EXCLUDE estado_id <> 3).
-    return true;
+  /**
+   * Cambio de estado del turno (HU-TUR-02).
+   *
+   * El backend valida la transición permitida (pendiente→confirmado→{atendido,
+   * cancelado, no_asistio}) y el trigger `trg_auditoria_turno_estado` registra
+   * el cambio con usuario, fecha y hora. Si pasa a cancelado, el horario queda
+   * libre en el mismo instante: el constraint EXCLUDE y el chequeo de
+   * disponibilidad filtran los dos por `estado_id <> 3`.
+   *
+   * El estado local se actualiza con el turno que DEVOLVIÓ el servidor, no con
+   * el `estadoId` que se pidió: si el backend hubiera hecho algo distinto, la
+   * pantalla mostraría lo que realmente quedó guardado.
+   */
+  const handleCambiarEstado = async (
+    turnoId: number,
+    estadoId: number,
+  ): Promise<string | null> => {
+    try {
+      const actualizado = await apiSend<Turno>("PATCH", `/api/turnos/${turnoId}/estado`, {
+        estadoId,
+      });
+      setTurnos((prev) => prev.map((t) => (t.id === turnoId ? actualizado : t)));
+      showToast(
+        "success",
+        `El turno #${String(turnoId).padStart(5, "0")} pasó a ${nombreEstado[actualizado.estadoId] ?? "desconocido"}`,
+      );
+      return null;
+    } catch (e) {
+      return mensajeDeError(e);
+    }
   };
 
   const handleSaveCliente = async (
@@ -626,6 +697,9 @@ function ClientesScreen() {
                 clientes={clientes}
                 mascotas={mascotas}
                 turnos={turnos}
+                profesionales={profesionales}
+                practicas={practicas}
+                estados={estadosTurnoCat}
                 onCrearTurno={handleCrearTurno}
                 nuevoTurnoOpen={turnoWizardOpen}
                 nuevoTurnoSession={turnoWizardSession}
@@ -646,6 +720,7 @@ function ClientesScreen() {
                 clientes={clientes}
                 mascotas={mascotas}
                 turnos={turnos}
+                catalogos={{ profesionales, practicas, estados: estadosTurnoCat }}
                 onCambiarEstado={handleCambiarEstado}
               />
             </div>

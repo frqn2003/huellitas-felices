@@ -3,10 +3,10 @@
 import { SlidersHorizontal, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
-  estadosTurno,
   nombreEstado,
-  practicas,
-  profesionales,
+  type EstadoTurno,
+  type Practica,
+  type Profesional,
 } from "@/data/turnos";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
@@ -33,15 +33,32 @@ export const FILTROS_AGENDA_VACIOS: FiltrosAgendaValues = {
   hasta: "",
 };
 
-const estadoOpciones = estadosTurno.map((e) => ({
-  value: String(e.id),
-  label: nombreEstado[e.id] ?? e.nombre,
-}));
+/**
+ * `nombreEstado` traduce el nombre crudo de la base ("no_asistio") al que ve el
+ * usuario ("No asistió"). Es presentación y vive en el front; la LISTA de
+ * estados, en cambio, sale de la tabla.
+ */
+function opcionesDeEstado(estados: EstadoTurno[]) {
+  return estados.map((e) => ({
+    value: String(e.id),
+    label: nombreEstado[e.id] ?? e.nombre,
+  }));
+}
 
-const practicaOpciones = practicas.map((p) => ({
-  value: String(p.id),
-  label: p.nombre,
-}));
+/**
+ * Catálogos de los selects de Profesional y Práctica.
+ *
+ * Llegan por prop y NO de las constantes de src/data/turnos.ts: son TABLAS
+ * (`usuario` con rol Veterinario, y `practica`). El id elegido viaja como
+ * `?profesionalId=` / `?practicaId=` al filtrar, así que tiene que ser un id
+ * real — con la lista fija, filtrar por un profesional inexistente devolvía
+ * siempre la agenda vacía.
+ */
+export type CatalogosAgenda = {
+  profesionales: Profesional[];
+  practicas: Practica[];
+  estados: EstadoTurno[];
+};
 
 function formatFechaChip(fecha: string) {
   if (!fecha) return "";
@@ -52,26 +69,27 @@ function formatFechaChip(fecha: string) {
 export function buildTagsAgenda(
   filtros: FiltrosAgendaValues,
   onChange: (filtros: FiltrosAgendaValues) => void,
+  catalogos: CatalogosAgenda,
 ) {
   const tags: { label: string; onRemove: () => void }[] = [];
   if (filtros.profesionalId) {
-    const pro = profesionales.find((p) => String(p.id) === filtros.profesionalId);
+    const pro = catalogos.profesionales.find((p) => String(p.id) === filtros.profesionalId);
     tags.push({
       label: `Profesional: ${pro ? `${pro.nombre} ${pro.apellido}` : filtros.profesionalId}`,
       onRemove: () => onChange({ ...filtros, profesionalId: "" }),
     });
   }
   if (filtros.estadoId) {
-    const estado = estadoOpciones.find((e) => e.value === filtros.estadoId);
+    const estado = opcionesDeEstado(catalogos.estados).find((e) => e.value === filtros.estadoId);
     tags.push({
       label: `Estado: ${estado?.label ?? filtros.estadoId}`,
       onRemove: () => onChange({ ...filtros, estadoId: "" }),
     });
   }
   if (filtros.practicaId) {
-    const pra = practicaOpciones.find((p) => p.value === filtros.practicaId);
+    const pra = catalogos.practicas.find((p) => String(p.id) === filtros.practicaId);
     tags.push({
-      label: `Práctica: ${pra?.label ?? filtros.practicaId}`,
+      label: `Práctica: ${pra?.nombre ?? filtros.practicaId}`,
       onRemove: () => onChange({ ...filtros, practicaId: "" }),
     });
   }
@@ -93,11 +111,13 @@ export function buildTagsAgenda(
 export function FiltrosAgendaChips({
   filtros,
   onChange,
+  catalogos,
 }: {
   filtros: FiltrosAgendaValues;
   onChange: (filtros: FiltrosAgendaValues) => void;
+  catalogos: CatalogosAgenda;
 }) {
-  const tags = buildTagsAgenda(filtros, onChange);
+  const tags = buildTagsAgenda(filtros, onChange, catalogos);
   if (tags.length === 0) return null;
   return (
     <div className="flex flex-wrap items-center gap-2" aria-label="Filtros aplicados">
@@ -124,9 +144,10 @@ export function FiltrosAgendaChips({
 interface FiltrosAgendaProps {
   filtros: FiltrosAgendaValues;
   onChange: (filtros: FiltrosAgendaValues) => void;
+  catalogos: CatalogosAgenda;
 }
 
-export function FiltrosAgenda({ filtros, onChange }: FiltrosAgendaProps) {
+export function FiltrosAgenda({ filtros, onChange, catalogos }: FiltrosAgendaProps) {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -141,7 +162,7 @@ export function FiltrosAgenda({ filtros, onChange }: FiltrosAgendaProps) {
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [open]);
 
-  const tags = buildTagsAgenda(filtros, onChange);
+  const tags = buildTagsAgenda(filtros, onChange, catalogos);
 
   return (
     <div className="relative" ref={panelRef}>
@@ -170,7 +191,7 @@ export function FiltrosAgenda({ filtros, onChange }: FiltrosAgendaProps) {
               onChange={(e) => onChange({ ...filtros, profesionalId: e.target.value })}
             >
               <option value="">Todos los profesionales</option>
-              {profesionales.map((p) => (
+              {catalogos.profesionales.map((p) => (
                 <option key={p.id} value={p.id}>
                   {`${p.nombre} ${p.apellido}`}
                 </option>
@@ -182,7 +203,7 @@ export function FiltrosAgenda({ filtros, onChange }: FiltrosAgendaProps) {
               onChange={(e) => onChange({ ...filtros, estadoId: e.target.value })}
             >
               <option value="">Todos los estados</option>
-              {estadoOpciones.map((o) => (
+              {opcionesDeEstado(catalogos.estados).map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
                 </option>
@@ -196,9 +217,9 @@ export function FiltrosAgenda({ filtros, onChange }: FiltrosAgendaProps) {
               onChange={(e) => onChange({ ...filtros, practicaId: e.target.value })}
             >
               <option value="">Todas las prácticas</option>
-              {practicaOpciones.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
+              {catalogos.practicas.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.nombre}
                 </option>
               ))}
             </Select>

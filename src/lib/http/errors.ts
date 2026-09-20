@@ -220,6 +220,13 @@ export function traducirErrorPostgres(e: unknown): AppError | null {
         "La operación dejaría el stock en negativo.",
       );
     }
+    if (constraint.includes("turno_check")) {
+      return new ValidationError(
+        "HORARIO_INVALIDO",
+        "La hora de fin del turno tiene que ser posterior a la de inicio.",
+        "horaFin",
+      );
+    }
     if (constraint.includes("mascota_peso_check")) {
       return new ValidationError(
         "PESO_INVALIDO",
@@ -365,6 +372,37 @@ export function traducirErrorPostgres(e: unknown): AppError | null {
     return new ValidationError(
       "CAMPO_OBLIGATORIO",
       "Falta un dato obligatorio del formulario. Revisá que estén completos todos los campos marcados con *.",
+    );
+  }
+
+  // 23P01 = exclusion_violation
+  //
+  // Lo levanta un constraint EXCLUDE. Hoy hay uno solo en el proyecto y es el
+  // que hace cumplir el criterio de HU-TUR-01 "rechaza la superposición":
+  //
+  //   turno_sin_superposicion_excl
+  //     EXCLUDE USING gist (agenda_profesional_id WITH =, fecha WITH =,
+  //                         tsrange(fecha + hora_inicio, fecha + hora_fin) WITH &&)
+  //     WHERE (estado_id <> 3)
+  //
+  // ⚠️ SIN ESTA RAMA, DOS TURNOS SUPERPUESTOS DEVOLVÍAN UN 500. El service
+  //    chequea la disponibilidad antes y da un mensaje con el horario ocupado,
+  //    pero bajo concurrencia —dos recepcionistas reservando el mismo hueco al
+  //    mismo tiempo— los dos pasan ese chequeo y uno choca contra el índice.
+  //    Ese choque es el único que garantiza que no se duplique el turno, así
+  //    que tiene que llegar al usuario como un 409 entendible y no como
+  //    "Ocurrió un error inesperado".
+  if (codigo === "23P01") {
+    if (constraint.includes("turno_sin_superposicion")) {
+      return new BusinessRuleError(
+        "TURNO_SUPERPUESTO",
+        "Ese horario se acaba de ocupar. Elegí otro y volvé a intentar.",
+        "horaInicio",
+      );
+    }
+    return new BusinessRuleError(
+      "RANGO_SUPERPUESTO",
+      "La operación se superpone con un registro existente.",
     );
   }
 

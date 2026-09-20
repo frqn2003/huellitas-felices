@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "db:dump": "node --env-file=.env.local scripts/db-dump.mjs",
     "db:types": "node --env-file=.env.local scripts/db-types.mjs",
+    "db:check": "node --env-file=.env.local scripts/db-check.mjs",
     "db:info": "node --env-file=.env.local scripts/db-info.mjs",
     "db:info:full": "node --env-file=.env.local scripts/db-info.mjs --full",
     "db:seed": "node --env-file=.env.local scripts/seed.mjs"

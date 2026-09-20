@@ -22,7 +22,14 @@ interface TurnoDetalleModalProps {
   onClose: () => void;
   /** HU-TUR-02: callback del cambio de estado (PATCH). Si devuelve false, el
       modal no se cierra (el error ya se mostró como toast por el padre). */
-  onCambiarEstado?: (turnoId: number, estadoId: number) => boolean;
+  /**
+   * Manda el cambio de estado al backend (PATCH /api/turnos/:id/estado).
+   *
+   * Devuelve el mensaje de error si el servidor lo rechazó, o `null` si salió
+   * bien. Se resuelve así y no con un `throw` para que el modal muestre el
+   * motivo —"el turno está Atendido y ese estado es final"— sin cerrarse.
+   */
+  onCambiarEstado?: (turnoId: number, estadoId: number) => Promise<string | null>;
 }
 
 function DatoDetalle({ label, valor }: { label: string; valor: string }) {
@@ -88,16 +95,26 @@ export function TurnoDetalleModal({
   const esFinal = turno !== null && transiciones.length === 0;
   const puedeGuardar = turno !== null && nuevoEstadoId !== "" && Number(nuevoEstadoId) !== turno.estadoId;
 
+  const [guardando, setGuardando] = useState(false);
+  const [errorCambio, setErrorCambio] = useState("");
+
   const guardarCambio = () => {
+    setErrorCambio("");
     if (!turno || !puedeGuardar) return;
     setConfirmando(true);
   };
 
-  const confirmarCambio = () => {
+  const confirmarCambio = async () => {
     if (!turno || !puedeGuardar) return;
-    const ok = onCambiarEstado?.(turno.id, Number(nuevoEstadoId)) ?? true;
+    setGuardando(true);
+    const error = (await onCambiarEstado?.(turno.id, Number(nuevoEstadoId))) ?? null;
+    setGuardando(false);
     setConfirmando(false);
-    if (ok) onClose();
+
+    // Solo se cierra si salió bien: con error, el modal queda abierto con el
+    // estado elegido para que la persona vea qué pasó y pueda corregir.
+    if (error) setErrorCambio(error);
+    else onClose();
   };
 
   return (
@@ -114,8 +131,12 @@ export function TurnoDetalleModal({
               Volver
             </Button>
             {!esFinal && (
-              <Button type="button" onClick={guardarCambio} disabled={!puedeGuardar}>
-                Guardar cambio
+              <Button
+                type="button"
+                onClick={guardarCambio}
+                disabled={!puedeGuardar || guardando}
+              >
+                {guardando ? "Guardando…" : "Guardar cambio"}
               </Button>
             )}
           </>
@@ -155,6 +176,12 @@ export function TurnoDetalleModal({
                   (pendiente → confirmado → atendido | cancelado | no asistió).
                 </p>
               </div>
+
+              {errorCambio && (
+                <p role="alert" className="text-sm font-semibold text-destructive">
+                  {errorCambio}
+                </p>
+              )}
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="flex flex-col gap-1">
@@ -225,7 +252,7 @@ export function TurnoDetalleModal({
           cancelLabel="Cancelar"
           tone={tonoDelEstado(Number(nuevoEstadoId))}
           onClose={() => setConfirmando(false)}
-          onConfirm={confirmarCambio}
+          onConfirm={() => void confirmarCambio()}
         />
       )}
     </Modal>
