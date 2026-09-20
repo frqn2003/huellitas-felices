@@ -5,6 +5,15 @@ import { createContext, useCallback, useEffect, useMemo, useState } from "react"
 import type { Proveedor } from "@/data/proveedores";
 import type { FormaPago } from "@/data/formas-pago";
 import { apiGet, apiSend, mensajeDeError } from "@/lib/api-client";
+// EL CONTRATO. Lo importa también el back (src/modules/proveedores/proveedor.schema.ts).
+// Tipar el body con `CrearProveedorBody` es lo que hace que escribir
+// `razon_social` acá deje de compilar en vez de devolver un 422 en runtime.
+import {
+  RUTA_PROVEEDORES,
+  rutaProveedor,
+  rutaInactivarProveedor,
+  type CrearProveedorBody,
+} from "@/contracts/proveedor";
 import { useCatalogo } from "@/lib/use-catalogo";
 
 export type NuevoProveedorInput = Omit<Proveedor, "id" | "estado">;
@@ -70,7 +79,7 @@ export function ProveedoresProvider({ children }: { children: ReactNode }) {
     // Este efecto trae SOLO el listado, que es lo que tiene estado de
     // carga/error propio. El catálogo de formas de pago lo resuelve
     // `useCatalogo` arriba, con su propio ciclo.
-    apiGet<Proveedor[]>("/api/proveedores")
+    apiGet<Proveedor[]>(RUTA_PROVEEDORES)
       .then((lista) => {
         if (cancelado) return;
         setProveedores(lista);
@@ -122,7 +131,7 @@ export function ProveedoresProvider({ children }: { children: ReactNode }) {
    * único lugar que ya sabía que los dos vocabularios existen.
    */
   const aBody = useCallback(
-    (input: NuevoProveedorInput) => ({
+    (input: NuevoProveedorInput): CrearProveedorBody => ({
       razonSocial: input.razon_social,
       cuit: input.cuit,
       direccion: input.direccion,
@@ -140,7 +149,7 @@ export function ProveedoresProvider({ children }: { children: ReactNode }) {
   const agregarProveedor = useCallback(
     async (input: NuevoProveedorInput): Promise<Resultado> => {
       try {
-        const creado = await apiSend<Proveedor>("POST", "/api/proveedores", aBody(input));
+        const creado = await apiSend<Proveedor>("POST", RUTA_PROVEEDORES, aBody(input));
         // Se agrega el que devuelve la API, no el draft: trae el id real.
         setProveedores((prev) => [...prev, creado]);
         return {};
@@ -156,7 +165,7 @@ export function ProveedoresProvider({ children }: { children: ReactNode }) {
       try {
         const actualizado = await apiSend<Proveedor>(
           "PUT",
-          `/api/proveedores/${id}`,
+          rutaProveedor(id),
           aBody(input),
         );
         setProveedores((prev) => prev.map((p) => (p.id === id ? actualizado : p)));
@@ -174,7 +183,7 @@ export function ProveedoresProvider({ children }: { children: ReactNode }) {
       // abiertas. Esa regla no se puede validar en el front.
       const actualizado = await apiSend<Proveedor>(
         "PATCH",
-        `/api/proveedores/${id}/inactivar`,
+        rutaInactivarProveedor(id),
       );
       setProveedores((prev) => prev.map((p) => (p.id === id ? actualizado : p)));
       return {};
