@@ -1,3 +1,5 @@
+import type { Row } from "@/lib/db/schema.types";
+
 /**
  * HU-SIS-04 — Inicio y Cierre de Sesión.
  *
@@ -13,16 +15,19 @@ export type EventoSesion = "login" | "logout" | "login_fallido" | "bloqueado";
  * No trae la contraseña porque `usuario` no tiene contraseña: la verifica
  * Supabase Auth (ver src/lib/auth/gotrue.ts).
  */
-export type UsuarioLoginRow = {
-  id: number;
-  nombre: string;
-  apellido: string;
-  email: string;
-  rol_id: number;
+export type UsuarioLoginRow = Pick<
+  Row<"usuario">,
+  | "id"
+  | "nombre"
+  | "apellido"
+  | "email"
+  | "rol_id"
+  | "auth_id"
+  | "intentos_fallidos"
+  | "bloqueado_hasta"
+> & {
+  /** Del JOIN con `rol`: el NOMBRE del rol, no su id. */
   rol: string;
-  auth_id: string | null;
-  intentos_fallidos: number;
-  bloqueado_hasta: Date | null;
 };
 
 /** Lo que devuelve POST /api/auth/login y GET /api/auth/sesion. */

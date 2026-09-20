@@ -1,19 +1,18 @@
-// Placeholder compartido del catálogo `forma_pago` (dict: id, nombre UNIQUE).
-// Lo consumen Proveedores (GET /api/formas-pago) y Órdenes de Compra /
-// Cotizaciones (GET /api/condiciones-pago sirve LA MISMA tabla, ver
-// src/app/api/condiciones-pago/route.ts).
-// Regla C2: catálogo placeholder en src/data + comentario // BACKEND: hasta
-// que la API lo exponga.
-// BACKEND: poblar desde GET /api/formas-pago.
+/**
+ * Fila del catálogo `forma_pago`.
+ *
+ * Acá vivía también un array FORMAS_PAGO con las 5 filas escritas a mano
+ * ("decisión D4"). Se borró: el catálogo lo sirve GET /api/formas-pago, y la
+ * copia local solo coincidía con el seed de casualidad — agregar una forma de
+ * pago en la base no la mostraba en ningún formulario, y renombrar una rompía
+ * en silencio la traducción nombre → id del alta de proveedores.
+ *
+ * La misma tabla se expone también como GET /api/condiciones-pago para las
+ * pantallas de compras (ver src/app/api/condiciones-pago/route.ts).
+ *
+ * Queda solo el TIPO, que es lo único que el front necesita declarar.
+ */
 export interface FormaPago {
   id: number;
   nombre: string;
 }
-
-export const FORMAS_PAGO: FormaPago[] = [
-  { id: 1, nombre: "Contado" },
-  { id: 2, nombre: "Cta. cte. 30 días" },
-  { id: 3, nombre: "Cta. cte. 60 días" },
-  { id: 4, nombre: "Transferencia" },
-  { id: 5, nombre: "Cheque a 30 días" },
-];

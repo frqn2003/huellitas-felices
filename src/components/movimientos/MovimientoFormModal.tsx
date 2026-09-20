@@ -5,7 +5,6 @@ import { useMemo, useState } from "react";
 import type { Deposito, FichaStock } from "@/data/stock";
 import {
   codigoFicha,
-  origenesMovimiento,
   origenesPorTipo,
   parseCantidad,
   tiposMovimiento,
@@ -15,6 +14,17 @@ import { Combobox } from "@/components/ui/Combobox";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
+
+/**
+ * Fila del catálogo `origen_movimiento` (GET /api/origenes-movimiento).
+ *
+ * Llega por prop y NO de una constante. La lista fija que había en
+ * src/data/movimientos.ts tenía los ids CORRIDOS respecto de la tabla, y como
+ * el back guarda el `origenId` que manda el front tal cual, todo movimiento
+ * cargado acá quedaba con el origen equivocado (una venta se registraba como
+ * recepción de compra).
+ */
+export type OrigenOpcion = { id: number; nombre: string };
 
 export interface MovimientoItemDraft {
   articuloId: string;
@@ -55,6 +65,8 @@ interface MovimientoFormModalProps {
   open: boolean;
   depositos: Deposito[];
   fichas: FichaStock[];
+  /** Catálogo `origen_movimiento` (GET /api/origenes-movimiento). */
+  origenes: OrigenOpcion[];
   numeroSiguiente: string;
   inicial?: MovimientoInicial | null;
   onClose: () => void;
@@ -89,12 +101,14 @@ const errorsVacios: MovimientoFormErrors = {};
 function MovimientoFormFields({
   depositos,
   fichas,
+  origenes,
   numeroSiguiente,
   inicial,
   onConfirm,
 }: {
   depositos: Deposito[];
   fichas: FichaStock[];
+  origenes: OrigenOpcion[];
   numeroSiguiente: string;
   inicial?: MovimientoInicial | null;
   onConfirm: (draft: MovimientoDraft) => void;
@@ -107,9 +121,7 @@ function MovimientoFormFields({
     // destino lo elige el usuario). El tipo "Transferencia" ya no existe en el
     // catálogo: la transferencia es un ORIGEN (dict) que deriva el token de API.
     const tipoEgreso = tiposMovimiento.find((t) => t.nombre === "Egreso");
-    const origenTransferencia = origenesMovimiento.find(
-      (o) => o.nombre === "transferencia_sucursal",
-    );
+    const origenTransferencia = origenes.find((o) => o.nombre === "transferencia_sucursal");
     return {
       ...base,
       tipoId: tipoEgreso ? String(tipoEgreso.id) : "",
@@ -123,16 +135,20 @@ function MovimientoFormFields({
   const tipo = tiposMovimiento.find((t) => t.id === Number(draft.tipoId))?.nombre;
   // El ORIGEN sale del catálogo (dict): la transferencia y el ajuste manual
   // son orígenes, no tipos. `esTransferencia`/`esAjuste` derivan del origen.
-  const origen = origenesMovimiento.find((o) => o.id === Number(draft.origenId))?.nombre;
+  const origen = origenes.find((o) => o.id === Number(draft.origenId))?.nombre;
   const esTransferencia = origen === "transferencia_sucursal";
-  const esAjuste = origen === "ajuste_manual";
+  // El nombre en la tabla es "ajuste", no "ajuste_manual": con el nombre viejo
+  // esta condición era siempre false.
+  const esAjuste = origen === "ajuste";
   // Solo venta y recepción de compra referencian un documento real con número.
   const esDocumento = origen === "venta" || origen === "recepcion_compra";
   const etiquetaDocumento = origen === "venta" ? "Nro. de venta" : "Nro. de OC";
 
   // Origen filtrado según el tipo (combos inválidos no se ofrecen).
-  const origenesValidos = tipo ? origenesPorTipo[tipo] : origenesMovimiento.map((o) => o.id);
-  const opcionesOrigen = origenesMovimiento.filter((o) => origenesValidos.includes(o.id));
+  // `origenesPorTipo` lista NOMBRES, no ids: así la regla no depende de que la
+  // tabla mantenga su numeración.
+  const origenesValidos = tipo ? origenesPorTipo[tipo] : origenes.map((o) => o.nombre);
+  const opcionesOrigen = origenes.filter((o) => origenesValidos.includes(o.nombre));
 
   const depositoOrigenId = Number(draft.depositoId);
   const depositoDestinoId = Number(draft.depositoDestinoId);
@@ -163,7 +179,12 @@ function MovimientoFormFields({
       // Se calcula desde `value`, no desde el closure (tipo anterior).
       const nuevoTipo = tiposMovimiento.find((t) => t.id === Number(value))?.nombre;
       const validos = nuevoTipo ? origenesPorTipo[nuevoTipo] : [];
-      next.origenId = validos.length === 1 ? String(validos[0]) : "";
+      // `validos` son NOMBRES; `origenId` guarda el id real del catálogo, así
+      // que hay que resolverlo contra la lista que vino de la API.
+      next.origenId =
+        validos.length === 1
+          ? String(origenes.find((o) => o.nombre === validos[0])?.id ?? "")
+          : "";
       if (validos.length === 0) next.origenEntidadId = "";
     }
     if (field === "depositoId") {
@@ -373,7 +394,6 @@ function MovimientoFormFields({
             ))}
           </Select>
         )}
-        {/* BACKEND: poblar el catálogo desde GET /api/origenes-movimiento. */}
         <Select
           id="mov-origen"
           label="Origen"
@@ -518,6 +538,7 @@ export function MovimientoFormModal({
   open,
   depositos,
   fichas,
+  origenes,
   numeroSiguiente,
   inicial = null,
   onClose,
@@ -548,6 +569,7 @@ export function MovimientoFormModal({
       <MovimientoFormFields
         depositos={depositos}
         fichas={fichas}
+        origenes={origenes}
         numeroSiguiente={numeroSiguiente}
         inicial={inicial}
         onConfirm={onConfirm}

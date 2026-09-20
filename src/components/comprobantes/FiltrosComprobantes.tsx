@@ -4,23 +4,26 @@ import { SlidersHorizontal, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 
-const proveedoresOpts = [
-  { value: "", label: "Todos los proveedores" },
-  { value: "1", label: "Distribuidora Vet SA" },
-  { value: "2", label: "Insumos Veterinarios del Norte SRL" },
-  { value: "3", label: "Juan Pérez Alimentos Balanceados" },
-];
-
-const tiposOpts = [
-  { value: "", label: "Todos los tipos" },
-  { value: "Factura A", label: "Factura A" },
-  { value: "Factura B", label: "Factura B" },
-  { value: "Factura C", label: "Factura C" },
-  { value: "Nota de Crédito A", label: "Nota de Crédito A" },
-  { value: "Nota de Crédito B", label: "Nota de Crédito B" },
-  { value: "Nota de Débito A", label: "Nota de Débito A" },
-  { value: "Nota de Débito B", label: "Nota de Débito B" },
-];
+/**
+ * Catálogos de los selects de Proveedor y Tipo.
+ *
+ * Llegan por prop y NO de constantes de este archivo. Las que había acá estaban
+ * mal de dos formas distintas:
+ *
+ *  · proveedores: ids 1/2/3 con nombres inventados. El id SÍ viaja a la API
+ *    (ComprobantesContent hace `params.set("proveedorId", ...)`), así que el
+ *    filtro traía los comprobantes de OTRO proveedor que el que decía la opción
+ *    elegida. Mentía en silencio, que es peor que no devolver nada.
+ *
+ *  · tipos: decían "Factura A", "Factura B". El filtro se aplica comparando
+ *    contra `comprobante.tipo`, que el mapper del back arma con
+ *    `tipo_comprobante_nombre` y vale "Factura" a secas, SIN la letra. O sea
+ *    que ninguna opción matcheaba nunca.
+ *
+ * Ahora salen de GET /api/proveedores?estado=activo y GET /api/tipos-comprobante.
+ */
+export type ProveedorOpcionComprobante = { id: number; razon_social: string };
+export type TipoComprobanteOpcionFiltro = { id: number; nombre: string };
 
 const estadosOpts = [
   { value: "", label: "Todos los estados" },
@@ -58,12 +61,13 @@ function formatFechaChip(fecha: string) {
 export function buildTagsComprobantes(
   filtros: FiltrosComprobanteValues,
   onChange: (filtros: FiltrosComprobanteValues) => void,
+  proveedores: ProveedorOpcionComprobante[],
 ) {
   const tags: { label: string; onRemove: () => void }[] = [];
   if (filtros.proveedor) {
-    const proveedor = proveedoresOpts.find((p) => p.value === filtros.proveedor);
+    const proveedor = proveedores.find((p) => String(p.id) === filtros.proveedor);
     tags.push({
-      label: `Proveedor: ${proveedor?.label ?? filtros.proveedor}`,
+      label: `Proveedor: ${proveedor?.razon_social ?? filtros.proveedor}`,
       onRemove: () => onChange({ ...filtros, proveedor: "" }),
     });
   }
@@ -103,11 +107,13 @@ export function buildTagsComprobantes(
 export function FiltrosComprobantesChips({
   filtros,
   onChange,
+  proveedores,
 }: {
   filtros: FiltrosComprobanteValues;
   onChange: (filtros: FiltrosComprobanteValues) => void;
+  proveedores: ProveedorOpcionComprobante[];
 }) {
-  const tags = buildTagsComprobantes(filtros, onChange);
+  const tags = buildTagsComprobantes(filtros, onChange, proveedores);
   if (tags.length === 0) return null;
   return (
     <div className="flex flex-wrap items-center gap-2" aria-label="Filtros aplicados">
@@ -134,6 +140,8 @@ export function FiltrosComprobantesChips({
 interface FiltrosComprobantesProps {
   values: FiltrosComprobanteValues;
   onChange: (values: FiltrosComprobanteValues) => void;
+  proveedores: ProveedorOpcionComprobante[];
+  tipos: TipoComprobanteOpcionFiltro[];
   disabled?: boolean;
   hideChips?: boolean;
 }
@@ -141,6 +149,8 @@ interface FiltrosComprobantesProps {
 export function FiltrosComprobantes({
   values,
   onChange,
+  proveedores,
+  tipos,
   disabled = false,
   hideChips = false,
 }: FiltrosComprobantesProps) {
@@ -161,7 +171,7 @@ export function FiltrosComprobantes({
   const set = (key: keyof FiltrosComprobanteValues, v: string) =>
     onChange({ ...values, [key]: v });
 
-  const tags = buildTagsComprobantes(values, onChange);
+  const tags = buildTagsComprobantes(values, onChange, proveedores);
 
   return (
     <div className="flex flex-col gap-2">
@@ -188,27 +198,30 @@ export function FiltrosComprobantes({
             <div className="flex flex-col gap-4">
               <label className="flex flex-col gap-1.5 text-sm font-bold text-text-primary">
                 Proveedor
-                {/* BACKEND: poblar desde GET /api/proveedores. */}
                 <select
                   value={values.proveedor}
                   onChange={(e) => set("proveedor", e.target.value)}
                   className="h-11 cursor-pointer rounded-sm border border-border bg-surface px-3 text-base font-normal text-text-primary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
                 >
-                  {proveedoresOpts.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
+                  <option value="">Todos los proveedores</option>
+                  {/* El value es el id: viaja como `?proveedorId=` a la API. */}
+                  {proveedores.map((p) => (
+                    <option key={p.id} value={p.id}>{p.razon_social}</option>
                   ))}
                 </select>
               </label>
               <label className="flex flex-col gap-1.5 text-sm font-bold text-text-primary">
                 Tipo
-                {/* BACKEND: poblar desde GET /api/tipos-comprobante. */}
                 <select
                   value={values.tipo}
                   onChange={(e) => set("tipo", e.target.value)}
                   className="h-11 cursor-pointer rounded-sm border border-border bg-surface px-3 text-base font-normal text-text-primary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
                 >
-                  {tiposOpts.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
+                  <option value="">Todos los tipos</option>
+                  {/* El value es el NOMBRE sin la letra ("Factura"), que es lo
+                      que trae `comprobante.tipo` desde el mapper del back. */}
+                  {tipos.map((t) => (
+                    <option key={t.id} value={t.nombre}>{t.nombre}</option>
                   ))}
                 </select>
               </label>
@@ -268,6 +281,7 @@ export function FiltrosComprobantes({
         <FiltrosComprobantesChips
           filtros={values}
           onChange={onChange}
+          proveedores={proveedores}
         />
       )}
     </div>

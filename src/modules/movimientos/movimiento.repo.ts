@@ -1,5 +1,5 @@
 import type { Pool, PoolClient } from "pg";
-import { pool } from "@/lib/db/client";
+import { pool, query } from "@/lib/db/client";
 import type {
     CabeceraInput,
     FichaStockRow,
@@ -186,6 +186,31 @@ export async function lockFicha(id: number, client: PoolClient): Promise<FichaSt
  * `recepcion_compra`: TODA transferencia quedaba registrada como una recepción
  * de compra. Acá se busca el origen que corresponde de verdad.
  */
+/**
+ * El catálogo `origen_movimiento` completo, para el select del formulario.
+ *
+ * ⚠️ POR QUÉ ESTE ENDPOINT EXISTE (y por qué no puede volver a ser una lista fija)
+ *
+ * El front tenía el catálogo hardcodeado en src/data/movimientos.ts con ids que
+ * NO coincidían con la tabla — estaban corridos:
+ *
+ *     front  1 = venta              base  1 = recepcion_compra
+ *     front  7 = recepcion_compra   base  7 = practica
+ *     front  9 = ajuste_manual      base  9 = ajuste
+ *     front  —                      base 13 = transferencia
+ *
+ * Y `movimiento.service` usa el `origenId` que manda el front tal cual
+ * (`input.origenId ?? null`), así que CADA movimiento cargado desde ese
+ * formulario quedaba guardado con el origen equivocado: una venta se
+ * registraba como recepción de compra. No fallaba nada — la FK existía — así
+ * que el dato entraba mal y en silencio.
+ */
+export async function listarOrigenes(): Promise<{ id: number; nombre: string }[]> {
+    return query<{ id: number; nombre: string }>(
+        `SELECT id, nombre FROM origen_movimiento ORDER BY nombre`,
+    );
+}
+
 export async function findOrigenByNombre(
     nombre: string,
     client: PoolClient,

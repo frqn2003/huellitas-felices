@@ -3,15 +3,14 @@
 import type { ReactNode } from "react";
 import { createContext, useCallback, useEffect, useMemo, useState } from "react";
 import type { Proveedor } from "@/data/proveedores";
-import { FORMAS_PAGO, type FormaPago } from "@/data/formas-pago";
+import type { FormaPago } from "@/data/formas-pago";
 import { apiGet, apiSend, mensajeDeError } from "@/lib/api-client";
+import { useCatalogo } from "@/lib/use-catalogo";
 
 export type NuevoProveedorInput = Omit<Proveedor, "id" | "estado">;
 
 /**
- * Fila del catálogo `forma_pago`. Es el placeholder compartido FORMAS_PAGO
- * (src/data/formas-pago.ts, decisión D4): la API lo expone por
- * GET /api/formas-pago, pero el front no cuelga de ese endpoint.
+ * Fila del catálogo `forma_pago`, que sirve GET /api/formas-pago.
  * Re-exportado para que los componentes del módulo no importen de dos lados.
  */
 export type { FormaPago } from "@/data/formas-pago";
@@ -20,7 +19,7 @@ type Resultado = { error?: string };
 
 interface ProveedoresContextValue {
   proveedores: Proveedor[];
-  /** Catálogo `forma_pago` (placeholder compartido FORMAS_PAGO, D4/C2). */
+  /** Catálogo `forma_pago`, desde GET /api/formas-pago. */
   formasPago: FormaPago[];
   loading: boolean;
   error: boolean;
@@ -42,18 +41,25 @@ export const ProveedoresContext = createContext<ProveedoresContextValue | null>(
  * abiertas — algo que el front directamente no sabe.
  *
  * TRADUCCIÓN DE FORMAS DE PAGO: el formulario envía el nombre elegido en
- * `formasPago: string[]` (wire actual) Y el `forma_pago_id` nuevo (dict). La
- * conversión nombres → ids (`formaPagoIds`) se hace acá, en el borde, contra
- * el catálogo FORMAS_PAGO (placeholder estático D4: no difiere de la base
- * salvo que el back cambie un nombre; el id viaja al POST en `forma_pago_id`).
+ * `formasPago: string[]` (wire actual). La conversión nombres → ids
+ * (`formaPagoIds`) se hace acá, en el borde, contra el catálogo real que trae
+ * GET /api/formas-pago.
+ *
+ * Antes ese catálogo era el array fijo FORMAS_PAGO de src/data/formas-pago.ts
+ * (decisión "D4"). Funcionaba porque sus ids 1–5 coincidían con los del seed,
+ * pero nada lo garantizaba: agregar una forma de pago desde Supabase no la
+ * hacía aparecer en el formulario, y renombrar una rompía la traducción
+ * nombre → id en silencio (el `.filter()` de `aIds` descarta lo que no
+ * encuentra, así que el proveedor se guardaba con menos formas de pago de las
+ * que el usuario eligió).
  */
 export function ProveedoresProvider({ children }: { children: ReactNode }) {
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
-  // D4: el catálogo de formas de pago NO se baja por red — arranca con el
-  // placeholder compartido FORMAS_PAGO (src/data/formas-pago.ts). BACKEND:
-  // cuando exista GET /api/formas-pago, volver a estado vacío + fetch en el
-  // efecto (igual que el listado).
-  const [formasPago] = useState<FormaPago[]>(FORMAS_PAGO);
+  // El catálogo real de `forma_pago`. Va por `useCatalogo` y no por el
+  // `Promise.all` del efecto de abajo porque no comparte su estado de
+  // carga/error: el listado de proveedores es lo que da sentido a la pantalla,
+  // este catálogo solo puebla dos selects.
+  const formasPago = useCatalogo<FormaPago>("/api/formas-pago");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [recarga, setRecarga] = useState(0);
@@ -61,9 +67,9 @@ export function ProveedoresProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelado = false;
 
-    // Sólo el listado de proveedores viaja por red (con su estado de
-    // carga/error compartido). El catálogo de formas de pago ya vive en el
-    // estado inicial (D4, ver comentario arriba) — no hay setState en el efecto.
+    // Este efecto trae SOLO el listado, que es lo que tiene estado de
+    // carga/error propio. El catálogo de formas de pago lo resuelve
+    // `useCatalogo` arriba, con su propio ciclo.
     apiGet<Proveedor[]>("/api/proveedores")
       .then((lista) => {
         if (cancelado) return;

@@ -59,17 +59,22 @@ export function ProveedorFormModal({
         setTelefono(proveedor.telefono);
         setEmail(proveedor.email);
         setContacto(proveedor.contacto);
-        // forma_pago_id es NOT NULL en el dict: si el proveedor aún no lo trae
-        // (wire intermedio), se preselecciona la primera del catálogo.
-        setFormaPagoId(
-          proveedor.forma_pago_id !== undefined
-            ? String(proveedor.forma_pago_id)
-            : String(formasPagoDisponibles[0]?.id ?? ""),
+        // La API devuelve las formas de pago por NOMBRE (`formasPago: string[]`,
+        // resuelto por JOIN), no por id. Se resuelve el id contra el catálogo.
+        //
+        // Antes esto leía `proveedor.forma_pago_id`, un campo que la API nunca
+        // mandó: la rama `!== undefined` era inalcanzable y al editar siempre
+        // quedaba preseleccionada la PRIMERA forma de pago del catálogo, no la
+        // del proveedor.
+        const formaPagoActual = formasPagoDisponibles.find(
+          (f) => f.nombre === proveedor.formasPago[0],
         );
+        setFormaPagoId(String(formaPagoActual?.id ?? formasPagoDisponibles[0]?.id ?? ""));
         setPlazoEntregaDias(String(proveedor.plazo_entrega_dias));
-        setCalificacion(
-          proveedor.calificacion !== undefined ? String(proveedor.calificacion) : "",
-        );
+        // `calificacion` es HU-PROV-02: la API no la devuelve, así que no hay
+        // nada que precargar. El input queda vacío (ver la nota al pie de
+        // src/data/proveedores.ts).
+        setCalificacion("");
       } else {
         setRazonSocial("");
         setCuit("");
@@ -119,9 +124,8 @@ export function ProveedorFormModal({
       return;
     }
 
-    // La forma de pago elegida (Select único) satisface los DOS contratos: el
-    // nuevo `forma_pago_id` (dict, NOT NULL) y el `formasPago: string[]` del
-    // wire actual que el context sigue traduciendo a ids (formaPagoIds).
+    // El contrato del alta/edición es `formasPago: string[]` (nombres); el
+    // context los traduce a `formaPagoIds` contra el catálogo antes del POST.
     const formaPagoElegida = formasPagoDisponibles.find(
       (f) => f.id === Number(formaPagoId),
     );
@@ -134,12 +138,7 @@ export function ProveedorFormModal({
       email: email.trim(),
       contacto: contacto.trim(),
       formasPago: formaPagoElegida ? [formaPagoElegida.nombre] : [],
-      forma_pago_id: formaPagoElegida?.id,
       plazo_entrega_dias: plazo,
-      // BACKEND: el dict guarda calificacion en el proveedor; la API todavía
-      // no lo persiste (schemas no estrictos: se ignora hasta que el back lo
-      // implemente).
-      calificacion: calificacion.trim() !== "" ? nota : undefined,
     };
 
     setGuardando(true);

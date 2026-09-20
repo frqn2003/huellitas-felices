@@ -47,72 +47,7 @@ export interface MovimientoStock {
 // Los nombres de depósito se alinean con el catálogo existente
 // (`depositosIniciales` de src/data/stock.ts): "Depósito Central" -> "Dep. Central",
 // "Sucursal A" -> "Dep. Norte".
-export const movimientosIniciales: MovimientoStock[] = [
-  {
-    id: 1,
-    numero: "MOV-0001",
-    fichaStockId: 1,
-    fichaStock: { articuloNombre: "Amoxicilina 500mg", articuloUnidad: "Unidad", depositoNombre: "Dep. Central" },
-    origenId: 7,
-    origen: { nombre: "recepcion_compra" },
-    origenEntidadId: 12,
-    tipo: "Ingreso",
-    cantidad: 20,
-    fechaHora: "2026-08-15T09:30:00Z",
-    usuario_id: 3,
-    usuario: { nombre: "Carlos López" },
-    motivo: "Recepción de orden de compra OC-0012",
-    movimientoVinculadoId: null,
-  },
-  {
-    id: 2,
-    numero: "MOV-0002",
-    fichaStockId: 2,
-    fichaStock: { articuloNombre: "Jeringa 5ml", articuloUnidad: "Unidad", depositoNombre: "Dep. Central" },
-    origenId: 1,
-    origen: { nombre: "venta" },
-    origenEntidadId: 45,
-    tipo: "Egreso",
-    cantidad: 50,
-    fechaHora: "2026-08-15T11:15:00Z",
-    usuario_id: 5,
-    usuario: { nombre: "María García" },
-    motivo: "Venta a cliente #45",
-    movimientoVinculadoId: null,
-  },
-  {
-    id: 3,
-    numero: "MOV-0003",
-    fichaStockId: 5,
-    fichaStock: { articuloNombre: "Alimento Premium", articuloUnidad: "Kg", depositoNombre: "Dep. Norte" },
-    origenId: 8,
-    origen: { nombre: "transferencia_sucursal" },
-    origenEntidadId: null,
-    tipo: "Ingreso",
-    cantidad: 10,
-    fechaHora: "2026-08-16T10:00:00Z",
-    usuario_id: 3,
-    usuario: { nombre: "Carlos López" },
-    motivo: "Transferencia desde Dep. Central",
-    movimientoVinculadoId: 4,
-  },
-  {
-    id: 4,
-    numero: "MOV-0004",
-    fichaStockId: 3,
-    fichaStock: { articuloNombre: "Alimento Premium", articuloUnidad: "Kg", depositoNombre: "Dep. Central" },
-    origenId: 8,
-    origen: { nombre: "transferencia_sucursal" },
-    origenEntidadId: null,
-    tipo: "Egreso",
-    cantidad: 10,
-    fechaHora: "2026-08-16T10:00:00Z",
-    usuario_id: 3,
-    usuario: { nombre: "Carlos López" },
-    motivo: "Transferencia a Dep. Norte",
-    movimientoVinculadoId: 3,
-  },
-];
+
 
 // Catálogo `tipo_movimiento` — el dict define el enum ingreso/egreso.
 // Transferencia/Ajuste se conservan SOLO como tipo del contrato HTTP actual
@@ -124,51 +59,40 @@ export const tiposMovimiento: { id: number; nombre: TipoMovimiento }[] = [
   { id: 2, nombre: "Egreso" },
 ];
 
-// Catálogo `origen_movimiento` (dict DBA): `origen_id` es NOT NULL, todo
-// movimiento lleva un origen. TRANSFERENCIA y AJUSTE MANUAL usan su origen
-// propio (transferencia_sucursal / ajuste_manual) — no son "sin documento".
-// BACKEND: poblar desde GET /api/origenes-movimiento.
-export const origenesMovimiento: { id: number; nombre: string }[] = [
-  { id: 1, nombre: "venta" },
-  { id: 2, nombre: "receta" },
-  { id: 3, nombre: "internacion" },
-  { id: 4, nombre: "urgencia" },
-  { id: 5, nombre: "cirugia" },
-  { id: 6, nombre: "practica" },
-  { id: 7, nombre: "recepcion_compra" },
-  { id: 8, nombre: "transferencia_sucursal" },
-  { id: 9, nombre: "ajuste_manual" },
-  { id: 10, nombre: "vacunacion" },
-  { id: 11, nombre: "desparasitacion" },
-  { id: 12, nombre: "merma" },
-];
-
-// Orígenes válidos según el tipo de movimiento (combos inválidos no se ofrecen).
-// Los ids referencian `origenesMovimiento`:
-// - Ingreso: ajuste manual que SUMA stock (la recepción de compra es automática vía su módulo).
-// - Egreso: venta, recetas, internación, cirugías, prácticas, vacunación,
-//   desparasitación, merma, transferencia y ajuste manual que RESTA.
-// - Transferencia/Ajuste: entradas de compatibilidad con el contrato HTTP
-//   (el front las resuelve como ORIGEN, no como tipo).
-export const origenesPorTipo: Record<TipoMovimiento, number[]> = {
-  Ingreso: [9],
-  Egreso: [1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12],
-  Transferencia: [8],
-  Ajuste: [9],
+// Orígenes válidos según el tipo de movimiento (los combos inválidos no se
+// ofrecen). Se listan por NOMBRE y no por id a propósito.
+//
+// Antes esto era `Record<TipoMovimiento, number[]>` con ids, apuntando a un
+// catálogo `origenesMovimiento` hardcodeado acá mismo cuyos ids estaban
+// CORRIDOS respecto de la tabla `origen_movimiento` (front 1 = "venta",
+// base 1 = "recepcion_compra"). Como el back usa el `origenId` que manda el
+// front tal cual, cada movimiento se guardaba con el origen equivocado.
+//
+// El catálogo ahora se pide a GET /api/origenes-movimiento. Esta tabla queda
+// porque SÍ es una regla de negocio del front (qué ofrecer según el tipo), pero
+// referencia nombres: si mañana cambian los ids de la tabla, no se rompe nada.
+export const origenesPorTipo: Record<TipoMovimiento, string[]> = {
+  // Ingreso: ajuste que SUMA stock (la recepción de compra la genera su módulo).
+  Ingreso: ["ajuste"],
+  // Egreso: consumo real, transferencia de salida y ajuste que RESTA.
+  Egreso: [
+    "venta",
+    "receta",
+    "internacion",
+    "urgencia",
+    "cirugia",
+    "practica",
+    "transferencia_sucursal",
+    "ajuste",
+    "vacunacion",
+    "desparasitacion",
+    "merma",
+  ],
+  // Entradas de compatibilidad con el contrato HTTP: el front resuelve la
+  // transferencia y el ajuste como ORIGEN, no como tipo.
+  Transferencia: ["transferencia_sucursal"],
+  Ajuste: ["ajuste"],
 };
-
-// Usuarios que aparecen en los movimientos de ejemplo + el usuario logueado.
-// BACKEND: poblar desde GET /api/usuarios.
-export const USUARIOS: { id: number; nombre: string }[] = [
-  { id: 1, nombre: "Ana Martínez" },
-  { id: 3, nombre: "Carlos López" },
-  { id: 5, nombre: "María García" },
-];
-
-// Usuario asignado automáticamente a los movimientos nuevos (usuario logueado).
-// BACKEND: reemplazar por el usuario de la sesión
-// (GET /api/auth/sesion -> usuario_id).
-export const USUARIO_ACTUAL = { id: 1, nombre: "Ana Martínez" };
 
 // Acá vivía `fichasMovimientos`, derivado del array hardcodeado
 // `fichasStockIniciales`. Ya no lo usaba nadie: la pantalla de stock arma esa

@@ -220,6 +220,13 @@ export function traducirErrorPostgres(e: unknown): AppError | null {
         "La operación dejaría el stock en negativo.",
       );
     }
+    if (constraint.includes("mascota_peso_check")) {
+      return new ValidationError(
+        "PESO_INVALIDO",
+        "El peso de la mascota debe ser mayor a 0.",
+        "peso",
+      );
+    }
     if (constraint.includes("critico_menor")) {
       return new ValidationError(
         "UMBRAL_INVALIDO",
@@ -227,6 +234,16 @@ export function traducirErrorPostgres(e: unknown): AppError | null {
         "stockCritico",
       );
     }
+    // ⚠️ Un `RAISE EXCEPTION ... USING ERRCODE = 'check_violation'` desde un
+    //    trigger cae acá SIN nombre de constraint, así que no se puede
+    //    distinguir de qué regla se trata y sale este mensaje genérico.
+    //
+    //    Hoy le pasa a `fn_mascota_validar_fecha_nacimiento` (fecha de
+    //    nacimiento futura). No se nota porque el schema de zod ya la rechaza
+    //    antes con un mensaje que señala el campo — la base es solo la red de
+    //    seguridad. Si algún día ese camino importa, el arreglo es darle al
+    //    trigger un SQLSTATE propio (HF0xx) y mapearlo abajo, como se hizo con
+    //    los de stock e imputaciones.
     return new ValidationError("DATO_INVALIDO", "Algún valor no cumple las reglas de la base.");
   }
 

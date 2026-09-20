@@ -1,3 +1,5 @@
+import type { Row } from "@/lib/db/schema.types";
+
 /**
  * HU-COMP-02 — tipos del módulo Compras (lado órdenes).
  *
@@ -12,49 +14,46 @@
  */
 
 /** Fila de `orden_compra` con los JOIN ya resueltos. */
-export type OrdenRow = {
-  id: number;
-  cod_ord: string;
-  proveedor_id: number;
+export type OrdenRow = Pick<
+  // Columnas de `orden_compra`, derivadas del esquema (`npm run db:types`).
+  // Los decimal(12,2) salen tipados como string: es lo que devuelve el driver
+  // `pg` para no perder precisión. El mapper los pasa a number.
+  Row<"orden_compra">,
+  | "id"
+  | "cod_ord"
+  | "proveedor_id"
+  | "cotizacion_id"
+  | "usuario_id"
+  | "fecha"
+  | "fecha_entrega"
+  | "deposito_id"
+  | "forma_pago_id"
+  | "notas"
+  | "subtotal"
+  | "descuento"
+  | "gastos_envio"
+  | "total"
+  | "estado_id"
+> & {
+  // Resuelto por los JOIN, no son columnas de `orden_compra`.
   proveedor_razon_social: string;
   proveedor_estado: "activo" | "inactivo";
-  cotizacion_id: number | null;
-  usuario_id: number;
   usuario_nombre: string;
   usuario_apellido: string;
-  fecha: Date;
-  fecha_entrega: Date | null;
-  deposito_id: number | null;
   deposito_ubicacion: string | null;
-  forma_pago_id: number;
   forma_pago_nombre: string;
-  notas: string | null;
-  // decimal(12,2) → el driver `pg` los entrega como string para no perder
-  // precisión. El mapper los pasa a number; acá quedan como vienen.
-  subtotal: string | null;
-  descuento: string | null;
-  gastos_envio: string | null;
-  total: string;
-  estado_id: number;
   estado_nombre: string;
   es_final: boolean;
 };
 
 /** Fila de `orden_compra_detalle`. */
-export type OrdenDetalleRow = {
-  id: number;
-  orden_compra_id: number;
-  articulo_id: number;
-  cantidad: string;
-  precio_acordado: string;
-};
+export type OrdenDetalleRow = Pick<
+  Row<"orden_compra_detalle">,
+  "id" | "orden_compra_id" | "articulo_id" | "cantidad" | "precio_acordado"
+>;
 
 /** Fila de `estado_orden_compra`. */
-export type EstadoOrdenRow = {
-  id: number;
-  nombre: string;
-  es_final: boolean;
-};
+export type EstadoOrdenRow = Row<"estado_orden_compra">;
 
 /**
  * Filtros del listado. Salen de FiltrosOrdenes.tsx y del buscador de

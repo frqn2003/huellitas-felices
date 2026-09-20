@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/Button";
 import { Pagination } from "@/components/ui/Pagination";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
 import { apiGet, apiSend, mensajeDeError } from "@/lib/api-client";
+import { useCatalogo } from "@/lib/use-catalogo";
+import type { FormaPago } from "@/data/formas-pago";
 import type {
   ComprobantePendiente,
   CuentaCorriente,
@@ -106,6 +108,10 @@ function CuentasCorrientesScreen() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+
+  // Catálogo `forma_pago`: lo usan el select del modal de registrar pago y la
+  // columna Concepto del historial.
+  const formasPago = useCatalogo<FormaPago>("/api/formas-pago");
 
   const [vista, setVista] = useState<"lista" | "detalle">("lista");
   const [detalle, setDetalle] = useState<Detalle | null>(null);
@@ -400,6 +406,7 @@ function CuentasCorrientesScreen() {
                   cuenta={detalle.cuenta}
                   comprobantes={detalle.comprobantes}
                   pagos={detalle.pagos}
+                  formasPago={formasPago}
                   onVolver={() => {
                     setVista("lista");
                     setDetalle(null);
@@ -436,6 +443,7 @@ function CuentasCorrientesScreen() {
         }
         comprobantes={comprobantesImputables}
         pagosExistentes={detalle?.pagos ?? []}
+        formasPago={formasPago}
         onClose={() => setRegistrarOpen(false)}
         onConfirm={handleRegistrar}
       />

@@ -7,12 +7,21 @@ import { Pagination } from "@/components/ui/Pagination";
 import { EstadoCtaCteBadge } from "@/components/proveedores/EstadoCtaCteBadge";
 import type { ComprobantePendiente, CuentaCorriente, EstadoCtaCte, Pago } from "@/data/cuentas-corrientes";
 import { formatARS, formatFecha, infoSaldo } from "@/data/cuentas-corrientes";
-import { FORMAS_PAGO } from "@/data/formas-pago";
+import type { FormaPago } from "@/data/formas-pago";
 
 interface CtaCorrienteDetalleGlobalProps {
   cuenta: CuentaCorriente;
   comprobantes: ComprobantePendiente[];
   pagos: Pago[];
+  /**
+   * Catálogo `forma_pago` (GET /api/formas-pago). Se usa para resolver el
+   * nombre de la forma de pago de cada fila del historial.
+   *
+   * Llega por prop y no de la constante FORMAS_PAGO de src/data: esa lista fija
+   * coincidía con el seed de casualidad, y una forma de pago agregada en la
+   * base salía como "—" en la columna Concepto.
+   */
+  formasPago: FormaPago[];
   onVolver: () => void;
   onRegistrar: () => void;
 }
@@ -21,6 +30,7 @@ export function CtaCorrienteDetalleGlobal({
   cuenta,
   comprobantes,
   pagos,
+  formasPago,
   onVolver,
   onRegistrar,
 }: CtaCorrienteDetalleGlobalProps) {
@@ -70,7 +80,12 @@ export function CtaCorrienteDetalleGlobal({
       </div>
 
       {/* Tabla unificada de movimientos (comprobantes + pagos) */}
-      <CtaMovimientosGlobal comprobantes={comprobantes} pagos={pagos} cuentaTipo={cuenta.tipo} />
+      <CtaMovimientosGlobal
+        comprobantes={comprobantes}
+        pagos={pagos}
+        formasPago={formasPago}
+        cuentaTipo={cuenta.tipo}
+      />
     </div>
   );
 }
@@ -78,10 +93,12 @@ export function CtaCorrienteDetalleGlobal({
 function CtaMovimientosGlobal({
   comprobantes,
   pagos,
+  formasPago,
   cuentaTipo,
 }: {
   comprobantes: ComprobantePendiente[];
   pagos: Pago[];
+  formasPago: FormaPago[];
   cuentaTipo: "proveedor" | "cliente";
 }) {
   const [pageSize, setPageSize] = useState(10);
@@ -107,7 +124,7 @@ function CtaMovimientosGlobal({
       fecha: p.fecha,
       tipo: "Pago" as const,
       numero: p.numero_comprobante,
-      concepto: FORMAS_PAGO.find((f) => f.id === p.forma_pago_id)?.nombre ?? "—",
+      concepto: formasPago.find((f) => f.id === p.forma_pago_id)?.nombre ?? "—",
       importe: p.monto,
       estado: p.estado ?? "Vigente",
       _isDebito: false as const,

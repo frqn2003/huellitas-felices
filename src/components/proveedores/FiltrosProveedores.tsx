@@ -3,7 +3,7 @@
 import { Search, SlidersHorizontal, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { FORMAS_PAGO } from "@/data/formas-pago";
+import type { FormaPago } from "@/data/formas-pago";
 
 export type FiltroEstado = "Todos" | "Activo" | "Inactivo";
 
@@ -13,10 +13,6 @@ const estadoOpts: { value: FiltroEstado; label: string }[] = [
   { value: "Inactivo", label: "Inactivos" },
 ];
 
-// BACKEND: poblar desde GET /api/formas-pago (hoy es el placeholder
-// compartido FORMAS_PAGO, decisión D4).
-const formasPagoOpts = FORMAS_PAGO.map((f) => f.nombre);
-
 interface FiltrosProveedoresProps {
   busqueda: string;
   onBusquedaChange: (q: string) => void;
@@ -24,6 +20,14 @@ interface FiltrosProveedoresProps {
   onEstadoChange: (e: FiltroEstado) => void;
   formaPago: string;
   onFormaPagoChange: (f: string) => void;
+  /**
+   * Catálogo `forma_pago` (GET /api/formas-pago), vía ProveedoresContext.
+   *
+   * Antes salía del array fijo FORMAS_PAGO: una forma de pago agregada en la
+   * base no aparecía en el filtro, y una renombrada dejaba de matchear contra
+   * `proveedor.formasPago` — el filtro devolvía vacío sin explicación.
+   */
+  formasPago: FormaPago[];
 }
 
 export function FiltrosProveedores({
@@ -33,6 +37,7 @@ export function FiltrosProveedores({
   onEstadoChange,
   formaPago,
   onFormaPagoChange,
+  formasPago,
 }: FiltrosProveedoresProps) {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -113,15 +118,16 @@ export function FiltrosProveedores({
                 </label>
                 <label className="flex flex-col gap-1.5 text-sm font-bold text-text-primary">
                   Formas de pago
-                  {/* BACKEND: poblar desde GET /api/formas-pago. */}
                   <select
                     value={formaPago}
                     onChange={(e) => onFormaPagoChange(e.target.value)}
                     className="h-11 cursor-pointer rounded-sm border border-border bg-surface px-3 text-base font-normal text-text-primary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
                   >
                     <option value="">Todas las formas de pago</option>
-                    {formasPagoOpts.map((f) => (
-                      <option key={f} value={f}>{f}</option>
+                    {/* El value es el NOMBRE: el filtro compara contra
+                        `proveedor.formasPago`, que es un string[] de nombres. */}
+                    {formasPago.map((f) => (
+                      <option key={f.id} value={f.nombre}>{f.nombre}</option>
                     ))}
                   </select>
                 </label>

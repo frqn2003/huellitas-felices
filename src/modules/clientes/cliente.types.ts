@@ -1,3 +1,5 @@
+import type { Row } from "@/lib/db/schema.types";
+
 /**
  * HU-CLI-01 — tipos del módulo Clientes.
  */
@@ -5,28 +7,34 @@
 import type { EstadoCliente } from "@/data/clientes";
 
 /** Fila cruda de la tabla `cliente`. */
-export type ClienteRow = {
-  id: number;
-  nombre: string;
-  apellido: string;
-  documento: string;
-  direccion: string | null;
-  telefono: string;
-  email: string;
-  fecha_nacimiento: string | Date | null;
-  estado: EstadoCliente;
-  created_at: Date;
-  updated_at: Date;
-};
+export type ClienteRow = Pick<
+  Row<"cliente">,
+  | "id"
+  | "nombre"
+  | "apellido"
+  | "documento"
+  | "direccion"
+  | "telefono"
+  | "email"
+  | "fecha_nacimiento"
+  | "estado"
+  | "created_at"
+  | "updated_at"
+>;
 
 /** Fila cruda de la tabla `mascota` asociada a un cliente. */
-export type MascotaRow = {
-  id: number;
-  cliente_id: number;
-  nombre: string;
-  especie: string;
-  estado: EstadoCliente;
-};
+/**
+ * Solo lo que el perfil del cliente necesita mostrar de cada mascota.
+ *
+ * La mascota completa (con raza, sexo, peso…) vive en su propio módulo:
+ * src/modules/mascotas/. Acá se lee de la misma tabla, así una mascota nueva
+ * aparece en el perfil de su dueño sin sincronizar nada — es el criterio 4 de
+ * HU-MAS-01.
+ */
+export type MascotaRow = Pick<
+  Row<"mascota">,
+  "id" | "cliente_id" | "nombre" | "especie" | "estado"
+>;
 
 /** Filtros del listado de clientes. */
 export type FiltrosCliente = {

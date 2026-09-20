@@ -30,10 +30,13 @@ export interface OrdenCompraDetalle {
   articulo_id: number;
   cantidad: number;
   precio_acordado: number;
-  /** dict: la BD lo persiste; el mapper de la API todavía no lo emite.
-      BACKEND: devolverlo en GET /api/ordenes-compra y en el POST/PUT. */
-  subtotal?: number;
 }
+
+// `subtotal?: number` se quitó de esta interfaz: la columna existe en la base
+// pero `toApiDetalle` (src/modules/compras/orden.mapper.ts) no la emite, así
+// que el campo valía `undefined` siempre. Nadie lo leía — el `subtotal` que sí
+// usan las pantallas es el de la CABECERA (OrdenCompra.subtotal), que el mapper
+// sí devuelve. Cuando el detalle lo emita, se agrega acá sin el `?`.
 
 export interface OrdenCompra {
   id: number;

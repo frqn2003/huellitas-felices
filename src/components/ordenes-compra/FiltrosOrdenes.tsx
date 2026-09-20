@@ -2,7 +2,6 @@
 
 import { SlidersHorizontal, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { PROVEEDORES } from "@/data/articulos";
 import { Button } from "@/components/ui/Button";
 import { OrdenamientoSelect, type OrdenFecha } from "@/components/ui/OrdenamientoSelect";
 import { RangoNumerico } from "@/components/ui/RangoNumerico";
@@ -18,9 +17,23 @@ export interface FiltrosOrden {
   totalMax: string;
 }
 
+/**
+ * Proveedor del select de filtro.
+ *
+ * Llega por prop y NO de una constante: antes salía de `PROVEEDORES` de
+ * src/data/articulos.ts, una lista fija con ids inventados (5, 8, 12, 15) que
+ * no existen en la base. Filtrar por cualquiera de esas opciones mandaba
+ * `?proveedorId=5` y la consulta no devolvía nada.
+ *
+ * La página ya trae los reales de GET /api/proveedores?estado=activo y se los
+ * pasa a otros componentes; este select había quedado sin conectar.
+ */
+export type ProveedorOpcionFiltro = { id: number; nombre: string };
+
 interface FiltrosOrdenesProps {
   filtros: FiltrosOrden;
   onChange: (filtros: FiltrosOrden) => void;
+  proveedores: ProveedorOpcionFiltro[];
   disabled?: boolean;
   hideChips?: boolean;
 }
@@ -28,6 +41,7 @@ interface FiltrosOrdenesProps {
 interface FiltrosChipsProps {
   filtros: FiltrosOrden;
   onChange: (filtros: FiltrosOrden) => void;
+  proveedores: ProveedorOpcionFiltro[];
 }
 
 // Los estados del filtro replican la tabla fija de estados de orden_compra.
@@ -54,7 +68,11 @@ function etiquetaRango(min: string, max: string): string {
   return `hasta ${max}`;
 }
 
-function buildTags(filtros: FiltrosOrden, onChange: (filtros: FiltrosOrden) => void) {
+function buildTags(
+  filtros: FiltrosOrden,
+  onChange: (filtros: FiltrosOrden) => void,
+  proveedores: ProveedorOpcionFiltro[],
+) {
   const tags: { label: string; onRemove: () => void }[] = [];
   if (filtros.estado !== "Todas") {
     tags.push({
@@ -63,7 +81,7 @@ function buildTags(filtros: FiltrosOrden, onChange: (filtros: FiltrosOrden) => v
     });
   }
   if (filtros.proveedorId) {
-    const proveedor = PROVEEDORES.find((p) => p.id === Number(filtros.proveedorId));
+    const proveedor = proveedores.find((p) => p.id === Number(filtros.proveedorId));
     tags.push({
       label: `Proveedor: ${proveedor?.nombre ?? filtros.proveedorId}`,
       onRemove: () => onChange({ ...filtros, proveedorId: "" }),
@@ -78,8 +96,8 @@ function buildTags(filtros: FiltrosOrden, onChange: (filtros: FiltrosOrden) => v
   return tags;
 }
 
-export function FiltrosChips({ filtros, onChange }: FiltrosChipsProps) {
-  const tags = buildTags(filtros, onChange);
+export function FiltrosChips({ filtros, onChange, proveedores }: FiltrosChipsProps) {
+  const tags = buildTags(filtros, onChange, proveedores);
   if (tags.length === 0) return null;
   return (
     <div className="flex flex-wrap items-center gap-2" aria-label="Filtros aplicados">
@@ -103,7 +121,13 @@ export function FiltrosChips({ filtros, onChange }: FiltrosChipsProps) {
   );
 }
 
-export function FiltrosOrdenes({ filtros, onChange, disabled = false, hideChips = false }: FiltrosOrdenesProps) {
+export function FiltrosOrdenes({
+  filtros,
+  onChange,
+  proveedores,
+  disabled = false,
+  hideChips = false,
+}: FiltrosOrdenesProps) {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -118,7 +142,7 @@ export function FiltrosOrdenes({ filtros, onChange, disabled = false, hideChips 
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [open]);
 
-  const tags = buildTags(filtros, onChange);
+  const tags = buildTags(filtros, onChange, proveedores);
 
   return (
     <div className="flex flex-col gap-2">
@@ -157,7 +181,6 @@ export function FiltrosOrdenes({ filtros, onChange, disabled = false, hideChips 
                   ))}
                 </select>
               </label>
-              {/* BACKEND: poblar desde GET /api/proveedores (id + nombre). */}
               <label className="flex flex-col gap-1.5 text-sm font-bold text-text-primary">
                 Proveedor
                 <select
@@ -166,7 +189,7 @@ export function FiltrosOrdenes({ filtros, onChange, disabled = false, hideChips 
                   className="h-11 cursor-pointer rounded-sm border border-border bg-surface px-3 text-base font-normal text-text-primary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
                 >
                   <option value="">Todos</option>
-                  {PROVEEDORES.map((p) => (
+                  {proveedores.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.nombre}
                     </option>
@@ -201,7 +224,7 @@ export function FiltrosOrdenes({ filtros, onChange, disabled = false, hideChips 
         )}
       </div>
       {!hideChips && tags.length > 0 && (
-        <FiltrosChips filtros={filtros} onChange={onChange} />
+        <FiltrosChips filtros={filtros} onChange={onChange} proveedores={proveedores} />
       )}
     </div>
   );

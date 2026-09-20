@@ -29,7 +29,6 @@ import {
 } from "@/components/stock/FiltrosStock";
 import { StockTabs, type TabStock } from "@/components/stock/StockTabs";
 import {
-  origenesMovimiento,
   parseCantidad,
   tiposMovimiento,
   type MovimientoStock,
@@ -45,7 +44,9 @@ import {
   MovimientoFormModal,
   type MovimientoDraft,
   type MovimientoInicial,
+  type OrigenOpcion,
 } from "@/components/movimientos/MovimientoFormModal";
+import { useCatalogo } from "@/lib/use-catalogo";
 import { AlertaReposicionModal } from "@/components/movimientos/AlertaReposicionModal";
 
 function exportarCSV(fichas: FichaStock[]) {
@@ -132,6 +133,11 @@ function StockScreen() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  // Catálogo `origen_movimiento`. El id elegido viaja en el POST y el back lo
+  // usa tal cual, así que tiene que salir de la tabla (antes era una lista fija
+  // con los ids corridos: las ventas se guardaban como recepciones de compra).
+  const origenesMovimiento = useCatalogo<OrigenOpcion>("/api/origenes-movimiento");
+
   const [fichas, setFichas] = useState<FichaStock[]>([]);
   const [depositos, setDepositos] = useState<Deposito[]>([]);
 
@@ -493,7 +499,7 @@ function StockScreen() {
     if (!tipo) return;
     // El token de la API coincide con el nombre del catálogo ("Ingreso" / "Egreso").
     // Transferencia/Ajuste se resuelven por ORIGEN.
-    const origen = origenesMovimiento.find((o) => o.id === Number(draft.origenId));
+    const origen = origenesMovimiento.find((o: OrigenOpcion) => o.id === Number(draft.origenId));
     const esTransferencia = origen?.nombre === "transferencia_sucursal";
     const tipoApi = tipo.nombre;
 
@@ -816,6 +822,7 @@ function StockScreen() {
       <MovimientoFormModal
         open={formOpen}
         depositos={depositos}
+        origenes={origenesMovimiento}
         fichas={fichasMov}
         numeroSiguiente={numeroSiguienteMovStr}
         inicial={movimientoInicial}

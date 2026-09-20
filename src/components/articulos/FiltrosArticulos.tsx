@@ -2,7 +2,7 @@
 
 import { SlidersHorizontal, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { CATEGORIAS, PROVEEDORES, UNIDADES } from "@/data/articulos";
+import type { CatalogosArticulo } from "@/data/articulos";
 import { Button } from "@/components/ui/Button";
 
 export type EstadoFiltro = "Activo" | "Inactivo" | "Todos";
@@ -14,9 +14,31 @@ export interface Filtros {
   proveedorId: string;
 }
 
+/**
+ * Catálogos de los selects.
+ *
+ * Llegan por prop y NO de constantes de `src/data/articulos.ts`: los salían de
+ * ahí (`PROVEEDORES`, `CATEGORIAS`, `UNIDADES`) eran listas fijas escritas a
+ * mano, y las de proveedores traían ids inventados (5, 8, 12, 15) que no
+ * existen en la base. Filtrar por cualquiera de esas opciones devolvía SIEMPRE
+ * cero resultados, porque `articulo.proveedorPreferido.id` nunca coincidía.
+ *
+ * Los tres salen de GET /api/articulos/catalogos, que los lee de las tablas
+ * `categoria`, `unidad_medida` y `proveedor`. La página ya los pedía para el
+ * formulario de alta; el filtro los ignoraba.
+ *
+ * Es solo la parte del catálogo que estos selects usan: así el componente no
+ * pide `fabricantes` ni `presentaciones`, que no muestra.
+ */
+export type CatalogosFiltroArticulo = Pick<
+  CatalogosArticulo,
+  "categorias" | "unidadesMedida" | "proveedores"
+>;
+
 interface FiltrosArticulosProps {
   filtros: Filtros;
   onChange: (filtros: Filtros) => void;
+  catalogos: CatalogosFiltroArticulo;
   disabled?: boolean;
   hideChips?: boolean;
 }
@@ -24,13 +46,18 @@ interface FiltrosArticulosProps {
 interface FiltrosChipsProps {
   filtros: Filtros;
   onChange: (filtros: Filtros) => void;
+  catalogos: CatalogosFiltroArticulo;
 }
 
 const ESTADOS: EstadoFiltro[] = ["Activo", "Inactivo", "Todos"];
 
 const FILTROS_VACIOS: Filtros = { categoria: "", estado: "Todos", unidadMedida: "", proveedorId: "" };
 
-function buildTags(filtros: Filtros, onChange: (filtros: Filtros) => void) {
+function buildTags(
+  filtros: Filtros,
+  onChange: (filtros: Filtros) => void,
+  catalogos: CatalogosFiltroArticulo,
+) {
   const tags: { label: string; onRemove: () => void }[] = [];
   if (filtros.categoria) {
     tags.push({
@@ -51,7 +78,7 @@ function buildTags(filtros: Filtros, onChange: (filtros: Filtros) => void) {
     });
   }
   if (filtros.proveedorId) {
-    const proveedor = PROVEEDORES.find((p) => p.id === Number(filtros.proveedorId));
+    const proveedor = catalogos.proveedores.find((p) => p.id === Number(filtros.proveedorId));
     tags.push({
       label: `Proveedor: ${proveedor?.nombre ?? filtros.proveedorId}`,
       onRemove: () => onChange({ ...filtros, proveedorId: "" }),
@@ -60,8 +87,8 @@ function buildTags(filtros: Filtros, onChange: (filtros: Filtros) => void) {
   return tags;
 }
 
-export function FiltrosChips({ filtros, onChange }: FiltrosChipsProps) {
-  const tags = buildTags(filtros, onChange);
+export function FiltrosChips({ filtros, onChange, catalogos }: FiltrosChipsProps) {
+  const tags = buildTags(filtros, onChange, catalogos);
   if (tags.length === 0) return null;
   return (
     <div className="flex flex-wrap items-center gap-2" aria-label="Filtros aplicados">
@@ -85,7 +112,13 @@ export function FiltrosChips({ filtros, onChange }: FiltrosChipsProps) {
   );
 }
 
-export function FiltrosArticulos({ filtros, onChange, disabled = false, hideChips = false }: FiltrosArticulosProps) {
+export function FiltrosArticulos({
+  filtros,
+  onChange,
+  catalogos,
+  disabled = false,
+  hideChips = false,
+}: FiltrosArticulosProps) {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -100,7 +133,7 @@ export function FiltrosArticulos({ filtros, onChange, disabled = false, hideChip
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [open]);
 
-  const tags = buildTags(filtros, onChange);
+  const tags = buildTags(filtros, onChange, catalogos);
 
   return (
     <div className="flex flex-col gap-2">
@@ -133,9 +166,12 @@ export function FiltrosArticulos({ filtros, onChange, disabled = false, hideChip
                   className="h-11 cursor-pointer rounded-sm border border-border bg-surface px-3 text-base font-normal text-text-primary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
                 >
                   <option value="">Todas</option>
-                  {CATEGORIAS.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
+                  {/* `value` es el NOMBRE y no el id: el filtro se aplica en la
+                      página comparando `articulo.categoria`, que es el nombre
+                      ya resuelto por el JOIN del back. */}
+                  {catalogos.categorias.map((c) => (
+                    <option key={c.id} value={c.nombre}>
+                      {c.nombre}
                     </option>
                   ))}
                 </select>
@@ -162,14 +198,14 @@ export function FiltrosArticulos({ filtros, onChange, disabled = false, hideChip
                   className="h-11 cursor-pointer rounded-sm border border-border bg-surface px-3 text-base font-normal text-text-primary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
                 >
                   <option value="">Todas</option>
-                  {UNIDADES.map((u) => (
-                    <option key={u} value={u}>
-                      {u}
+                  {/* Igual que categoría: se compara por nombre. */}
+                  {catalogos.unidadesMedida.map((u) => (
+                    <option key={u.id} value={u.nombre}>
+                      {u.nombre}
                     </option>
                   ))}
                 </select>
               </label>
-              {/* BACKEND: poblar desde GET /api/proveedores (id + nombre). */}
               <label className="flex flex-col gap-1.5 text-sm font-bold text-text-primary">
                 Proveedor
                 <select
@@ -178,7 +214,9 @@ export function FiltrosArticulos({ filtros, onChange, disabled = false, hideChip
                   className="h-11 cursor-pointer rounded-sm border border-border bg-surface px-3 text-base font-normal text-text-primary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
                 >
                   <option value="">Todos</option>
-                  {PROVEEDORES.map((p) => (
+                  {/* Acá sí va el id: el filtro compara contra
+                      `articulo.proveedorPreferido.id`. */}
+                  {catalogos.proveedores.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.nombre}
                     </option>
@@ -198,7 +236,7 @@ export function FiltrosArticulos({ filtros, onChange, disabled = false, hideChip
         )}
       </div>
       {!hideChips && tags.length > 0 && (
-        <FiltrosChips filtros={filtros} onChange={onChange} />
+        <FiltrosChips filtros={filtros} onChange={onChange} catalogos={catalogos} />
       )}
     </div>
   );
