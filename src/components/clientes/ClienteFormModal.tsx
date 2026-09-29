@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/Textarea";
 import { useCamposSecuenciales } from "@/hooks/useCamposSecuenciales";
 import type { Cliente, ClienteDraft, EstadoCliente, Mascota } from "@/data/clientes";
 import { validaciones } from "@/data/clientes";
+import { obtenerVentasPorCliente } from "@/data/ventas";
 
 // Secuencia de desbloqueo de obligatorios SOLO en el alta (crear), en orden
 // visual: nombre → apellido → documento → teléfono → email. Los opcionales
@@ -209,6 +210,66 @@ function MascotasVinculadas({ mascotas }: { mascotas: Mascota[] }) {
               <td className="px-4 py-3 text-sm text-text-primary">{m.especie}</td>
               <td className="px-4 py-3">
                 <EstadoClienteBadge estado={m.estado} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function HistorialVentasCliente({ clienteId }: { clienteId: number }) {
+  // BACKEND: GET /api/ventas?cliente_id=:id
+  const ventas = obtenerVentasPorCliente(clienteId);
+
+  if (ventas.length === 0) {
+    return (
+      <p className="rounded-sm bg-cream-50 px-4 py-3 text-xs text-text-secondary">
+        Este cliente todavía no registra compras ni atenciones facturadas.
+      </p>
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-sm border border-border bg-surface">
+      <table className="w-full border-collapse text-left">
+        <thead>
+          <tr className="border-b border-border bg-cream-50">
+            <th scope="col" className="px-3 py-2 text-[10px] font-extrabold uppercase tracking-wide text-text-secondary">
+              Fecha & Recibo
+            </th>
+            <th scope="col" className="px-3 py-2 text-[10px] font-extrabold uppercase tracking-wide text-text-secondary">
+              Atención / Conceptos
+            </th>
+            <th scope="col" className="px-3 py-2 text-[10px] font-extrabold uppercase tracking-wide text-text-secondary">
+              Medio
+            </th>
+            <th scope="col" className="px-3 py-2 text-right text-[10px] font-extrabold uppercase tracking-wide text-text-secondary">
+              Total
+            </th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border/60">
+          {ventas.map((v) => (
+            <tr key={v.id} className="transition-colors duration-fast hover:bg-cream-50/50">
+              <td className="px-3 py-2 text-xs">
+                <span className="block font-bold text-text-primary">{v.fecha}</span>
+                <span className="font-mono text-[10px] text-text-secondary">{v.numeroComprobante}</span>
+              </td>
+              <td className="px-3 py-2 text-xs">
+                <span className="block font-bold text-brand-900">{v.conceptoServicio}</span>
+                <span className="text-[11px] text-text-secondary">
+                  {v.items.length > 0
+                    ? `+ ${v.items.length} ${v.items.length === 1 ? "artículo" : "artículos"}`
+                    : "Solo práctica"}
+                </span>
+              </td>
+              <td className="px-3 py-2 text-xs capitalize text-text-secondary">
+                {v.medioPago}
+              </td>
+              <td className="px-3 py-2 text-right text-xs font-extrabold text-brand-900">
+                ${v.total.toLocaleString("es-AR")}
               </td>
             </tr>
           ))}
@@ -476,9 +537,25 @@ function ClienteFormFields({
         </div>
 
         {isLectura && (
-          <div className="flex flex-col gap-2">
-            <p className="text-sm font-bold text-text-primary">Mascotas vinculadas</p>
-            <MascotasVinculadas mascotas={mascotas} />
+          <div className="flex flex-col gap-5 border-t border-border pt-4">
+            <div className="flex flex-col gap-2">
+              <p className="text-sm font-bold text-brand-900">Mascotas vinculadas</p>
+              <MascotasVinculadas mascotas={mascotas} />
+            </div>
+
+            {cliente && (
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-bold text-brand-900">
+                    Historial de compras y atenciones (HU-VTA-01)
+                  </p>
+                  <span className="text-[11px] font-semibold text-text-secondary">
+                    Ventas facturadas en mostrador
+                  </span>
+                </div>
+                <HistorialVentasCliente clienteId={cliente.id} />
+              </div>
+            )}
           </div>
         )}
       </form>

@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   Calendar,
   CheckCircle2,
+  CircleDollarSign,
   ClipboardList,
   Download,
   Lock,
@@ -28,10 +29,12 @@ import { ToastProvider, useToast } from "@/components/ui/Toast";
 import { EstadoTurnoBadge } from "@/components/turnos/EstadoTurnoBadge";
 import { InsumoRow } from "@/components/clinica/InsumoRow";
 import { NotaConsultaModal } from "@/components/clinica/NotaConsultaModal";
+import { descargarPdfConsulta } from "@/lib/generarPdfConsulta";
 
 import {
   articulosActivos,
-  consultasIniciales,
+  guardarConsulta,
+  obtenerConsultaPorTurno,
   CONSULTA_DRAFT_VACIO,
   SIMULAR_ERROR,
   type Consulta,
@@ -141,7 +144,7 @@ function ConsultaPageContent({ turnoId }: { turnoId: number }) {
 
   // ── Resolver consulta existente ───────────────────────────────────────────
   const [consulta, setConsulta] = useState<Consulta | null>(() =>
-    consultasIniciales.find((c) => c.turnoId === turnoId) ?? null,
+    obtenerConsultaPorTurno(turnoId),
   );
 
   // Si consulta existe y está cerrada: modo lectura.
@@ -288,6 +291,7 @@ function ConsultaPageContent({ turnoId }: { turnoId: number }) {
         notas: [],
       };
       setConsulta(nueva);
+      guardarConsulta(nueva);
       setConfirmOpen(false);
       setFinalizando(false);
       showToast("success", "Consulta registrada. Paciente derivado a mostrador.");
@@ -309,9 +313,73 @@ function ConsultaPageContent({ turnoId }: { turnoId: number }) {
       nota: texto,
       fechaHora: new Date().toISOString(),
     };
-    setNotas((prev) => [...prev, nueva]);
+    const listaActualizada = [...notas, nueva];
+    setNotas(listaActualizada);
+    if (consulta) {
+      const conNotas: Consulta = { ...consulta, notas: listaActualizada };
+      setConsulta(conNotas);
+      guardarConsulta(conNotas);
+    }
     setNotaOpen(false);
     showToast("success", "Nota agregada correctamente.");
+  }
+
+  // Generación nativa de Historia Clínica en PDF (Pet Bliss Style)
+  function handleDescargarPdf() {
+    if (!turno) return;
+    descargarPdfConsulta({
+      turnoId,
+      consultaId: consulta?.id,
+      fecha: formatFecha(turno.fecha),
+      hora: `${turno.horaInicio} – ${turno.horaFin}`,
+      estado: esCerrada ? "cerrada" : "abierta",
+      profesionalNombre: profesionalDisplay,
+      practicaNombre: practicaDisplay,
+      clienteNombre: cliente ? `${cliente.nombre} ${cliente.apellido}` : "—",
+      clienteDni: cliente?.documento,
+      clienteTelefono: cliente?.telefono,
+      mascotaNombre: mascota?.nombre || "—",
+      mascotaEspecie: mascota?.especie || "—",
+      mascotaRaza: mascota?.raza,
+      mascotaSexo: mascota?.sexo,
+      mascotaPesoAnterior: mascota?.peso,
+      temperatura: esCerrada
+        ? consulta?.temperatura
+        : draft.temperatura
+          ? parseFloat(draft.temperatura)
+          : null,
+      frecuenciaCardiaca: esCerrada
+        ? consulta?.frecuenciaCardiaca
+        : draft.frecuenciaCardiaca
+          ? parseInt(draft.frecuenciaCardiaca)
+          : null,
+      pesoMomento: esCerrada
+        ? consulta?.pesoMomento
+        : draft.pesoMomento
+          ? parseFloat(draft.pesoMomento)
+          : null,
+      estadoFisicoGeneral: esCerrada
+        ? consulta?.estadoFisicoGeneral
+        : draft.estadoFisicoGeneral || null,
+      motivoConsulta: esCerrada
+        ? consulta?.motivoConsulta || "—"
+        : draft.motivoConsulta || "Consulta clínica",
+      diagnostico: esCerrada
+        ? consulta?.diagnostico || "—"
+        : draft.diagnostico || "En evaluación",
+      tratamiento: esCerrada ? consulta?.tratamiento : draft.tratamiento,
+      insumos: (esCerrada ? (consulta?.insumos ?? []) : insumos).map((i) => ({
+        codigo: i.codigo,
+        nombre: i.nombre,
+        unidad: i.unidadMedida,
+        cantidad: i.cantidad,
+      })),
+      notas: (esCerrada ? notas : []).map((n) => ({
+        profesional: n.profesional,
+        fechaHora: formatHoraMin(n.fechaHora),
+        nota: n.nota,
+      })),
+    });
   }
 
   // ── Estados de pantalla ───────────────────────────────────────────────────
@@ -393,49 +461,82 @@ function ConsultaPageContent({ turnoId }: { turnoId: number }) {
         </div>
 
         {/* ── Encabezado ─── */}
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between print:hidden">
-          <div className="flex flex-col gap-1">
+        <div className="mb-6 flex flex-col gap-4 print:hidden">
+          <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={handleAtras}
-              className="flex cursor-pointer items-center gap-1.5 text-sm font-semibold text-text-secondary transition-colors duration-fast ease-out hover:text-brand-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900"
+              className="inline-flex h-10 items-center gap-2 rounded-pill border border-border bg-surface px-4 text-xs font-bold uppercase tracking-wider text-text-secondary transition-colors duration-fast ease-out hover:border-brand-900 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900"
             >
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
               Volver a Clínica
             </button>
-            <h1 className="font-display text-2xl font-extrabold uppercase tracking-tight text-brand-900">
-              Registro de Consulta Médica
-            </h1>
-            <p className="text-sm text-text-secondary">
-              Turno #{turno.id} · {formatFecha(turno.fecha)} · {turno.horaInicio} – {turno.horaFin}
-            </p>
+            <span className="text-xs font-bold text-text-secondary">/</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-text-secondary">
+              Atención Clínica
+            </span>
           </div>
 
-          {/* Botón de PDF en la cabecera */}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => window.print()}
-            className="bg-surface shadow-xs hover:bg-cream-100 self-start sm:self-auto"
-          >
-            <Download className="h-4 w-4 text-brand-900" aria-hidden="true" />
-            Descargar PDF
-          </Button>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex flex-col gap-1">
+              <h1 className="font-display text-2xl font-extrabold uppercase tracking-tight text-brand-900">
+                Registro de Consulta Médica
+              </h1>
+              <p className="text-sm text-text-secondary">
+                Turno #{turno.id} · {formatFecha(turno.fecha)} · {turno.horaInicio} – {turno.horaFin}
+              </p>
+            </div>
+
+            {/* Botones de acción en la cabecera */}
+            <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+              {esCerrada && (
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  onClick={() => router.push(`/turnos/${turnoId}/pago`)}
+                  className="shadow-xs font-bold"
+                >
+                  <CircleDollarSign className="h-4 w-4 mr-1.5" aria-hidden="true" />
+                  Cobrar en mostrador
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleDescargarPdf}
+                className="bg-surface shadow-xs hover:bg-cream-100"
+              >
+                <Download className="h-4 w-4 text-brand-900" aria-hidden="true" />
+                Descargar PDF
+              </Button>
+            </div>
+          </div>
         </div>
 
-        {/* Banner "cerrada" */}
+        {/* Banner "cerrada" con acceso a mostrador (HU-VTA-01) */}
         {esCerrada && (
           <motion.div
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-5 flex items-center gap-3 rounded-md border border-status-warning bg-status-warning/10 px-5 py-3"
+            className="mb-5 flex flex-col gap-3 rounded-md border border-status-warning bg-status-warning/10 px-5 py-3 sm:flex-row sm:items-center sm:justify-between"
             role="status"
           >
-            <Lock className="h-5 w-5 shrink-0 text-status-warning-strong" aria-hidden="true" />
-            <p className="text-sm font-semibold text-status-warning-strong">
-              Esta consulta está cerrada. Solo puede agregar notas aclaratorias.
-            </p>
+            <div className="flex items-center gap-3">
+              <Lock className="h-5 w-5 shrink-0 text-status-warning-strong" aria-hidden="true" />
+              <p className="text-sm font-semibold text-status-warning-strong">
+                Esta consulta está cerrada. Paciente derivado a mostrador para liquidación y cobro.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => router.push(`/turnos/${turnoId}/pago`)}
+              className="inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-pill bg-status-warning-strong px-4 py-2 text-xs font-extrabold text-white transition-opacity hover:opacity-90 self-start sm:self-auto"
+            >
+              <CircleDollarSign className="h-4 w-4" aria-hidden="true" />
+              Liquidar y Cobrar Turno
+            </button>
           </motion.div>
         )}
 

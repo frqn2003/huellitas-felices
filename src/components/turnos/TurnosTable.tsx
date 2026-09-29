@@ -1,7 +1,15 @@
 "use client";
 
-import { CalendarDays, Eye } from "lucide-react";
+import { CalendarDays, CircleDollarSign, Eye } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
 import { formatearFecha } from "@/data/turnos";
+import {
+  esTurnoPagado,
+  obtenerComprobanteTurno,
+  type ComprobanteTurno,
+} from "@/data/pagos";
+import { ComprobanteTurnoModal } from "./ComprobanteTurnoModal";
 import { EstadoTurnoBadge } from "./EstadoTurnoBadge";
 
 // Fila de la tabla con los campos de display ya resueltos (el front los junta
@@ -32,6 +40,7 @@ interface TurnosTableProps {
   onClearFilters: () => void;
   onNuevo?: () => void;
   onVer?: (turno: TurnoRow) => void;
+  onPagar?: (turno: TurnoRow) => void;
   renderActions?: (turno: TurnoRow) => React.ReactNode;
 }
 
@@ -55,8 +64,23 @@ export function TurnosTable({
   onClearFilters,
   onNuevo,
   onVer,
+  onPagar,
   renderActions,
 }: TurnosTableProps) {
+  const router = useRouter();
+  const [comprobanteActivo, setComprobanteActivo] = useState<ComprobanteTurno | null>(null);
+
+  const pagadosMap = useMemo(() => {
+    // BACKEND: se resolverá desde la API de turnos (JOIN con cobro / estado_facturacion)
+    const map: Record<number, boolean> = {};
+    for (const t of turnos) {
+      if (t.estadoId === 4 && esTurnoPagado(t.id)) {
+        map[t.id] = true;
+      }
+    }
+    return map;
+  }, [turnos]);
+
   if (loading) {
     return (
       <div className="overflow-hidden rounded-md border border-border bg-surface shadow-card">
@@ -83,6 +107,7 @@ export function TurnosTable({
             <div className="hidden h-4 w-24 animate-pulse rounded bg-cream-100 lg:block" />
             <div className="h-6 w-24 animate-pulse rounded-pill bg-cream-100" />
             <div className="ml-auto flex gap-1 lg:ml-0">
+              <div className="h-11 w-11 animate-pulse rounded-pill bg-cream-100" />
               <div className="h-11 w-11 animate-pulse rounded-pill bg-cream-100" />
             </div>
           </div>
@@ -182,23 +207,71 @@ export function TurnosTable({
                     <div className="flex items-center gap-1">
                       {renderActions(t)}
                     </div>
-                  ) : onVer ? (
-                    <button
-                      type="button"
-                      onClick={() => onVer(t)}
-                      aria-label={`Ver detalle del turno de ${t.clienteNombre}`}
-                      title="Ver detalle"
-                      className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-pill text-text-secondary transition-colors duration-fast ease-out hover:bg-brand-900/10 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900"
-                    >
-                      <Eye className="h-5 w-5" aria-hidden="true" />
-                    </button>
-                  ) : null}
+                  ) : (
+                    <div className="flex items-center gap-1">
+                      {onVer && (
+                        <button
+                          type="button"
+                          onClick={() => onVer(t)}
+                          aria-label={`Ver detalle del turno de ${t.clienteNombre}`}
+                          title="Ver detalle"
+                          className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-pill text-text-secondary transition-colors duration-fast ease-out hover:bg-brand-900/10 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900"
+                        >
+                          <Eye className="h-5 w-5" aria-hidden="true" />
+                        </button>
+                      )}
+                      {t.estadoId === 4 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (pagadosMap[t.id]) {
+                              const comp = obtenerComprobanteTurno(t.id);
+                              if (comp) {
+                                setComprobanteActivo(comp);
+                                return;
+                              }
+                            }
+                            if (onPagar) {
+                              onPagar(t);
+                            } else {
+                              router.push(`/turnos/${t.id}/pago`);
+                            }
+                          }}
+                          aria-label={
+                            pagadosMap[t.id]
+                              ? `Ver comprobante de cobro del turno de ${t.clienteNombre}`
+                              : `Pagar turno de ${t.clienteNombre}`
+                          }
+                          title={
+                            pagadosMap[t.id]
+                              ? "Ver comprobante de cobro (Pagado)"
+                              : "Pagar turno"
+                          }
+                          className={`flex h-11 w-11 cursor-pointer items-center justify-center rounded-pill transition-colors duration-fast ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900 ${
+                            pagadosMap[t.id]
+                              ? "text-status-success-strong hover:bg-status-success/15 hover:text-status-success-strong"
+                              : "text-text-secondary hover:bg-brand-900/10 hover:text-brand-900"
+                          }`}
+                        >
+                          <CircleDollarSign className="h-5 w-5" aria-hidden="true" />
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {comprobanteActivo && (
+        <ComprobanteTurnoModal
+          open={Boolean(comprobanteActivo)}
+          onClose={() => setComprobanteActivo(null)}
+          comprobante={comprobanteActivo}
+        />
+      )}
     </div>
   );
 }

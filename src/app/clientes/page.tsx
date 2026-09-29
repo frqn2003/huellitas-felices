@@ -252,6 +252,10 @@ function ClientesScreen() {
     // BACKEND: el backend valida que la transición sea permitida (1→2, 2→{3,4,5})
     // y registra la auditoría del UPDATE. Si cancelado, el horario queda libre
     // al instante (EXCLUDE estado_id <> 3).
+    if (estadoId === 4) {
+      // HU-CLIN-01: Al cambiar el turno a "atendido", abre automáticamente la pantalla de consulta médica
+      router.push(`/consulta/${turnoId}`);
+    }
     return true;
   };
 

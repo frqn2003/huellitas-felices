@@ -253,3 +253,36 @@ export const consultasIniciales: Consulta[] = [consultaCerrada, consultaCerrada3
 
 export const SIMULAR_VACIO = false;
 export const SIMULAR_ERROR = false;
+
+const STORAGE_KEY_CONSULTAS = "huellitas_consultas_clin01";
+
+// BACKEND: GET /api/consultas/:turnoId
+export function obtenerConsultaPorTurno(turnoId: number): Consulta | null {
+  if (typeof window === "undefined") {
+    return consultasIniciales.find((c) => c.turnoId === turnoId) || null;
+  }
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY_CONSULTAS);
+    if (raw) {
+      const map: Record<number, Consulta> = JSON.parse(raw);
+      if (map[turnoId]) return map[turnoId];
+    }
+  } catch {
+    // fallback
+  }
+  return consultasIniciales.find((c) => c.turnoId === turnoId) || null;
+}
+
+// BACKEND: PATCH /api/consultas/:id/cerrar o POST /api/consultas
+// En backend: trigger trg_auditoria_consulta_medica registra la operación.
+export function guardarConsulta(consulta: Consulta): void {
+  if (typeof window === "undefined") return;
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY_CONSULTAS);
+    const map: Record<number, Consulta> = raw ? JSON.parse(raw) : {};
+    map[consulta.turnoId] = consulta;
+    sessionStorage.setItem(STORAGE_KEY_CONSULTAS, JSON.stringify(map));
+  } catch (err) {
+    console.error("Error al guardar consulta en sessionStorage:", err);
+  }
+}
