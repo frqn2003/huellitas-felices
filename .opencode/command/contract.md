@@ -1,5 +1,5 @@
 ---
-description: Define (o ajusta) el contrato de API de una entidad antes de que se escriba su pantalla. Recibe entidad + operaciones + campos, contrasta con la autoridad (PLAN-SPRINT1 §5, GUIA-IMPLEMENTACION §5/§6/§7/§14) y materializa el módulo de 5 capas en src/modules/ + los route handlers flacos en src/app/api/. Se usa antes de /brief y antes de /disenar de esa entidad.
+description: Define (o ajusta) el contrato de API de una entidad antes de que se escriba su pantalla. Recibe entidad + operaciones + campos, contrasta con la autoridad (PLAN-SPRINT1 §5, GUIA-IMPLEMENTACION §5/§6/§7/§14) y materializa el módulo de 5 capas en src/modules/ + los route handlers flacos en src/app/api/. Se usa despues de /brief y antes de /disenar de esa entidad.
 agent: build
 ---
 
@@ -304,11 +304,11 @@ Cerrá con este reporte, en este orden:
 5. **Errores de dominio:** código, mensaje, `campo`, status, y qué criterio de la HU lo origina.
 6. **Bloqueantes o divergencias:** lo que no se pudo cerrar (tabla que no existe, decisión abierta de `AJUSTES-DER.md`, pendiente de `PENDIENTE-FRONT.md`, endpoint que §5 promete y el código no tiene). Si §5 de `PLAN-SPRINT1.md` y `src/app/api/` divergen, **gana el código** y se anota la divergencia.
 7. **Verificación:** resultado de `npm run lint` y `npm run typecheck`, y qué camino de error se probó.
-8. **Próximos pasos:** que la pantalla se diseña con `/brief` + `/disenar` contra este contrato, y que se publica con `/subir`.
+8. **Próximos pasos:** que la pantalla se diseña con `/disenar` contra este contrato, sobre el brief de `docs/briefs/` que lo originó, y que se publica con `/subir`.
 
 ## Recordatorio de reglas
 
-- **El contrato va antes que la pantalla.** `/contract` → `/brief` → `/disenar` → `/subir`.
+- **El contrato va después del brief y antes que la pantalla.** `/brief` → `/contract` → `/disenar` → `/subir`.
 - **Este comando NO commitea ni pushea.** Eso es de `/subir`.
 - **No inventar nada:** ni un endpoint, ni un campo, ni un tipo. Si falta contexto, se pregunta (paso 1). Si falta la tabla en `db/schema.sql`, se dice; no se escribe el DDL.
 - **Reusar antes de crear:** copiar la estructura de `src/modules/articulos/` y `src/modules/proveedores/`, y las rutas de `src/app/api/articulos/`. Un módulo que ya existe se ajusta, no se regenera.

@@ -70,7 +70,7 @@ Lo que hace (pasos en orden):
 5. **Paso 4 — Verificación**: reglas duras del repo + el checklist por endpoint de `GUIA-IMPLEMENTACION.md` §14, más `npm run lint` y `npm run typecheck`. Si aparece un error, lo registra en `docs/errores-comunes.md`.
 6. **Paso 5 — Reporte**: qué contratos reusó, archivos creados/ajustados, operaciones, campos, errores de dominio, bloqueantes, **verificación** (resultado de `npm run lint` y `npm run typecheck`, y qué camino de error se probó) y próximos pasos.
 
-> Regla: **el contrato va antes que la pantalla.** Si la pantalla se dibuja contra un contrato que después cambia, se rompe el formulario entero.
+> Regla: **el contrato va después del brief y antes que la pantalla.** `/brief` → `/contract` → `/disenar`. Si la pantalla se dibuja contra un contrato que después cambia, se rompe el formulario entero.
 > El tipo del contrato vive en `src/data/<modulo>.ts` y lo importa el mapper: si el front cambia la interfaz, el mapper deja de compilar. El front llama la API con `apiGet`/`apiGetOpcional`/`apiSend` de `@/lib/api-client`, sin `fetch` a mano.
 
 ### `/subir` — Publicar cambios en GitHub
