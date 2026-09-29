@@ -8,7 +8,7 @@ Documento de referencia para el equipo que trabaja en **Huellitas Felices** (ERP
 
 ## Sección 1 — Comandos OpenCode del equipo
 
-Los tres comandos que se usan a diario. Van siempre precedidos de `/` y se escriben en OpenCode.
+Los comandos que se usan a diario. Van siempre precedidos de `/` y se escriben en OpenCode.
 
 ### `/brief` — Armar el brief de una pantalla
 
@@ -48,6 +48,30 @@ Lo que hace (pasos en orden):
 
 > Reutilizar antes de crear es **regla dura**. El inventario vive en Engram (`disenar/componentes`) y en `src/components/`.
 > Si en el paso 6/7 se detecta un error, el agente lo registra **automáticamente** en `docs/errores-comunes.md` + Engram (no hay comando `/error`).
+
+### `/contract` — Definir el contrato de API de una entidad
+
+Fija el contrato de API de una entidad **antes de que se escriba su pantalla**. Recibe entidad + operaciones + campos, y deja el contrato materializado en el repo. **No commitea**: eso va con `/subir`.
+
+```
+/contract articulos — GET /api/articulos (busqueda, categoriaId, estado), POST, PUT /:id, PATCH /:id (baja lógica), GET /:id/ultimo-precio-compra. Campos: nombre, descripcion, categoriaId, unidadMedidaId, fabricanteId, presentacionId, contenidoNeto, imagen
+```
+
+o solo la HU, y el agente deriva el contrato del brief:
+```
+/contract HU-STK-01
+```
+
+Lo que hace (pasos en orden):
+1. **Paso 0 — Autoridad + relevo**: lee `docs/backend/PLAN-SPRINT1.md` §5 (qué endpoints pide cada HU), `GUIA-IMPLEMENTACION.md` §5/§6/§7/§9/§14 (arquitectura en capas, carpetas, convenciones, métodos, checklist), `ENTENDER-EL-BACKEND.md` §6 (receta) y `db/schema.sql` (la base real). Después releva `src/modules/*/` y `src/app/api/*/` para **no duplicar**: si el módulo ya existe, lo ajusta contra lo pedido en vez de regenerarlo.
+2. **Paso 1 — Contexto**: entidad, operaciones, campos de entrada/salida y errores de dominio. Si hay brief en `docs/briefs/`, lo lee primero. **Te pregunta solo lo que falta**; lo que falta de verdad, se pregunta — nunca se inventa un campo.
+3. **Paso 2 — Contrato**: los 5 archivos del módulo en `src/modules/{entidad}/` — `types` (Row/Filtros/Input/Catalogos), `schema` (Zod, forma nomás), `repo` (SQL parametrizado), `service` (reglas de negocio, transacciones, auditoría) y `mapper` (fila → shape del front). Respeta el naming base (`snake_case`) vs API (**el shape que el front ya espera, módulo por módulo**) y el shape único de error.
+4. **Paso 3 — Ruta**: `src/app/api/{entidad}/route.ts` con `withRoute` + `parseBody`/`parseId` + `ok`/`created` y los helpers de `lib/http/query`. **Handlers flacos**: leer, validar, delegar, responder.
+5. **Paso 4 — Verificación**: reglas duras del repo + el checklist por endpoint de `GUIA-IMPLEMENTACION.md` §14, más `npm run lint` y `npm run typecheck`. Si aparece un error, lo registra en `docs/errores-comunes.md`.
+6. **Paso 5 — Reporte**: qué contratos reusó, archivos creados/ajustados, operaciones, campos, errores de dominio, bloqueantes, **verificación** (resultado de `npm run lint` y `npm run typecheck`, y qué camino de error se probó) y próximos pasos.
+
+> Regla: **el contrato va antes que la pantalla.** Si la pantalla se dibuja contra un contrato que después cambia, se rompe el formulario entero.
+> El tipo del contrato vive en `src/data/<modulo>.ts` y lo importa el mapper: si el front cambia la interfaz, el mapper deja de compilar. El front llama la API con `apiGet`/`apiGetOpcional`/`apiSend` de `@/lib/api-client`, sin `fetch` a mano.
 
 ### `/subir` — Publicar cambios en GitHub
 
@@ -208,6 +232,7 @@ Referencia rápida para usar a diario.
 
 | Comando | Qué hace |
 |---|---|
+| `/contract <entidad>` | Define el contrato de API de una entidad (módulo en `src/modules/` + rutas en `src/app/api/`). |
 | `/brief "..."` | Genera el brief `docs/briefs/HU-XXX.md` desde descripción + idea. |
 | `/disenar HU-XXX` | Diseña, codea y verifica la pantalla del brief. |
 | `/subir` | Publica cambios en GitHub (con confirmación). |
