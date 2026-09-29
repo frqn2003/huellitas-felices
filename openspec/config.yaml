@@ -1,0 +1,54 @@
+# openspec/config.yaml
+schema: spec-driven
+
+context: |
+  Tech stack: Next.js 16.3 + React 19 + TypeScript 5 (strict) + Tailwind v4 (Pet Bliss tokens) + pg (Supabase)
+  Architecture: App Router UI with hardcoded placeholder data (src/data), modular repo/service/mapper layers (src/modules), DB triggers own stock/code/audit logic
+  Testing: no test runner detected; lint + typecheck only (see `testing:`)
+  Style: Pet Bliss design tokens via Tailwind @theme; reusable components; UI in Spanish; `// BACKEND:` comments mark integration points
+
+projects:
+  - path: .
+    stack: Next.js 16.3.0 / React 19.2.8 / TypeScript 5 / Tailwind v4 / PostgreSQL (pg, Supabase)
+    test_command: ""
+    test_framework: ""
+    coverage_command: ""
+    lint_command: npm run lint
+    typecheck_command: npm run typecheck
+    format_command: ""
+
+testing:
+  strict_tdd: false
+  reason: |
+    No test runner, no `test` script in package.json, no test files and no
+    test config (vitest/jest/playwright/cypress all absent). Strict TDD fails
+    closed: downstream execution requires adding a workspace-wide test command.
+  test_command: ""
+  coverage_command: ""
+
+rules:
+  proposal:
+    - Include rollback plan for risky changes
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+  design:
+    - Include sequence diagrams for complex flows
+    - Document architecture decisions with rationale
+  tasks:
+    - Group by phase, use hierarchical numbering
+    - Keep tasks completable in one session
+  apply:
+    guidelines:
+      - Follow existing module pattern (repo/service/schema/types/mapper per domain)
+      - Use Pet Bliss design tokens via Tailwind @theme; no hardcoded colors
+      - Mark every integration point with a `// BACKEND:` comment (endpoint + what to replace)
+      - Reuse or extend existing components; check design-system/huellitas-felices/componentes.md first
+    tdd: false
+    test_command: ""
+  verify:
+    test_command: ""
+    build_command: npm run build
+    coverage_threshold: 0
+  archive:
+    - Warn before merging destructive deltas

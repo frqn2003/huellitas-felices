@@ -10,13 +10,14 @@ import {
   Settings,
   ShieldCheck,
   ShoppingCart,
+  Stethoscope,
   Truck,
   Users,
   Warehouse,
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 
@@ -38,6 +39,9 @@ const SECCIONES: SidebarSection[] = [
       // HU-CLI-01: un solo ítem lleva a /clientes; las pestañas Clientes /
       // Mascotas / Turnos viven dentro de la pantalla (patrón Compras).
       { label: "Recepción", href: "/clientes", icon: Users },
+      // HU-CLIN-01: tabla de turnos del día — el veterinario elige el turno a atender.
+      // BACKEND: en producción navegar desde la Agenda al cambiar estado a "atendido".
+      { label: "Clínica", href: "/consulta", icon: Stethoscope },
     ],
   },
   {
@@ -244,7 +248,7 @@ export function Sidebar() {
         onMouseLeave={() => setHovering(false)}
         onPointerEnter={() => setHovering(true)}
         onPointerLeave={() => setHovering(false)}
-        className={`sticky top-0 z-30 hidden h-screen shrink-0 flex-col bg-brand-900 transition-all duration-normal ease-out lg:flex ${expanded ? "w-[264px]" : "w-[72px]"}`}
+        className={`sticky top-0 z-30 hidden h-screen shrink-0 flex-col bg-brand-900 transition-all duration-normal ease-out lg:flex print:hidden ${expanded ? "w-[264px]" : "w-[72px]"}`}
       >
         <div
           className={`flex items-center justify-between gap-2 border-b border-cream-50/15 px-4 py-4 ${expanded ? "" : "justify-center"}`}
@@ -285,7 +289,7 @@ export function Sidebar() {
         <NavBody collapsed={!expanded} />
       </aside>
 
-      <div className="sticky top-0 z-30 flex w-full items-center justify-between border-b border-border bg-cream-50 px-4 py-3 lg:hidden">
+      <div className="sticky top-0 z-30 flex w-full items-center justify-between border-b border-border bg-cream-50 px-4 py-3 lg:hidden print:hidden">
         <button
           type="button"
           aria-label="Huellitas Felices"

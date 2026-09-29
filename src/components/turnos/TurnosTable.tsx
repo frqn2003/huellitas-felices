@@ -30,8 +30,9 @@ interface TurnosTableProps {
   loading?: boolean;
   hasActiveFilters: boolean;
   onClearFilters: () => void;
-  onNuevo: () => void;
-  onVer: (turno: TurnoRow) => void;
+  onNuevo?: () => void;
+  onVer?: (turno: TurnoRow) => void;
+  renderActions?: (turno: TurnoRow) => React.ReactNode;
 }
 
 const HEADERS = [
@@ -54,6 +55,7 @@ export function TurnosTable({
   onClearFilters,
   onNuevo,
   onVer,
+  renderActions,
 }: TurnosTableProps) {
   if (loading) {
     return (
@@ -113,7 +115,7 @@ export function TurnosTable({
           >
             Limpiar filtros
           </button>
-        ) : (
+        ) : onNuevo ? (
           <button
             type="button"
             onClick={onNuevo}
@@ -121,7 +123,7 @@ export function TurnosTable({
           >
             Nuevo turno
           </button>
-        )}
+        ) : null}
       </div>
     );
   }
@@ -176,15 +178,21 @@ export function TurnosTable({
                   <EstadoTurnoBadge estadoId={t.estadoId} />
                 </td>
                 <td className="px-4 py-3">
-                  <button
-                    type="button"
-                    onClick={() => onVer(t)}
-                    aria-label={`Ver detalle del turno de ${t.clienteNombre}`}
-                    title="Ver detalle"
-                    className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-pill text-text-secondary transition-colors duration-fast ease-out hover:bg-brand-900/10 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900"
-                  >
-                    <Eye className="h-5 w-5" aria-hidden="true" />
-                  </button>
+                  {renderActions ? (
+                    <div className="flex items-center gap-1">
+                      {renderActions(t)}
+                    </div>
+                  ) : onVer ? (
+                    <button
+                      type="button"
+                      onClick={() => onVer(t)}
+                      aria-label={`Ver detalle del turno de ${t.clienteNombre}`}
+                      title="Ver detalle"
+                      className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-pill text-text-secondary transition-colors duration-fast ease-out hover:bg-brand-900/10 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900"
+                    >
+                      <Eye className="h-5 w-5" aria-hidden="true" />
+                    </button>
+                  ) : null}
                 </td>
               </tr>
             ))}
