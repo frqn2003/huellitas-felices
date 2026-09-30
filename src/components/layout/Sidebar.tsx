@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  BadgeDollarSign,
   Landmark,
   LogOut,
   Menu,
@@ -48,6 +49,9 @@ const SECCIONES: SidebarSection[] = [
     titulo: "Operaciones",
     items: [
       { label: "Artículos", href: "/articulos", icon: Package },
+      // HU-STK-03: precio de venta vigente por artículo (useItemActivo usa
+      // startsWith, así que /lista-precios/historial también la marca activa).
+      { label: "Lista de Precios", href: "/lista-precios", icon: BadgeDollarSign },
       { label: "Inventario", href: "/stock", icon: Warehouse },
       { label: "Compras", href: "/ordenes-compra", icon: ShoppingCart },
       { label: "Proveedores", href: "/proveedores", icon: Truck },

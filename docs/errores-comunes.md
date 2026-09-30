@@ -18,6 +18,7 @@ Log vivo del equipo de diseño para **no volver a cometer los mismos errores**. 
 - [x] Páginas con `useSearchParams` (client component) → envolver en `<Suspense fallback={null}>` (falla el prerender de `next build`).
 - [x] Siempre que un input cargue sugerencias, verificar cómo se renderizan dentro de un `Modal` animado (transform): el `datalist` nativo se posiciona mal → usar chips propios. Y si un Combobox "parece seleccionado", revisar el `value` interno: tipear sin elegir de la lista deja el value vacío.
 - [x] NO resetear estado con `useEffect` sincrónico (setState dentro del effect body → lint `react-hooks/set-state-in-effect`). Para reiniciar un select al cambiar de registro: remount-key desde el padre (`key={id}`) o ajustar estado durante render (guardar el id previo con `useState` y setear si cambió).
+- [x] Errores de `tsc` solo en `.next/**/types/validator.ts` (rutas inexistentes) → artefactos stale: borrar `.next/types` y `.next/dev/types` y re-ejecutar; no tocar el código.
 
 ---
 
@@ -25,6 +26,14 @@ Log vivo del equipo de diseño para **no volver a cometer los mismos errores**. 
 
 <!-- Formato de cada entrada. Agregar entradas NUEVAS ARRIBA de las existentes (más reciente primero).
      No borrar entradas viejas: si quedó obsoleta, marcarla como [OBSOLETA] y por qué. -->
+
+### 2026-09-29 · Lista de precios · `npx tsc --noEmit` fallaba por tipos generados de Next (HU-STK-03)
+
+- **Qué pasó:** `npx tsc --noEmit` devolvió 8 errores TS2307 en `.next/types/validator.ts` y `.next/dev/types/validator.ts` apuntando a `src/app/api/lista-precios/*` (rutas que no existen en el repo ni en el historial de git).
+- **Cómo se detectó:** verificación técnica (paso 6a).
+- **Causa:** artefactos stale de tipos generados por Next (probablemente sincronizados por OneDrive desde otro equipo o de una corrida con rutas que después se borraron sin commitear): el validator de tipos referencia rutas que ya no están.
+- **Regla para no repetirlo:** si tsc falla SOLO dentro de `.next/**/types/**`, no es error del código: borrar `.next/types` y `.next/dev/types` y re-ejecutar `npx tsc --noEmit` (Next los regenera en el próximo dev/build). Verificar contra `git status` que no haya rutas borradas de verdad.
+- **Fix:** se borraron `.next/types` y `.next/dev/types`; tsc pasó. Dato no-tan-trivial: esos validators delatan el contrato que se imaginó para el back (`GET/POST /api/lista-precios`, `GET /api/lista-precios/[articuloId]`, `GET /api/lista-precios/[articuloId]/historial`, `GET /api/lista-precios/articulos-sin-precio`) — alinear los `// BACKEND:` cuando el back arranque.
 
 ### 2026-09-16 · Recepción · tab Agenda (`/clientes?tab=agenda`, HU-TUR-02)
 

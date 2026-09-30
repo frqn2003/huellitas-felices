@@ -7,6 +7,9 @@ import { Button } from "@/components/ui/Button";
 
 export type EstadoFiltro = "Activo" | "Inactivo" | "Todos";
 
+/** Selects que puede mostrar el panel. */
+export type GrupoFiltro = "categoria" | "estado" | "unidadMedida" | "proveedor";
+
 export interface Filtros {
   categoria: string;
   estado: EstadoFiltro;
@@ -19,38 +22,52 @@ interface FiltrosArticulosProps {
   onChange: (filtros: Filtros) => void;
   disabled?: boolean;
   hideChips?: boolean;
+  /**
+   * Qué select muestra el panel. Por defecto, todos (comportamiento original).
+   * HU-STK-03 usa ["categoria", "estado"]: unidad y proveedor no aplican a la
+   * lista de precios. Las props nuevas son opcionales, así quien ya lo usa no
+   * se ve afectado.
+   */
+  grupos?: GrupoFiltro[];
 }
 
 interface FiltrosChipsProps {
   filtros: Filtros;
   onChange: (filtros: Filtros) => void;
+  grupos?: GrupoFiltro[];
 }
 
 const ESTADOS: EstadoFiltro[] = ["Activo", "Inactivo", "Todos"];
 
 const FILTROS_VACIOS: Filtros = { categoria: "", estado: "Todos", unidadMedida: "", proveedorId: "" };
 
-function buildTags(filtros: Filtros, onChange: (filtros: Filtros) => void) {
+const TODOS_LOS_GRUPOS: GrupoFiltro[] = ["categoria", "estado", "unidadMedida", "proveedor"];
+
+function buildTags(
+  filtros: Filtros,
+  onChange: (filtros: Filtros) => void,
+  grupos: GrupoFiltro[],
+) {
   const tags: { label: string; onRemove: () => void }[] = [];
-  if (filtros.categoria) {
+  if (grupos.includes("categoria") && filtros.categoria) {
     tags.push({
       label: `Categoría: ${filtros.categoria}`,
       onRemove: () => onChange({ ...filtros, categoria: "" }),
     });
   }
-  if (filtros.estado !== "Todos") {
+  if (grupos.includes("estado") && filtros.estado !== "Todos") {
     tags.push({
       label: `Estado: ${filtros.estado}`,
       onRemove: () => onChange({ ...filtros, estado: "Todos" }),
     });
   }
-  if (filtros.unidadMedida) {
+  if (grupos.includes("unidadMedida") && filtros.unidadMedida) {
     tags.push({
       label: `Unidad: ${filtros.unidadMedida}`,
       onRemove: () => onChange({ ...filtros, unidadMedida: "" }),
     });
   }
-  if (filtros.proveedorId) {
+  if (grupos.includes("proveedor") && filtros.proveedorId) {
     const proveedor = PROVEEDORES.find((p) => p.id === Number(filtros.proveedorId));
     tags.push({
       label: `Proveedor: ${proveedor?.nombre ?? filtros.proveedorId}`,
@@ -60,8 +77,8 @@ function buildTags(filtros: Filtros, onChange: (filtros: Filtros) => void) {
   return tags;
 }
 
-export function FiltrosChips({ filtros, onChange }: FiltrosChipsProps) {
-  const tags = buildTags(filtros, onChange);
+export function FiltrosChips({ filtros, onChange, grupos = TODOS_LOS_GRUPOS }: FiltrosChipsProps) {
+  const tags = buildTags(filtros, onChange, grupos);
   if (tags.length === 0) return null;
   return (
     <div className="flex flex-wrap items-center gap-2" aria-label="Filtros aplicados">
@@ -85,7 +102,13 @@ export function FiltrosChips({ filtros, onChange }: FiltrosChipsProps) {
   );
 }
 
-export function FiltrosArticulos({ filtros, onChange, disabled = false, hideChips = false }: FiltrosArticulosProps) {
+export function FiltrosArticulos({
+  filtros,
+  onChange,
+  disabled = false,
+  hideChips = false,
+  grupos = TODOS_LOS_GRUPOS,
+}: FiltrosArticulosProps) {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -100,7 +123,7 @@ export function FiltrosArticulos({ filtros, onChange, disabled = false, hideChip
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [open]);
 
-  const tags = buildTags(filtros, onChange);
+  const tags = buildTags(filtros, onChange, grupos);
 
   return (
     <div className="flex flex-col gap-2">
@@ -125,66 +148,74 @@ export function FiltrosArticulos({ filtros, onChange, disabled = false, hideChip
         {open && (
           <div className="absolute right-0 top-[calc(100%+8px)] z-20 w-64 rounded-md border border-border bg-surface p-4 shadow-card">
             <div className="flex flex-col gap-4">
-              <label className="flex flex-col gap-1.5 text-sm font-bold text-text-primary">
-                Categoría
-                <select
-                  value={filtros.categoria}
-                  onChange={(e) => onChange({ ...filtros, categoria: e.target.value })}
-                  className="h-11 cursor-pointer rounded-sm border border-border bg-surface px-3 text-base font-normal text-text-primary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
-                >
-                  <option value="">Todas</option>
-                  {CATEGORIAS.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex flex-col gap-1.5 text-sm font-bold text-text-primary">
-                Estado
-                <select
-                  value={filtros.estado}
-                  onChange={(e) => onChange({ ...filtros, estado: e.target.value as EstadoFiltro })}
-                  className="h-11 cursor-pointer rounded-sm border border-border bg-surface px-3 text-base font-normal text-text-primary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
-                >
-                  {ESTADOS.map((e) => (
-                    <option key={e} value={e}>
-                      {e === "Todos" ? "Todos" : e}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex flex-col gap-1.5 text-sm font-bold text-text-primary">
-                Unidad de medida
-                <select
-                  value={filtros.unidadMedida}
-                  onChange={(e) => onChange({ ...filtros, unidadMedida: e.target.value })}
-                  className="h-11 cursor-pointer rounded-sm border border-border bg-surface px-3 text-base font-normal text-text-primary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
-                >
-                  <option value="">Todas</option>
-                  {UNIDADES.map((u) => (
-                    <option key={u} value={u}>
-                      {u}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {grupos.includes("categoria") && (
+                <label className="flex flex-col gap-1.5 text-sm font-bold text-text-primary">
+                  Categoría
+                  <select
+                    value={filtros.categoria}
+                    onChange={(e) => onChange({ ...filtros, categoria: e.target.value })}
+                    className="h-11 cursor-pointer rounded-sm border border-border bg-surface px-3 text-base font-normal text-text-primary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
+                  >
+                    <option value="">Todas</option>
+                    {CATEGORIAS.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {grupos.includes("estado") && (
+                <label className="flex flex-col gap-1.5 text-sm font-bold text-text-primary">
+                  Estado
+                  <select
+                    value={filtros.estado}
+                    onChange={(e) => onChange({ ...filtros, estado: e.target.value as EstadoFiltro })}
+                    className="h-11 cursor-pointer rounded-sm border border-border bg-surface px-3 text-base font-normal text-text-primary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
+                  >
+                    {ESTADOS.map((e) => (
+                      <option key={e} value={e}>
+                        {e === "Todos" ? "Todos" : e}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {grupos.includes("unidadMedida") && (
+                <label className="flex flex-col gap-1.5 text-sm font-bold text-text-primary">
+                  Unidad de medida
+                  <select
+                    value={filtros.unidadMedida}
+                    onChange={(e) => onChange({ ...filtros, unidadMedida: e.target.value })}
+                    className="h-11 cursor-pointer rounded-sm border border-border bg-surface px-3 text-base font-normal text-text-primary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
+                  >
+                    <option value="">Todas</option>
+                    {UNIDADES.map((u) => (
+                      <option key={u} value={u}>
+                        {u}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               {/* BACKEND: poblar desde GET /api/proveedores (id + nombre). */}
-              <label className="flex flex-col gap-1.5 text-sm font-bold text-text-primary">
-                Proveedor
-                <select
-                  value={filtros.proveedorId}
-                  onChange={(e) => onChange({ ...filtros, proveedorId: e.target.value })}
-                  className="h-11 cursor-pointer rounded-sm border border-border bg-surface px-3 text-base font-normal text-text-primary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
-                >
-                  <option value="">Todos</option>
-                  {PROVEEDORES.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.nombre}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {grupos.includes("proveedor") && (
+                <label className="flex flex-col gap-1.5 text-sm font-bold text-text-primary">
+                  Proveedor
+                  <select
+                    value={filtros.proveedorId}
+                    onChange={(e) => onChange({ ...filtros, proveedorId: e.target.value })}
+                    className="h-11 cursor-pointer rounded-sm border border-border bg-surface px-3 text-base font-normal text-text-primary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
+                  >
+                    <option value="">Todos</option>
+                    {PROVEEDORES.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <Button
                 variant="ghost"
                 size="sm"
@@ -198,7 +229,7 @@ export function FiltrosArticulos({ filtros, onChange, disabled = false, hideChip
         )}
       </div>
       {!hideChips && tags.length > 0 && (
-        <FiltrosChips filtros={filtros} onChange={onChange} />
+        <FiltrosChips filtros={filtros} onChange={onChange} grupos={grupos} />
       )}
     </div>
   );

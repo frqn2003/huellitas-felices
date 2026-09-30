@@ -30,6 +30,7 @@ Patrones recurrentes por pantalla: `<Entidad>Table`, `<Entidad>Filtros*`, `<Enti
 
 ### articulos
 `ArticuloFormModal` · `ArticulosTable` · `ArticuloThumb` · `DesactivarModal` · `EstadoBadge` · `FiltrosArticulos`
+> Extendidos en HU-STK-03 (retrocompatibles): `EstadoBadge` acepta props opcionales `articulo?` / `estado?: EstadoArticulo` (ahora también recibe el estado crudo, no solo el objeto); `FiltrosArticulos` acepta `grupos?: GrupoFiltro[]` (`"categoria" | "estado" | "unidadMedida" | "proveedor"`, default = los 4) para mostrar solo el panel que pida la pantalla — `/lista-precios` usa `["categoria","estado"]`.
 
 ### auth
 `LoginForm` · `TwoFactorModal` · `BlockedOverlay`
@@ -77,6 +78,11 @@ Módulo global de Cuentas Corrientes (HU-FIN-03): maneja AMBOS lados, proveedore
 
 ### ordenes-compra
 `CancelarOrdenModal` · `EstadoOrdenBadge` · `FiltrosOrdenes` · `OrdenFormModal` · `OrdenesTable`
+
+### precios
+Módulo HU-STK-03 (Gestión de Lista de Precios, `/lista-precios`): `PreciosTable` (columnas Código/Nombre/Categoría/Costo ref. OC/Precio vigente/Estado/Acciones — sin columna "Imagen" por ahora, `min-w-[920px]`, skeleton grid-7, estados vacío/sin resultados, acciones condicionales 👁 Ver · ✏ Editar o ➕ Cargar precio según `fila.precio === null` · 🕒 Historial, todas con `aria-label`+`title` y target 44px; precio en bold `tabular-nums` o `StatusBadge warning "Sin precio"`) · `PrecioFormModal` (paramétrico 3 modos sobre `Modal`, patrón ArticuloFormModal con `key={modo-articuloId}`: INSERCION con `Combobox` solo de artículos activos sin precio + precio `inputMode="decimal"` sanitizado `^\d{0,10}(\.\d{0,2})?$`, **sin campo motivo** porque `lista_precio` no tiene esa columna; EDICIÓN con artículo bloqueado 🔒 y `ConfirmarDialog tone="neutral"` antes/después; LECTURA con ficha + "Edita y guarda desde el botón…") · `HistorialPreciosContent` (header con código+nombre y tabla Vigencia desde/Precio/Vigencia hasta/Usuario/Estado; estados loading/error/vacío/no encontrado)
+> Datos y store de sesión en `src/data/lista-precios.ts`: tipos `FilaListaPrecio` (`precioId` null = sin precio) / `HistorialPrecio`, flags `SIMULAR_VACIO`/`SIMULAR_ERROR`, helpers `listarListaPrecios()` / `historialDe(articuloId)` / `guardarPrecio()` (simulan `fn_abm_lista_precio` + trigger de historial), y `LISTA_PRECIOS_ARTICULOS` ahora **derivada** de las filas (una sola fuente por precio, HU-VTA-01 intacta).
+> Rutas: `/lista-precios` (ítem "Lista de Precios", `BadgeDollarSign`, en Operaciones del `Sidebar`) y `/lista-precios/historial?articuloId=` (página propia envuelta en `<Suspense>` por `useSearchParams`). Override visual en `design-system/huellitas-felices/pages/lista-precios.md`.
 
 ### proveedores
 `BajaProveedorModal` · `EstadoCtaCteBadge` (mapea sobre `StatusBadge`: Vencido=danger, Próximo a vencer/Pendiente=warning, Crédito=success, Saldado=neutral) · `EstadoProveedorBadge` (mapea sobre `StatusBadge`: success/neutral) · `FiltrosProveedores` · `ProveedorFormModal` · `ProveedoresTable` · `ProveedoresTabs`
