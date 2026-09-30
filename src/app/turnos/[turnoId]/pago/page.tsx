@@ -7,6 +7,7 @@ import {
   Calendar,
   CheckCircle2,
   CircleDollarSign,
+  Eye,
   Minus,
   PawPrint,
   Pill,
@@ -14,6 +15,8 @@ import {
   QrCode,
   Stethoscope,
   Trash2,
+  User,
+  X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Suspense, use, useMemo, useState } from "react";
@@ -219,6 +222,7 @@ function PagoTurnoContent({ turnoId }: { turnoId: number }) {
   const [observaciones, setObservaciones] = useState("");
   const [confirmarOpen, setConfirmarOpen] = useState(false);
   const [procesando, setProcesando] = useState(false);
+  const [fichaModalOpen, setFichaModalOpen] = useState(false);
 
   // Estado del modal de comprobante emitido
   const [comprobanteData, setComprobanteData] = useState<ComprobanteTurno | null>(
@@ -447,57 +451,59 @@ function PagoTurnoContent({ turnoId }: { turnoId: number }) {
           </div>
         </div>
 
-        {/* Cuerpo principal en 2 columnas */}
-        <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 pt-8 pb-36 sm:px-8">
+        {/* Cuerpo principal en 2 columnas con Header Resumen compacto */}
+        <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 pt-6 pb-36 sm:px-8">
+          {/* Header Resumen Compacto - 1 sola fila con datos clave y botón a Ficha Completa */}
+          <div className="rounded-md border border-border bg-surface p-4 shadow-card">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-brand-900 shrink-0" aria-hidden="true" />
+                  <div>
+                    <span className="font-bold text-text-secondary uppercase">Turno: </span>
+                    <span className="font-semibold text-text-primary">{formatearFecha(turno.fecha)} · {turno.horaInicio}hs</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Stethoscope className="h-4 w-4 text-brand-900 shrink-0" aria-hidden="true" />
+                  <div>
+                    <span className="font-bold text-text-secondary uppercase">Prof: </span>
+                    <span className="font-semibold text-text-primary">{profesionalDisplay}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <User className="h-4 w-4 text-brand-900 shrink-0" aria-hidden="true" />
+                  <div>
+                    <span className="font-bold text-text-secondary uppercase">Cliente: </span>
+                    <span className="font-semibold text-text-primary">{cliente ? `${cliente.nombre} ${cliente.apellido}` : `Cliente #${turno.clienteId}`}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <PawPrint className="h-4 w-4 text-brand-900 shrink-0" aria-hidden="true" />
+                  <div>
+                    <span className="font-bold text-text-secondary uppercase">Mascota: </span>
+                    <span className="font-semibold text-text-primary">{mascota?.nombre ?? "—"} ({mascota?.especie ?? "—"})</span>
+                  </div>
+                </div>
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setFichaModalOpen(true)}
+                className="h-8 gap-1.5 text-xs font-bold shrink-0"
+              >
+                <Eye className="h-3.5 w-3.5" aria-hidden="true" />
+                Ver Ficha Completa
+              </Button>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-            {/* Columna Izquierda: Información del Turno, Paciente y Consulta (7 cols) */}
+            {/* Columna Izquierda: Detalle Clínico de la Atención e Insumos (7 cols) */}
             <div className="flex flex-col gap-6 lg:col-span-7">
-              {/* Card 1: Datos del Turno y Práctica */}
-              <SectionCard
-                title="Datos del Turno"
-                icon={<Calendar className="h-4 w-4" aria-hidden="true" />}
-              >
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <DataField
-                    label="Fecha y Horario"
-                    value={`${formatearFecha(turno.fecha)} · ${turno.horaInicio} – ${turno.horaFin}`}
-                  />
-                  <DataField label="Profesional" value={profesionalDisplay} />
-                  <DataField label="Práctica" value={practica?.nombre ?? "—"} />
-                  <DataField
-                    label="Duración Estimada"
-                    value={practica ? `${practica.duracionMinutos} minutos` : "—"}
-                  />
-                </div>
-              </SectionCard>
-
-              {/* Card 2: Cliente y Mascota */}
-              <SectionCard
-                title="Cliente y Paciente"
-                icon={<PawPrint className="h-4 w-4" aria-hidden="true" />}
-              >
-                <div className="flex flex-col gap-4">
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <DataField
-                      label="Titular / Cliente"
-                      value={cliente ? `${cliente.nombre} ${cliente.apellido}` : `Cliente #${turno.clienteId}`}
-                    />
-                    <DataField label="DNI" value={cliente?.documento} />
-                    <DataField label="Teléfono" value={cliente?.telefono} />
-                    <DataField label="Email" value={cliente?.email} />
-                  </div>
-
-                  <div className="border-t border-border pt-4">
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                      <DataField label="Paciente (Mascota)" value={mascota?.nombre} />
-                      <DataField label="Especie / Raza" value={`${mascota?.especie ?? "—"} · ${mascota?.raza ?? "—"}`} />
-                      <DataField label="Sexo / Peso" value={`${mascota?.sexo ?? "—"} · ${mascota?.peso ? `${mascota.peso} kg` : "—"}`} />
-                    </div>
-                  </div>
-                </div>
-              </SectionCard>
-
-              {/* Card 3: Detalle de Consulta Médica y Productos */}
+              {/* Card único: Detalle Clínico de la Atención */}
               <SectionCard
                 title="Detalle Clínico de la Atención"
                 icon={<Stethoscope className="h-4 w-4" aria-hidden="true" />}
@@ -642,162 +648,219 @@ function PagoTurnoContent({ turnoId }: { turnoId: number }) {
               </SectionCard>
             </div>
 
-            {/* Columna Derecha: Liquidación, Medio de Pago y Confirmación (5 cols) */}
+            {/* Columna Derecha: Liquidación, Medio de Pago y Confirmación (5 cols) - Sticky */}
             <div className="flex flex-col gap-6 lg:col-span-5">
-              <SectionCard
-                title="Liquidación y Cobro"
-                icon={<CircleDollarSign className="h-4 w-4" aria-hidden="true" />}
-              >
-                <div className="flex flex-col gap-5">
-                  {/* Desglose de ítems */}
-                  <div>
-                    <h3 className="mb-3 text-xs font-extrabold uppercase tracking-widest text-text-secondary">
-                      Conceptos a facturar
-                    </h3>
-                    <div className="rounded-md border border-border bg-cream-50 p-4">
-                      {/* Arancel de práctica */}
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="font-semibold text-text-primary">
-                          {practica?.nombre ?? "Servicio Veterinario"} (Arancel base)
-                        </span>
-                        <span className="font-bold text-text-primary">
-                          ${arancelBase.toLocaleString("es-AR")}
-                        </span>
-                      </div>
-
-                      {/* Desglose de productos */}
-                      {productos.length > 0 && (
-                        <div className="mt-3 border-t border-border/80 pt-3">
-                          <div className="mb-2 flex items-center justify-between text-xs font-bold uppercase text-text-secondary">
-                            <span>Productos e Insumos ({productos.length}):</span>
-                            <span>${totalProductos.toLocaleString("es-AR")}</span>
-                          </div>
-                          <div className="flex flex-col gap-1.5">
-                            {productos.map((prod) => (
-                              <div
-                                key={prod.id}
-                                className="flex items-center justify-between text-xs text-text-secondary"
-                              >
-                                <span className="truncate pr-2">
-                                  {prod.nombre} × {prod.cantidad}
-                                </span>
-                                <span className="shrink-0 font-semibold text-text-primary">
-                                  ${(prod.cantidad * prod.precioUnitario).toLocaleString("es-AR")}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Desglose fiscal de Subtotal, IVA y Total (HU-VTA-01) */}
-                      <div className="mt-4 flex flex-col gap-1.5 border-t border-border pt-3">
-                        <div className="flex items-center justify-between text-xs text-text-secondary">
-                          <span>Subtotal (Neto gravado):</span>
+              <div className="sticky top-6">
+                <SectionCard
+                  title="Liquidación y Cobro"
+                  icon={<CircleDollarSign className="h-4 w-4" aria-hidden="true" />}
+                >
+                  <div className="flex flex-col gap-5">
+                    {/* Desglose de ítems */}
+                    <div>
+                      <h3 className="mb-3 text-xs font-extrabold uppercase tracking-widest text-text-secondary">
+                        Conceptos a facturar
+                      </h3>
+                      <div className="rounded-md border border-border bg-cream-50 p-4">
+                        {/* Arancel de práctica */}
+                        <div className="flex items-center justify-between text-sm">
                           <span className="font-semibold text-text-primary">
-                            ${subtotalNeto.toLocaleString("es-AR")}
+                            {practica?.nombre ?? "Servicio Veterinario"} (Arancel base)
+                          </span>
+                          <span className="font-bold text-text-primary">
+                            ${arancelBase.toLocaleString("es-AR")}
                           </span>
                         </div>
-                        <div className="flex items-center justify-between text-xs text-text-secondary">
-                          <span>IVA discriminado (21%):</span>
-                          <span className="font-semibold text-text-primary">
-                            ${impuestosIva.toLocaleString("es-AR")}
-                          </span>
-                        </div>
-                        <div className="mt-2 flex items-baseline justify-between border-t border-border/80 pt-2">
-                          <span className="text-base font-extrabold uppercase tracking-wide text-brand-900">
-                            Total de la venta
-                          </span>
-                          <span className="font-display text-2xl font-black text-brand-900">
-                            ${totalCobrar.toLocaleString("es-AR")}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
 
-                  {/* Selección de Medio de Pago */}
-                  <div>
-                    <h3 className="mb-2 text-xs font-extrabold uppercase tracking-widest text-text-secondary">
-                      Medio de pago
-                    </h3>
-                    <div className="grid grid-cols-2 gap-2">
-                      {MEDIOS_PAGO.map((mp) => {
-                        const Icon = mp.icon;
-                        const isSelected = medioPago === mp.id;
-                        return (
-                          <button
-                            key={mp.id}
-                            type="button"
-                            onClick={() => setMedioPago(mp.id)}
-                            className={`flex flex-col items-start gap-1 rounded-md border p-3 text-left transition-all duration-fast ease-out ${
-                              isSelected
-                                ? "border-brand-900 bg-brand-900/5 ring-2 ring-brand-900"
-                                : "border-border bg-surface hover:border-brand-900/40 hover:bg-cream-50/50"
-                            }`}
-                          >
-                            <div className="flex w-full items-center justify-between">
-                              <Icon
-                                className={`h-4 w-4 ${isSelected ? "text-brand-900" : "text-text-secondary"}`}
-                                aria-hidden="true"
-                              />
-                              {isSelected && (
-                                <CheckCircle2 className="h-4 w-4 text-brand-900" aria-hidden="true" />
-                              )}
+                        {/* Desglose de productos */}
+                        {productos.length > 0 && (
+                          <div className="mt-3 border-t border-border/80 pt-3">
+                            <div className="mb-2 flex items-center justify-between text-xs font-bold uppercase text-text-secondary">
+                              <span>Productos e Insumos ({productos.length}):</span>
+                              <span>${totalProductos.toLocaleString("es-AR")}</span>
                             </div>
-                            <span className="text-xs font-bold text-text-primary">{mp.label}</span>
-                            <span className="text-[10px] text-text-secondary leading-tight">
-                              {mp.descripcion}
+                            <div className="flex flex-col gap-1.5">
+                              {productos.map((prod) => (
+                                <div
+                                  key={prod.id}
+                                  className="flex items-center justify-between text-xs text-text-secondary"
+                                >
+                                  <span className="truncate pr-2">
+                                    {prod.nombre} × {prod.cantidad}
+                                  </span>
+                                  <span className="shrink-0 font-semibold text-text-primary">
+                                    ${(prod.cantidad * prod.precioUnitario).toLocaleString("es-AR")}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Desglose fiscal de Subtotal, IVA y Total (HU-VTA-01) */}
+                        <div className="mt-4 flex flex-col gap-1.5 border-t border-border pt-3">
+                          <div className="flex items-center justify-between text-xs text-text-secondary">
+                            <span>Subtotal (Neto gravado):</span>
+                            <span className="font-semibold text-text-primary">
+                              ${subtotalNeto.toLocaleString("es-AR")}
                             </span>
-                          </button>
-                        );
-                      })}
+                          </div>
+                          <div className="flex items-center justify-between text-xs text-text-secondary">
+                            <span>IVA discriminado (21%):</span>
+                            <span className="font-semibold text-text-primary">
+                              ${impuestosIva.toLocaleString("es-AR")}
+                            </span>
+                          </div>
+                          <div className="mt-2 flex items-baseline justify-between border-t border-border/80 pt-2">
+                            <span className="text-base font-extrabold uppercase tracking-wide text-brand-900">
+                              Total de la venta
+                            </span>
+                            <span className="font-display text-2xl font-black text-brand-900">
+                              ${totalCobrar.toLocaleString("es-AR")}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Selección de Medio de Pago */}
+                    <div>
+                      <h3 className="mb-2 text-xs font-extrabold uppercase tracking-widest text-text-secondary">
+                        Medio de pago
+                      </h3>
+                      <div className="grid grid-cols-2 gap-2">
+                        {MEDIOS_PAGO.map((mp) => {
+                          const Icon = mp.icon;
+                          const isSelected = medioPago === mp.id;
+                          return (
+                            <button
+                              key={mp.id}
+                              type="button"
+                              onClick={() => setMedioPago(mp.id)}
+                              className={`flex flex-col items-start gap-1 rounded-md border p-3 text-left transition-all duration-fast ease-out ${
+                                isSelected
+                                  ? "border-brand-900 bg-brand-900/5 ring-2 ring-brand-900"
+                                  : "border-border bg-surface hover:border-brand-900/40 hover:bg-cream-50/50"
+                              }`}
+                            >
+                              <div className="flex w-full items-center justify-between">
+                                <Icon
+                                  className={`h-4 w-4 ${isSelected ? "text-brand-900" : "text-text-secondary"}`}
+                                  aria-hidden="true"
+                                />
+                                {isSelected && (
+                                  <CheckCircle2 className="h-4 w-4 text-brand-900" aria-hidden="true" />
+                                )}
+                              </div>
+                              <span className="text-xs font-bold text-text-primary">{mp.label}</span>
+                              <span className="text-[10px] text-text-secondary leading-tight">
+                                {mp.descripcion}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Campos adicionales de referencia */}
+                    <div className="flex flex-col gap-3">
+                      <Input
+                        label="Nº de comprobante / Referencia (opcional)"
+                        placeholder="Ej: REC-0001-000452 o código TRX"
+                        value={comprobanteRef}
+                        onChange={(e) => setComprobanteRef(e.target.value)}
+                      />
+
+                      <Input
+                        label="Observaciones de caja (opcional)"
+                        placeholder="Notas internas para el cierre de caja"
+                        value={observaciones}
+                        onChange={(e) => setObservaciones(e.target.value)}
+                      />
+                    </div>
+
+                    {/* Acciones principales de cobro */}
+                    <div className="mt-2 flex flex-col gap-2.5">
+                      <Button
+                        type="button"
+                        variant="primary"
+                        onClick={() => setConfirmarOpen(true)}
+                        className="w-full text-base font-extrabold shadow-sm"
+                      >
+                        Confirmar
+                      </Button>
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => router.push("/clientes?tab=turnos")}
+                        className="w-full"
+                      >
+                        Cancelar
+                      </Button>
                     </div>
                   </div>
-
-                  {/* Campos adicionales de referencia */}
-                  <div className="flex flex-col gap-3">
-                    <Input
-                      label="Nº de comprobante / Referencia (opcional)"
-                      placeholder="Ej: REC-0001-000452 o código TRX"
-                      value={comprobanteRef}
-                      onChange={(e) => setComprobanteRef(e.target.value)}
-                    />
-
-                    <Input
-                      label="Observaciones de caja (opcional)"
-                      placeholder="Notas internas para el cierre de caja"
-                      value={observaciones}
-                      onChange={(e) => setObservaciones(e.target.value)}
-                    />
-                  </div>
-
-                  {/* Acciones principales de cobro */}
-                  <div className="mt-2 flex flex-col gap-2.5">
-                    <Button
-                      type="button"
-                      variant="primary"
-                      onClick={() => setConfirmarOpen(true)}
-                      className="w-full text-base font-extrabold shadow-sm"
-                    >
-                      Confirmar
-                    </Button>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => router.push("/clientes?tab=turnos")}
-                      className="w-full"
-                    >
-                      Cancelar
-                    </Button>
-                  </div>
-                </div>
-              </SectionCard>
+                </SectionCard>
+              </div>
             </div>
           </div>
         </div>
       </main>
+
+      {/* Modal Emergente de Ficha Completa de Cliente y Paciente */}
+      {fichaModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-950/40 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-lg rounded-md border border-border bg-surface p-6 shadow-modal animate-in fade-in zoom-in-95 duration-fast">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div className="flex items-center gap-2 text-brand-900">
+                <PawPrint className="h-5 w-5" aria-hidden="true" />
+                <h2 className="font-display text-base font-extrabold uppercase tracking-wide">
+                  Ficha del Cliente y Paciente
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFichaModalOpen(false)}
+                className="rounded-full p-1 text-text-secondary hover:bg-cream-100 hover:text-brand-900"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="mt-4 flex flex-col gap-4 text-sm">
+              <div className="rounded-md border border-border bg-cream-50 p-3.5">
+                <h3 className="mb-2 text-xs font-extrabold uppercase tracking-wider text-brand-900">
+                  Datos del Titular / Cliente
+                </h3>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <DataField label="Nombre Completo" value={cliente ? `${cliente.nombre} ${cliente.apellido}` : `Cliente #${turno.clienteId}`} />
+                  <DataField label="DNI" value={cliente?.documento} />
+                  <DataField label="Teléfono" value={cliente?.telefono} />
+                  <DataField label="Email" value={cliente?.email} />
+                </div>
+              </div>
+
+              <div className="rounded-md border border-border bg-cream-50 p-3.5">
+                <h3 className="mb-2 text-xs font-extrabold uppercase tracking-wider text-brand-900">
+                  Datos del Paciente
+                </h3>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <DataField label="Nombre" value={mascota?.nombre} />
+                  <DataField label="Especie / Raza" value={`${mascota?.especie ?? "—"} · ${mascota?.raza ?? "—"}`} />
+                  <DataField label="Sexo / Peso" value={`${mascota?.sexo ?? "—"} · ${mascota?.peso ? `${mascota.peso} kg` : "—"}`} />
+                  <DataField label="N° Historia Clínica" value={mascota ? `HC-${String(mascota.id).padStart(5, "0")}` : "—"} />
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 flex justify-end">
+              <Button variant="outline" size="sm" onClick={() => setFichaModalOpen(false)}>
+                Cerrar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Diálogo de Confirmación de Cobro */}
       <ConfirmarDialog
