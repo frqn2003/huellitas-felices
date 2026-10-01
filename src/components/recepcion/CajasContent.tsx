@@ -27,6 +27,8 @@ import {
   aperturasIniciales,
   cajas,
   cajeros,
+  guardarAperturas,
+  obtenerAperturas,
   SIMULAR_ERROR,
   SIMULAR_VACIO,
   type CajaApertura,
@@ -78,7 +80,7 @@ export function CajasContent({
         setLoading(false);
         return;
       }
-      setAperturas(SIMULAR_VACIO ? [] : aperturasIniciales);
+      setAperturas(SIMULAR_VACIO ? [] : obtenerAperturas());
       setError(false);
       setLoading(false);
     }, 700);
@@ -162,25 +164,28 @@ export function CajasContent({
     const caja = cajas.find((c) => c.id === data.cajaId);
     const cajero = cajeros.find((c) => c.id === data.cajeroId);
 
-    setAperturas((prev) => [
-      {
-        id: nuevoId,
-        cajaId: data.cajaId,
-        sucursalId: caja?.sucursalId ?? 1,
-        sucursal: caja?.sucursal ?? "Sucursal Centro",
-        cajaNombre: caja?.nombre ?? "Caja principal",
-        cajeroId: data.cajeroId,
-        cajero: { nombre: cajero?.nombre ?? "", apellido: cajero?.apellido ?? "" },
-        montoInicial: data.montoInicial,
-        fechaApertura: new Date().toISOString(),
-        estado: true,
-        montoContado: null,
-        montoEsperado: null,
-        diferencia: null,
-        fechaCierre: null,
-      },
-      ...prev,
-    ]);
+    const nuevaApertura: CajaApertura = {
+      id: nuevoId,
+      cajaId: data.cajaId,
+      sucursalId: caja?.sucursalId ?? 1,
+      sucursal: caja?.sucursal ?? "Sucursal Centro",
+      cajaNombre: caja?.nombre ?? "Caja principal",
+      cajeroId: data.cajeroId,
+      cajero: { nombre: cajero?.nombre ?? "", apellido: cajero?.apellido ?? "" },
+      montoInicial: data.montoInicial,
+      fechaApertura: new Date().toISOString(),
+      estado: true,
+      montoContado: null,
+      montoEsperado: null,
+      diferencia: null,
+      fechaCierre: null,
+    };
+
+    setAperturas((prev) => {
+      const actualizadas = [nuevaApertura, ...prev];
+      guardarAperturas(actualizadas);
+      return actualizadas;
+    });
     onCerrarAbrirCaja();
     showToast("success", "Caja abierta correctamente");
     router.push(`/cajas/${nuevoId}`);

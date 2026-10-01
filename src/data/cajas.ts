@@ -160,3 +160,70 @@ export const esperadoPreview = (a: CajaApertura, movs: MovimientoCaja[]): number
 
 export const SIMULAR_VACIO = false;
 export const SIMULAR_ERROR = false;
+
+// =============================================================================
+// Persistencia en navegador (sessionStorage) para maquetado frontend sin backend
+// =============================================================================
+const STORAGE_KEY_APERTURAS = "huellitas_cajas_aperturas";
+const STORAGE_KEY_MOVIMIENTOS = "huellitas_cajas_movimientos";
+
+export function obtenerAperturas(): CajaApertura[] {
+  if (typeof window === "undefined") return aperturasIniciales;
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY_APERTURAS);
+    if (!raw) return aperturasIniciales;
+    return JSON.parse(raw);
+  } catch {
+    return aperturasIniciales;
+  }
+}
+
+export function obtenerAperturaPorId(id: number): CajaApertura | null {
+  return obtenerAperturas().find((a) => a.id === id) ?? null;
+}
+
+export function guardarAperturas(aperturas: CajaApertura[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(STORAGE_KEY_APERTURAS, JSON.stringify(aperturas));
+  } catch (err) {
+    console.error("Error al persistir aperturas en sessionStorage:", err);
+  }
+}
+
+export function actualizarApertura(apertura: CajaApertura): void {
+  const actuales = [...obtenerAperturas()];
+  const index = actuales.findIndex((a) => a.id === apertura.id);
+  if (index >= 0) {
+    actuales[index] = apertura;
+  } else {
+    actuales.unshift(apertura);
+  }
+  guardarAperturas(actuales);
+}
+
+export function obtenerMovimientos(): MovimientoCaja[] {
+  if (typeof window === "undefined") return movimientosCajaIniciales;
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY_MOVIMIENTOS);
+    if (!raw) return movimientosCajaIniciales;
+    return JSON.parse(raw);
+  } catch {
+    return movimientosCajaIniciales;
+  }
+}
+
+export function obtenerMovimientosPorApertura(aperturaId: number): MovimientoCaja[] {
+  return obtenerMovimientos().filter((m) => m.cajaAperturaId === aperturaId);
+}
+
+export function guardarMovimiento(movimiento: MovimientoCaja): void {
+  if (typeof window === "undefined") return;
+  try {
+    const actuales = obtenerMovimientos();
+    const nuevos = [...actuales, movimiento];
+    sessionStorage.setItem(STORAGE_KEY_MOVIMIENTOS, JSON.stringify(nuevos));
+  } catch (err) {
+    console.error("Error al persistir movimiento en sessionStorage:", err);
+  }
+}

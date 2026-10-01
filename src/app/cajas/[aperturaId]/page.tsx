@@ -24,13 +24,16 @@ import { MovimientoCajaFormModal } from "@/components/cajas/MovimientoCajaFormMo
 import { CerrarCajaModal } from "@/components/cajas/CerrarCajaModal";
 import { EstadoCajaBadge } from "@/components/cajas/EstadoCajaBadge";
 import {
-  aperturasIniciales,
-  movimientosCajaIniciales,
+  actualizarApertura,
+  esperadoPreview,
+  guardarMovimiento,
+  obtenerAperturaPorId,
+  obtenerMovimientosPorApertura,
   SIMULAR_ERROR,
   SIMULAR_VACIO,
+  type CajaApertura,
   type MovimientoCaja,
   type TipoMovimientoCaja,
-  esperadoPreview,
 } from "@/data/cajas";
 
 export default function CajaDetallePage() {
@@ -43,7 +46,7 @@ export default function CajaDetallePage() {
   const [error, setError] = useState(false);
   const [recargar, setRecargar] = useState(0);
 
-  const [apertura, setApertura] = useState<(typeof aperturasIniciales)[number] | null>(null);
+  const [apertura, setApertura] = useState<CajaApertura | null>(null);
   const [movimientos, setMovimientos] = useState<MovimientoCaja[]>([]);
 
   const [busqueda, setBusqueda] = useState("");
@@ -66,10 +69,10 @@ export default function CajaDetallePage() {
         setLoading(false);
         return;
       }
-      const ap = aperturasIniciales.find((a) => a.id === aperturaId) ?? null;
+      const ap = obtenerAperturaPorId(aperturaId);
       setApertura(ap);
       if (ap && !SIMULAR_VACIO) {
-        setMovimientos(movimientosCajaIniciales.filter((m) => m.cajaAperturaId === ap.id));
+        setMovimientos(obtenerMovimientosPorApertura(ap.id));
       } else {
         setMovimientos([]);
       }
@@ -142,6 +145,7 @@ export default function CajaDetallePage() {
       fechaHora: new Date().toISOString(),
     };
     setMovimientos((prev) => [...prev, nuevoMov]);
+    guardarMovimiento(nuevoMov);
     setNuevoMovOpen(false);
     showToast("success", "Movimiento registrado");
     setPage(1);
@@ -154,18 +158,16 @@ export default function CajaDetallePage() {
     //          fecha_cierre, estado=false
     const esperado = esperadoPreview(apertura, movimientos);
     const diferencia = montoContado - esperado;
-    setApertura((prev) =>
-      prev
-        ? {
-            ...prev,
-            estado: false,
-            montoContado,
-            montoEsperado: esperado,
-            diferencia,
-            fechaCierre: new Date().toISOString(),
-          }
-        : prev
-    );
+    const actualizada: CajaApertura = {
+      ...apertura,
+      estado: false,
+      montoContado,
+      montoEsperado: esperado,
+      diferencia,
+      fechaCierre: new Date().toISOString(),
+    };
+    setApertura(actualizada);
+    actualizarApertura(actualizada);
     setCerrarCajaOpen(false);
     showToast("success", "Caja cerrada correctamente");
   };
