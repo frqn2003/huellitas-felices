@@ -14,7 +14,7 @@ interface AbrirCajaModalProps {
   onClose: () => void;
   onConfirm: (data: { cajaId: number; cajeroId: number; montoInicial: number }) => void;
   sucursales: { id: number; nombre: string; cajaId: number }[];
-  cajeros: { id: number; nombre: string; apellido: string; sucursalId: number }[];
+  cajeros: { id: number; nombre: string; apellido: string }[];
   loading?: boolean;
 }
 
@@ -30,8 +30,6 @@ export function AbrirCajaModal({
   const [cajeroId, setCajeroId] = useState("");
   const [montoInicial, setMontoInicial] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
-
-  const cajerosFiltrados = cajeros.filter((c) => String(c.sucursalId) === sucursalId);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -60,11 +58,9 @@ export function AbrirCajaModal({
 
   const handleSucursalChange = (e: ChangeEvent<HTMLSelectElement>) => {
     setSucursalId(e.target.value);
-    setCajeroId("");
     setErrors((prev) => {
       const next = { ...prev };
       delete next.sucursalId;
-      delete next.cajeroId;
       return next;
     });
   };
@@ -106,11 +102,9 @@ export function AbrirCajaModal({
             });
           }}
           error={errors.cajeroId}
-          hint={!sucursalId ? "Primero seleccione una sucursal" : undefined}
-          disabled={!sucursalId}
         >
           <option value="">Seleccione...</option>
-          {cajerosFiltrados.map((c) => (
+          {cajeros.map((c) => (
             <option key={c.id} value={String(c.id)}>
               {c.nombre} {c.apellido}
             </option>

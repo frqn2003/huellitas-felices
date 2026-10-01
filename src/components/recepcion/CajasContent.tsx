@@ -27,8 +27,10 @@ import {
   aperturasIniciales,
   cajas,
   cajeros,
+  esperadoPreview,
   guardarAperturas,
   obtenerAperturas,
+  obtenerMovimientos,
   SIMULAR_ERROR,
   SIMULAR_VACIO,
   type CajaApertura,
@@ -101,10 +103,17 @@ export function CajasContent({
     []
   );
 
-  const filas = useMemo<CajaRow[]>(
-    () => aperturas.map((a) => ({ ...a, saldoActual: cajas.find((c) => c.id === a.cajaId)?.saldoActual ?? 0 })),
-    [aperturas]
-  );
+  const filas = useMemo<CajaRow[]>(() => {
+    const movs = obtenerMovimientos();
+    return aperturas.map((a) => {
+      const movsApertura = movs.filter((m) => m.cajaAperturaId === a.id);
+      const saldoVivo = esperadoPreview(a, movsApertura);
+      return {
+        ...a,
+        saldoActual: saldoVivo,
+      };
+    });
+  }, [aperturas]);
 
   const filtradas = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -192,13 +201,10 @@ export function CajasContent({
   };
 
   const metricasCajas = useMemo(() => {
-    const abiertas = aperturas.filter((a) => a.estado === true);
-    const cerradas = aperturas.filter((a) => a.estado === false);
-    const saldoTotalGaveta = abiertas.reduce((acc, a) => {
-      const caja = cajas.find((c) => c.id === a.cajaId);
-      return acc + (caja?.saldoActual ?? a.montoInicial);
-    }, 0);
-    const totalIniciales = abiertas.reduce((acc, a) => acc + a.montoInicial, 0);
+    const abiertas = filas.filter((f) => f.estado === true);
+    const cerradas = filas.filter((f) => f.estado === false);
+    const saldoTotalGaveta = abiertas.reduce((acc, f) => acc + f.saldoActual, 0);
+    const totalIniciales = abiertas.reduce((acc, f) => acc + f.montoInicial, 0);
 
     return {
       totalAbiertas: abiertas.length,
@@ -207,7 +213,7 @@ export function CajasContent({
       totalIniciales,
       cajaAbiertaPrincipal: abiertas[0] ?? null,
     };
-  }, [aperturas]);
+  }, [filas]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -391,7 +397,6 @@ export function CajasContent({
           id: c.id,
           nombre: c.nombre,
           apellido: c.apellido,
-          sucursalId: c.sucursal_id ?? 1,
         }))}
         loading={loading}
       />
