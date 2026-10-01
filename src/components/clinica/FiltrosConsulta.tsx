@@ -17,10 +17,10 @@ export interface FiltrosConsultaValues {
 
 export const FILTROS_CONSULTA_VACIOS: FiltrosConsultaValues = {
   busqueda: "",
-  estadoId: "2",
+  estadoId: "",
   profesionalId: "",
   practicaId: "",
-  orden: "hora_asc",
+  orden: "prioridad",
 };
 
 const OPCIONES_ORDEN: { value: OrdenTurnos; label: string }[] = [
@@ -255,15 +255,7 @@ export function FiltrosConsulta({ filtros, onChange, disabled = false }: Filtros
                 variant="ghost"
                 size="sm"
                 type="button"
-                onClick={() =>
-                  onChange({
-                    ...filtros,
-                    estadoId: "",
-                    profesionalId: "",
-                    practicaId: "",
-                    orden: "prioridad",
-                  })
-                }
+                onClick={() => onChange(FILTROS_CONSULTA_VACIOS)}
               >
                 Restablecer
               </Button>

@@ -80,7 +80,7 @@ function validateDraft(
   if (!precio) {
     next.precio = "Ingresá el precio de venta.";
   } else if (!RE_PRECIO.test(precio)) {
-    next.precio = "Ingresá un importe válido, ej: 24900 o 24900.50";
+    next.precio = "Ingresá un importe válido, ej: 24900";
   }
 
   return next;
@@ -186,7 +186,7 @@ function PrecioFormFields({
               setErrors(validateDraft(draft, modo, filas));
             }}
             error={showError("precio")}
-            placeholder="24900 o 24900.50"
+            placeholder="Precio venta (ej. 24900)"
           />
         </div>
       )}
@@ -205,7 +205,7 @@ function PrecioFormFields({
             setErrors(validateDraft(draft, modo, filas));
           }}
           error={showError("precio")}
-          placeholder="24900 o 24900.50"
+          placeholder="Precio venta (ej. 24900)"
         />
       )}
 

@@ -83,7 +83,7 @@ export function FiltrosCajas({
           )}
         </Button>
         {open && (
-          <div className="absolute right-0 top-[calc(100%+8px)] z-20 w-72 rounded-md border border-border bg-surface p-4 shadow-card">
+          <div className="absolute right-0 top-[calc(100%+8px)] z-20 w-80 max-h-[calc(100vh-220px)] overflow-y-auto rounded-md border border-border bg-surface p-4 shadow-card">
             <div className="flex flex-col gap-4">
               {/* BACKEND: poblar desde GET /api/sucursales (id + nombre). */}
               <label className={etiquetaClase}>
@@ -135,27 +135,29 @@ export function FiltrosCajas({
                 </Select>
               </label>
 
-              <label className={etiquetaClase}>
-                Fecha desde
-                <Input
-                  type="date"
-                  value={filtros.fechaDesde ?? ""}
-                  max={filtros.fechaHasta || undefined}
-                  onChange={(e) => onChange({ ...filtros, fechaDesde: e.target.value })}
-                  disabled={disabled}
-                />
-              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <label className={etiquetaClase}>
+                  Fecha desde
+                  <Input
+                    type="date"
+                    value={filtros.fechaDesde ?? ""}
+                    max={filtros.fechaHasta || undefined}
+                    onChange={(e) => onChange({ ...filtros, fechaDesde: e.target.value })}
+                    disabled={disabled}
+                  />
+                </label>
 
-              <label className={etiquetaClase}>
-                Fecha hasta
-                <Input
-                  type="date"
-                  value={filtros.fechaHasta ?? ""}
-                  min={filtros.fechaDesde || undefined}
-                  onChange={(e) => onChange({ ...filtros, fechaHasta: e.target.value })}
-                  disabled={disabled}
-                />
-              </label>
+                <label className={etiquetaClase}>
+                  Fecha hasta
+                  <Input
+                    type="date"
+                    value={filtros.fechaHasta ?? ""}
+                    min={filtros.fechaDesde || undefined}
+                    onChange={(e) => onChange({ ...filtros, fechaHasta: e.target.value })}
+                    disabled={disabled}
+                  />
+                </label>
+              </div>
 
               <OrdenamientoSelect
                 value={filtros.orden ?? "recientes"}
