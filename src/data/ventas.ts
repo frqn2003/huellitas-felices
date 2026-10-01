@@ -130,6 +130,50 @@ export const VENTAS_INICIALES: Venta[] = [
     medioPago: "efectivo",
     estado: "vigente",
   },
+  // Las ventas 1 y 2 (21 y 22/09) son de días previos a las jornadas de caja
+  // (aperturas 1 y 2: 25 y 26/09): no entran en el "Cobrado fuera de caja".
+  // La venta 3 cae dentro de la ventana de la apertura 1 (25/09 08:00 → 18:30)
+  // y la 4 dentro de la apertura 2 (26/09 08:05 → +24h).
+  {
+    id: 3,
+    numeroComprobante: "REC-2026-000011",
+    clienteId: 1, // Pablo Celaya (clientes.ts)
+    clienteNombre: "Pablo Celaya",
+    clienteDoc: "45115839",
+    sucursalId: 1,
+    consultaId: null,
+    turnoId: null,
+    usuarioId: 4, // Ana Martínez, recepcionista (usuarios.ts)
+    fecha: "2026-09-25T14:20:00",
+    conceptoServicio: "Venta en mostrador",
+    arancelServicio: 0,
+    items: [],
+    subtotalNeto: 13500,
+    impuestosIva: 0,
+    total: 13500,
+    medioPago: "transferencia",
+    estado: "vigente",
+  },
+  {
+    id: 4,
+    numeroComprobante: "REC-2026-000012",
+    clienteId: 3, // Nicolás Celaya (clientes.ts)
+    clienteNombre: "Nicolás Celaya",
+    clienteDoc: "46115839",
+    sucursalId: 1,
+    consultaId: null,
+    turnoId: null,
+    usuarioId: 4, // Ana Martínez, recepcionista (usuarios.ts)
+    fecha: "2026-09-26T10:15:00",
+    conceptoServicio: "Venta en mostrador",
+    arancelServicio: 0,
+    items: [],
+    subtotalNeto: 22000,
+    impuestosIva: 0,
+    total: 22000,
+    medioPago: "transferencia",
+    estado: "vigente",
+  },
 ];
 
 // BACKEND: GET /api/ventas

@@ -1,9 +1,9 @@
 "use client";
 
-import { CalendarDays, CalendarRange, PawPrint, Users } from "lucide-react";
+import { CalendarDays, CalendarRange, PawPrint, Users, Wallet } from "lucide-react";
 import { useRef } from "react";
 
-export type TabRecepcion = "clientes" | "mascotas" | "turnos" | "agenda";
+export type TabRecepcion = "clientes" | "mascotas" | "turnos" | "agenda" | "cajas";
 
 interface RecepcionTabsProps {
   active: TabRecepcion;
@@ -22,6 +22,9 @@ const TABS: {
   // HU-TUR-02: la agenda semanal es otra lectura de los turnos (grilla, no
   // listado). Icono distinto al de Turnos para distinguirlas en la tab.
   { id: "agenda", label: "Agenda semanal", icon: CalendarRange },
+  // HU-VTA-03: gestión de caja del turno. Va después de la agenda porque
+  // comparte el contexto de recepción y se consulta al cierre del turno.
+  { id: "cajas", label: "Cajas", icon: Wallet },
 ];
 
 export function RecepcionTabs({ active, onChange, disabled = false }: RecepcionTabsProps) {
@@ -30,6 +33,7 @@ export function RecepcionTabs({ active, onChange, disabled = false }: RecepcionT
     mascotas: null,
     turnos: null,
     agenda: null,
+    cajas: null,
   });
 
   const handleKeyDown = (e: React.KeyboardEvent, index: number) => {

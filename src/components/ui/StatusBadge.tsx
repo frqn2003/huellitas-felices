@@ -36,13 +36,14 @@ interface StatusBadgeProps {
   variant: StatusVariant;
   label: string;
   icon?: LucideIcon;
+  className?: string;
 }
 
-export function StatusBadge({ variant, label, icon: Icon }: StatusBadgeProps) {
+export function StatusBadge({ variant, label, icon: Icon, className }: StatusBadgeProps) {
   const style = variantStyles[variant];
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-pill px-2.5 py-1 text-xs font-bold ${style.chip}`}
+      className={`inline-flex items-center gap-1.5 rounded-pill px-2.5 py-1 text-xs font-bold ${style.chip} ${className ?? ""}`}
     >
       {Icon ? (
         <Icon className="h-3.5 w-3.5" aria-hidden={true} />

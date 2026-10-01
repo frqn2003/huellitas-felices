@@ -32,6 +32,7 @@ import {
 import type { Turno } from "@/data/turnos";
 import { nombreEstado, turnosIniciales } from "@/data/turnos";
 import { AgendaSemanal } from "@/components/turnos/AgendaSemanal";
+import { CajasContent } from "@/components/recepcion/CajasContent";
 
 function ClientesScreen() {
   const { showToast } = useToast();
@@ -46,6 +47,11 @@ function ClientesScreen() {
     setTurnoWizardSession((s) => s + 1);
     setTurnoWizardOpen(true);
   };
+
+  // HU-VTA-03: "Abrir caja" es el CTA del header cuando la tab Cajas está
+  // activa. El modal vive en CajasContent, así que su apertura se controla
+  // acá (mismo patrón que turnoWizardOpen).
+  const [abrirCajaOpen, setAbrirCajaOpen] = useState(false);
 
   // El tab y el dueño se DERIVAN de la URL (?tab= / ?dueno=): vienen de la
   // patita de ClientesTable y de la navegación interna. Cambiar de tab o quitar
@@ -64,7 +70,9 @@ function ClientesScreen() {
         ? "turnos"
         : searchParams.get("tab") === "agenda"
           ? "agenda"
-          : "clientes";
+          : searchParams.get("tab") === "cajas"
+            ? "cajas"
+            : "clientes";
   const dueno: number | null = useMemo(() => {
     const raw = searchParams.get("dueno");
     if (!raw) return null;
@@ -324,12 +332,13 @@ function ClientesScreen() {
   };
 
   // El CTA del header es UNA sola acción clara por viewport (regla Pet Bliss):
-  // cambia según la tab activa (Nuevo cliente / Nueva mascota / Nuevo turno),
-  // nunca las dos a la vez.
+  // cambia según la tab activa (Nuevo cliente / Nueva mascota / Nuevo turno /
+  // Abrir caja), nunca dos a la vez.
   const accionPrincipal =
     tab === "clientes" ? { label: "Nuevo cliente", onOpen: () => abrirModalCliente("crear") }
     : tab === "mascotas" ? { label: "Nueva mascota", onOpen: () => abrirModalMascota("crear") }
     : tab === "turnos" ? { label: "Nuevo turno", onOpen: solicitarNuevoTurno }
+    : tab === "cajas" ? { label: "Abrir caja", onOpen: () => setAbrirCajaOpen(true) }
     : null;
   const ctaDisabled = tab === "clientes" ? cargando || error : false;
 
@@ -552,6 +561,23 @@ function ClientesScreen() {
                 mascotas={mascotas}
                 turnos={turnos}
                 onCambiarEstado={handleCambiarEstado}
+              />
+            </div>
+          )}
+
+          {tab === "cajas" && (
+            <div
+              role="tabpanel"
+              id={`panel-recepcion-${tab}`}
+              aria-labelledby={`tab-recepcion-${tab}`}
+              className="flex flex-col gap-6"
+            >
+              {/* HU-VTA-03: el estado de la caja vive acá para que persista al
+                  cambiar de tab (mismo criterio que turnos). */}
+              <CajasContent
+                abrirCajaOpen={abrirCajaOpen}
+                onCerrarAbrirCaja={() => setAbrirCajaOpen(false)}
+                onSolicitarAbrirCaja={() => setAbrirCajaOpen(true)}
               />
             </div>
           )}

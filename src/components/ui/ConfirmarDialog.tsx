@@ -17,10 +17,11 @@ export type ConfirmarTone = "danger" | "success" | "neutral";
 interface ConfirmarDialogProps {
   open: boolean;
   title: string;
-  description: string;
+  description: ReactNode;
   confirmLabel: string;
   cancelLabel?: string;
   tone?: ConfirmarTone;
+  loading?: boolean;
   onClose: () => void;
   onConfirm: () => void;
 }
@@ -53,6 +54,7 @@ export function ConfirmarDialog({
   confirmLabel,
   cancelLabel = "Volver",
   tone = "danger",
+  loading,
   onClose,
   onConfirm,
 }: ConfirmarDialogProps) {
@@ -66,12 +68,14 @@ export function ConfirmarDialog({
       maxWidth="max-w-md"
       footer={
         <>
-          <Button type="button" variant="outline" onClick={onClose}>{cancelLabel}</Button>
-          <Button type="button" variant={style.variant} onClick={onConfirm}>{confirmLabel}</Button>
+          <Button type="button" variant="outline" onClick={onClose} disabled={loading}>{cancelLabel}</Button>
+          <Button type="button" variant={style.variant} onClick={onConfirm} disabled={loading}>{confirmLabel}</Button>
         </>
       }
     >
-      <p className="text-sm text-text-secondary">{description}</p>
+      {/* div y no p: description acepta ReactNode y un <p> anidado
+          (<p><p>..</p></p>) es HTML inválido. Mismo estilo visual. */}
+      <div className="text-sm text-text-secondary">{description}</div>
     </Modal>
   );
 }

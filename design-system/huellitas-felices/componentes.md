@@ -22,7 +22,7 @@ Usar SIEMPRE estos antes de crear un equivalente propio del módulo.
 | `RangoNumerico` | Filtro numérico min–max | `label`, `valor: {min,max}`, `onChange` |
 | `Switch` | Toggle de estado Activo/Inactivo | `role="switch"` + `aria-checked`, `checked`, `onChange`, `ariaLabel`; touch target ≥ 44px. Creado para HU-CLI-01 (no existía switch en ui/) | 
 | `Toast` | Notificaciones de éxito/error | `ToastProvider` + `useToast()` → `showToast("success"\|"error", msg)` |
-| `ConfirmarDialog` | Diálogo de confirmación sobre `Modal maxWidth="max-w-md"` | `open`, `title`, `description`, `confirmLabel`, `cancelLabel="Volver"`, `onClose`, `onConfirm`; `tone?: "danger" (default) \| "success" \| "neutral"` (mapea a Button variant destructive/primary/secondary + icono). Extendido en HU-TUR-02 para acciones no destructivas |
+| `ConfirmarDialog` | Diálogo de confirmación sobre `Modal maxWidth="max-w-md"` | `open`, `title`, `description: ReactNode` (renderizado en un `div`, no en `p`, para admitir JSX de bloque sin HTML inválido), `confirmLabel`, `cancelLabel="Volver"`, `loading?`, `onClose`, `onConfirm`; `tone?: "danger" (default) \| "success" \| "neutral"` (mapea a Button variant destructive/primary/secondary + icono). Extendido en HU-TUR-02 para acciones no destructivas, en HU-VTA-03 con `description: ReactNode` + `loading` |
 
 ## Por módulo (`src/components/<módulo>/`)
 
@@ -71,7 +71,8 @@ Módulo global de Cuentas Corrientes (HU-FIN-03): maneja AMBOS lados, proveedore
 `Sidebar` (nav principal) — sección **Recepción** con UN solo ítem "Recepción" (`/clientes`, icono `Users`): las sub-pantallas del módulo viven como pestañas dentro de la página (patrón Compras; ver `recepcion/RecepcionTabs`).
 
 ### recepcion
-`RecepcionTabs` — tabs del módulo Recepción (Clientes `/clientes` + Mascotas/Turnos/Agenda en tabs), espejo de `compras/ComprasTabs` (role=tablist, navegación con ←/→). HU-TUR-02 agregó el tab `"agenda"` (icono `CalendarRange`); la unión de tabs `TabRecepcion` y el mapa `tabRefs` por id en vez de índice.
+`RecepcionTabs` — tabs del módulo Recepción (Clientes `/clientes` + Mascotas/Turnos/Agenda/Cajas en tabs), espejo de `compras/ComprasTabs` (role=tablist, navegación con ←/→). HU-TUR-02 agregó el tab `"agenda"` (icono `CalendarRange`); HU-VTA-03 agregó el tab `"cajas"` (icono `Wallet`, última posición); la unión de tabs `TabRecepcion` y el mapa `tabRefs` por id en vez de índice.
+`CajasContent` — panel de la tab Cajas: estado + filtros + paginación + JOIN de display (exporta el patrón de `TurnosContent`; la apertura del modal está **controlada por la página** vía prop `abrirCajaOpen`, que mueve el CTA "Abrir caja" del header).
 
 ### movimientos
 `AlertaReposicionModal` · `FiltrosMovimientos` · `MovimientoFormModal` · `MovimientosTable` · `TipoMovimientoBadge`
@@ -89,6 +90,26 @@ Módulo HU-STK-03 (Gestión de Lista de Precios, `/lista-precios`): `PreciosTabl
 
 ### recepciones
 `RecepcionesTable` · `FiltrosRecepciones` · `FiltrosChipsRecepciones` · `RecepcionFormModal` · `RecepcionDetalleModal` · `EstadoRecepcionBadge`
+
+### cajas
+Módulo HU-VTA-03 (Gestión de Cajas): **vive como tab "Cajas" de Recepción** (`/clientes?tab=cajas`), no como página propia.
+`CajasContent` (panel del tab: estado + filtros + paginación + JOIN de display; alta controlada por la página) ·
+`CajasTable` (listado de aperturas: Id·Fecha·Hora·Sucursal·Cajero·Monto inicial·Saldo actual·Estado·Acciones; exporta el tipo `CajaRow = CajaApertura & { saldoActual }` —el saldo es `caja.saldo_actual`, **no** un campo de la apertura—; markup canónico de `TurnosTable`: wrapper `rounded-md border border-border bg-surface shadow-card`, `min-w-[1180px]`, thead `bg-cream-50`, skeleton grid-9 y estados vacío/sin resultados; acción única **`ArrowRight` "Entrar a la caja"** —el ojo `Eye` es de detalle, no de navegación—; `renderActions?` para extender) ·
+`MovimientosCajaTable` (movimientos: Id·Fecha·Hora·Tipo·Motivo/Monto·Origen con `TipoMovimientoOrigenBadge`; mismo markup canónico, skeleton grid-7 y estados vacío/sin resultados) ·
+`FiltrosCajas` + `FiltrosCajasChips` (botón "Filtros" con popover —mismo patrón que `FiltrosStock`/`FiltrosArticulos`: `SlidersHorizontal`, badge con contador, cierre por click fuera, `Limpiar filtros`—; dentro: sucursal/estado/cajero/rango fechas y **`ui/OrdenamientoSelect` reutilizado** para el orden; aplica al instante, sin botón "Aplicar". El buscador por cajero vive en el panel, no en el popover. `FILTROS_CAJAS_VACIOS` exportado. `hideChips` para renderizar los chips aparte) ·
+`AbrirCajaModal` (3 campos: sucursal, cajero, monto; fecha/hora automática; validación `monto >= 0` —admite 0, alineado al CHECK del esquema y al brief—; abre desde el CTA del header) ·
+`MovimientoCajaFormModal` (tipo ingreso/egreso + monto + motivo; cajero solo lectura vía `cajeroNombre`) ·
+`CerrarCajaModal` (recibe `montoInicial`/`ingresos`/`egresos`/`responsable` y calcula el esperado; resumen de 4 renglones + responsable + conteo + diferencia en vivo; nota de que **solo cuenta efectivo**; `ConfirmarDialog tone="success"` si diferencia ≠ 0) ·
+`ResumenCaja` (4 tarjetas —inicial, ingresos, egresos, **efectivo esperado**— con acento `border-l-4` sobre tokens; bloque **"Cobrado fuera de caja"** entre las tarjetas y la diferencia: suma vía `cobradoFueraDeCaja()` sobre la ventana de la apertura, acento `border-status-info` / `text-status-info-strong` —ni bueno ni malo—, con nota de que es transferencia y no toca el efectivo esperado; diferencia condicional solo si cerrada; nota final acotada al alcance en efectivo del resumen, sin repetir lo del bloque) ·
+
+> ⚠️ **`Modal icon=`** recibe `ReactNode`: hay que pasar `icon={<Wallet className="h-5 w-5 text-brand-900" aria-hidden="true" />}`, **nunca** `icon="Wallet"` (imprime la palabra "Wallet" en pantalla). Los tres modales de cajas usan `Input`/`Select`/`Textarea` con sus props `label`/`requiredMark`/`error`/`hint` — no `<label>` suelto con clases `neutral-*` fuera de paleta.
+`EstadoCajaBadge` (mapea boolean → `StatusBadge` con `Record`: true=success/Abierta/`CheckCircle2`, false=neutral/Cerrada/`Lock`) ·
+`TipoMovimientoCajaBadge` (mapea con `Record`: Ingreso=success/+ Ingreso/`ArrowUpRight`, Egreso=danger/− Egreso/`ArrowDownLeft`) ·
+`TipoMovimientoOrigenBadge` (mapea con `Record`: ventaId not-null=info/Venta #N/`ShoppingCart`, null=neutral/Manual/`User`)
+> Datos y store de sesión en `src/data/cajas.ts`: tipos `Caja`, `CajaApertura`, `MovimientoCaja`, arrays `cajas`, `cajeros` (derivado de `usuarios` filtrando `rol_id === 6`), `aperturasIniciales`, `movimientosCajaIniciales`, helpers `esperadoPreview`, flags `SIMULAR_VACIO`/`SIMULAR_ERROR`.
+> Medios de pago de venta en `src/data/venta-medios-pago.ts`: tipo `VentaMedioPago` (refleja `venta_medio_pago`), array `ventaMediosPago` y helper `cobradoFueraDeCaja(sucursalId, desde, hasta)` —suma lo cobrado por fuera del efectivo en la ventana de la apertura—, consumido por `ResumenCaja`. El catálogo `forma_pago` sigue siendo único en `src/data/formas-pago.ts` (fila "Efectivo" obligatoria: el trigger de caja la detecta por nombre).
+> Rutas: `/clientes?tab=cajas` (tab del módulo) · `/cajas` **redirige** a ese tab (sin ítem en el `Sidebar`) · `/cajas/[aperturaId]` (detalle, página propia).
+> Todas las integraciones preparadas con comentarios `// BACKEND:` con tabla+endpoint (`grep -rn "BACKEND" src/`).
 
 ### stock
 `DepositoFormModal` · `DepositosList` · `EstadoStockBadge` · `FichaFormModal` · `FichasTable` · `FiltrosStock` · `StockTabs`
