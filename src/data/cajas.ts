@@ -63,7 +63,9 @@ export interface MovimientoCaja {
 export const cajas: Caja[] = [
   { id: 1, sucursalId: 1, sucursal: "Sucursal Centro", nombre: "Caja principal", saldoActual: 1600.0, estado: "activo" },
   // Apertura 3: monto_inicial 100000 sin movimientos → 100000, no 0.
-  { id: 2, sucursalId: 2, sucursal: "Sucursal Norte", nombre: "Caja principal", saldoActual: 100000.0, estado: "activo" },
+  { id: 2, sucursalId: 2, sucursal: "Sucursal Este", nombre: "Caja principal", saldoActual: 100000.0, estado: "activo" },
+  { id: 3, sucursalId: 3, sucursal: "Sucursal Oeste", nombre: "Caja principal", saldoActual: 0.0, estado: "activo" },
+  { id: 4, sucursalId: 4, sucursal: "Sucursal Sur", nombre: "Caja principal", saldoActual: 0.0, estado: "activo" },
 ];
 
 // Los cajeros NO se declaran como catálogo aparte: se derivan del mismo array
@@ -118,12 +120,12 @@ export const aperturasIniciales: CajaApertura[] = [
     id: 3,
     cajaId: 2,
     sucursalId: 2,
-    sucursal: "Sucursal Norte",
+    sucursal: "Sucursal Este",
     cajaNombre: "Caja principal",
     // Distinto de los cajeros 5/6 (sucursal 1): el CA de visibilidad obliga a
     // que el cajero pertenezca a la sucursal de la caja.
     cajeroId: 7,
-    cajero: { nombre: "Lucía", apellido: "Ferreyra" },
+    cajero: { nombre: "Lucía", apellido: "Gómez" },
     montoInicial: 100000.0,
     fechaApertura: "2026-09-26T15:00:00",
     estado: true,                  // abierta
@@ -141,7 +143,7 @@ export const movimientosCajaIniciales: MovimientoCaja[] = [
   // Apertura 2 (abierta): la tabla NO muestra la apertura como movimiento.
   { id: 3, cajaAperturaId: 2, tipo: "Egreso", monto: 24900.0, motivo: "Devolución a cliente por error de cobro", ventaId: null, usuarioId: 6, fechaHora: "2026-09-26T11:45:00" },
   { id: 4, cajaAperturaId: 2, tipo: "Ingreso", monto: 8500.0, motivo: "Fondo sencillo adicional para vueltos", ventaId: null, usuarioId: 6, fechaHora: "2026-09-26T12:30:00" },
-  // Apertura 3 (Sucursal Norte) todavía sin movimientos → estado vacío de tabla.
+  // Apertura 3 (Sucursal Este) todavía sin movimientos → estado vacío de tabla.
 ];
 
 // BACKEND: el trigger es la fuente de verdad del esperado y de la diferencia.
