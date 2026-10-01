@@ -83,7 +83,7 @@ export function FiltrosCajas({
           )}
         </Button>
         {open && (
-          <div className="absolute right-0 top-[calc(100%+8px)] z-20 w-80 max-h-[calc(100vh-220px)] overflow-y-auto rounded-md border border-border bg-surface p-4 shadow-card">
+          <div className="absolute right-0 top-[calc(100%+8px)] z-20 w-80 h-72 overflow-y-auto rounded-md border border-border bg-surface p-4 shadow-card">
             <div className="flex flex-col gap-4">
               {/* BACKEND: poblar desde GET /api/sucursales (id + nombre). */}
               <label className={etiquetaClase}>
