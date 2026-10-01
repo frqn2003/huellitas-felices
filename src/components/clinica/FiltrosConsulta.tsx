@@ -110,6 +110,11 @@ export function FiltrosConsultaChips({
           </button>
         </span>
       ))}
+      {onClearAll && (
+        <Button variant="ghost" size="sm" type="button" onClick={onClearAll}>
+          Limpiar todos
+        </Button>
+      )}
     </div>
   );
 }

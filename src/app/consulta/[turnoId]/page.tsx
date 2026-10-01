@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   CircleDollarSign,
   ClipboardList,
-  Download,
   Lock,
   MessageSquarePlus,
   PawPrint,
@@ -150,6 +149,9 @@ function ConsultaPageContent({ turnoId }: { turnoId: number }) {
   // Si consulta existe y está cerrada: modo lectura.
   const esCerrada = consulta?.estado === "cerrada";
 
+  // ── Estado del Wizard / Pasos (solo modo edición) ────────────────────────
+  const [pasoActual, setPasoActual] = useState<1 | 2 | 3>(1);
+
   // ── Estado del formulario (solo modo edición) ─────────────────────────────
   const [draft, setDraft] = useState<ConsultaDraft>({
     ...CONSULTA_DRAFT_VACIO,
@@ -218,6 +220,9 @@ function ConsultaPageContent({ turnoId }: { turnoId: number }) {
     setInsumos((prev) => prev.filter((i) => i.articuloId !== articuloId));
   }
 
+  // ── Modal emergente post-finalización de PDF ─────────────────────────────
+  const [pdfModalOpen, setPdfModalOpen] = useState(false);
+
   // ── Validaciones ──────────────────────────────────────────────────────────
   const errores: Partial<Record<keyof ConsultaDraft, string>> = {};
   if (touched.motivoConsulta && !draft.motivoConsulta.trim())
@@ -225,8 +230,33 @@ function ConsultaPageContent({ turnoId }: { turnoId: number }) {
   if (touched.diagnostico && !draft.diagnostico.trim())
     errores.diagnostico = "El diagnóstico es obligatorio.";
 
+  if (draft.temperatura) {
+    const temp = parseFloat(draft.temperatura);
+    if (isNaN(temp) || temp < 30 || temp > 45) {
+      errores.temperatura = "La temperatura debe estar entre 30 y 45 °C.";
+    }
+  }
+
+  if (draft.frecuenciaCardiaca) {
+    const fc = parseInt(draft.frecuenciaCardiaca);
+    if (isNaN(fc) || fc < 30 || fc > 300) {
+      errores.frecuenciaCardiaca = "La frec. cardíaca debe estar entre 30 y 300 lpm.";
+    }
+  }
+
+  if (draft.pesoMomento) {
+    const peso = parseFloat(draft.pesoMomento);
+    if (isNaN(peso) || peso < 0.1 || peso > 200) {
+      errores.pesoMomento = "El peso debe estar entre 0.1 y 200 kg.";
+    }
+  }
+
   const puedeGuardar =
-    draft.motivoConsulta.trim() !== "" && draft.diagnostico.trim() !== "";
+    draft.motivoConsulta.trim() !== "" &&
+    draft.diagnostico.trim() !== "" &&
+    !errores.temperatura &&
+    !errores.frecuenciaCardiaca &&
+    !errores.pesoMomento;
 
   // ── Confirmación finalizar ────────────────────────────────────────────────
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -295,7 +325,8 @@ function ConsultaPageContent({ turnoId }: { turnoId: number }) {
       setConfirmOpen(false);
       setFinalizando(false);
       showToast("success", "Consulta registrada. Paciente derivado a mostrador.");
-      setTimeout(() => router.push("/consulta"), 1500);
+      // Abrir modal preguntando por el PDF
+      setPdfModalOpen(true);
     }, 600);
   }
 
@@ -501,16 +532,6 @@ function ConsultaPageContent({ turnoId }: { turnoId: number }) {
                   Cobrar en mostrador
                 </Button>
               )}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleDescargarPdf}
-                className="bg-surface shadow-xs hover:bg-cream-100"
-              >
-                <Download className="h-4 w-4 text-brand-900" aria-hidden="true" />
-                Descargar PDF
-              </Button>
             </div>
           </div>
         </div>
@@ -540,329 +561,470 @@ function ConsultaPageContent({ turnoId }: { turnoId: number }) {
           </motion.div>
         )}
 
-        <div className="flex flex-col gap-5 pb-8">
-          {/* ── DATOS DEL TURNO ─── */}
-          <SectionCard
-            title="Datos del turno"
-            icon={<Calendar className="h-4 w-4" aria-hidden="true" />}
-          >
-            <div className="grid grid-cols-1 gap-4 rounded-sm border border-border bg-cream-50 p-4 sm:grid-cols-2">
-              <DatoDetalle
-                label="Cliente"
-                valor={cliente ? `${cliente.nombre} ${cliente.apellido}` : "—"}
-              />
-              <DatoDetalle label="DNI" valor={cliente?.documento ?? "—"} />
-              <DatoDetalle
-                label="Mascota"
-                valor={
-                  mascota
-                    ? `${mascota.nombre} · ${mascota.especie}${mascota.raza ? ` · ${mascota.raza}` : ""}${mascota.sexo ? `, ${mascota.sexo}` : ""}${mascota.peso ? `, ${mascota.peso} kg` : ""}`
-                    : "—"
-                }
-              />
-              <DatoDetalle
-                label="Fecha y hora"
-                valor={`${formatFecha(turno.fecha)} · ${turno.horaInicio} – ${turno.horaFin}`}
-              />
-              <DatoDetalle label="Profesional" valor={profesionalDisplay} />
-              <DatoDetalle label="Práctica" valor={practicaDisplay} />
-              <div className="flex flex-col gap-1 sm:col-span-2">
-                <span className="text-xs font-bold uppercase tracking-wide text-text-secondary">
-                  Estado
-                </span>
-                <div>
-                  <EstadoTurnoBadge estadoId={turno.estadoId} />
-                </div>
-              </div>
-            </div>
-          </SectionCard>
-
-          {/* ── SIGNOS VITALES ─── */}
-          <SectionCard
-            title="Signos vitales"
-            icon={<Thermometer className="h-4 w-4" aria-hidden="true" />}
-          >
-            {esCerrada ? (
-              <div className="grid grid-cols-2 gap-x-8 gap-y-0 sm:grid-cols-4">
-                <DataRow
-                  label="Temperatura"
-                  value={consulta?.temperatura != null ? `${consulta.temperatura} °C` : "—"}
-                />
-                <DataRow
-                  label="Frec. cardíaca"
-                  value={consulta?.frecuenciaCardiaca != null ? `${consulta.frecuenciaCardiaca} lpm` : "—"}
-                />
-                <DataRow
-                  label="Peso al momento"
-                  value={consulta?.pesoMomento != null ? `${consulta.pesoMomento} kg` : "—"}
-                />
-                <DataRow label="Est. físico general" value={consulta?.estadoFisicoGeneral ?? "—"} />
-              </div>
-            ) : (
-              <div className="flex flex-col gap-5">
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                  <Input
-                    id="temperatura"
-                    label="Temperatura (°C)"
-                    type="number"
-                    step="0.1"
-                    min="30"
-                    max="44"
-                    placeholder="ej. 38.5"
-                    value={draft.temperatura}
-                    onChange={(e) =>
-                      setDraft((d) => ({ ...d, temperatura: e.target.value }))
-                    }
-                    hint={
-                      draft.temperatura &&
-                      (parseFloat(draft.temperatura) < 37 ||
-                        parseFloat(draft.temperatura) > 41)
-                        ? "Fuera del rango normal (37–41 °C)"
-                        : undefined
-                    }
-                  />
-                  <Input
-                    id="frecuencia-cardiaca"
-                    label="Frec. cardíaca (lpm)"
-                    type="number"
-                    step="1"
-                    min="20"
-                    max="300"
-                    placeholder="ej. 90"
-                    value={draft.frecuenciaCardiaca}
-                    onChange={(e) =>
-                      setDraft((d) => ({ ...d, frecuenciaCardiaca: e.target.value }))
-                    }
-                  />
-                  <div>
-                    <Input
-                      id="peso-momento"
-                      label="Peso (kg)"
-                      type="number"
-                      step="0.1"
-                      min="0.1"
-                      placeholder="ej. 28.5"
-                      value={draft.pesoMomento}
-                      onChange={(e) =>
-                        setDraft((d) => ({ ...d, pesoMomento: e.target.value }))
-                      }
-                      hint={
-                        mascota?.peso
-                          ? `Peso anterior: ${mascota.peso} kg`
-                          : undefined
-                      }
-                    />
-                  </div>
-                </div>
-                <Textarea
-                  id="estado-fisico-general"
-                  label="Estado físico general"
-                  placeholder="Describí el estado físico general del animal…"
-                  value={draft.estadoFisicoGeneral}
-                  onChange={(e) =>
-                    setDraft((d) => ({ ...d, estadoFisicoGeneral: e.target.value }))
-                  }
-                  rows={2}
-                />
-              </div>
-            )}
-          </SectionCard>
-
-          {/* ── ANAMNESIS Y DIAGNÓSTICO ─── */}
-          <SectionCard
-            title="Anamnesis y diagnóstico"
-            icon={<ClipboardList className="h-4 w-4" aria-hidden="true" />}
-          >
-            {esCerrada ? (
-              <div className="flex flex-col gap-0">
-                <DataRow label="Motivo de consulta" value={consulta?.motivoConsulta ?? "—"} />
-                <DataRow label="Diagnóstico" value={consulta?.diagnostico ?? "—"} />
-                <DataRow label="Tratamiento" value={consulta?.tratamiento ?? "—"} />
-              </div>
-            ) : (
-              <div className="flex flex-col gap-4">
-                <Textarea
-                  id="motivo-consulta"
-                  label="Motivo de consulta"
-                  requiredMark
-                  placeholder="¿Por qué trae al paciente?"
-                  value={draft.motivoConsulta}
-                  onChange={(e) =>
-                    setDraft((d) => ({ ...d, motivoConsulta: e.target.value }))
-                  }
-                  onBlur={() => setTouched((t) => ({ ...t, motivoConsulta: true }))}
-                  error={errores.motivoConsulta}
-                  rows={2}
-                />
-                <Textarea
-                  id="diagnostico"
-                  label="Diagnóstico"
-                  requiredMark
-                  placeholder="Diagnóstico principal y secundario si aplica…"
-                  value={draft.diagnostico}
-                  onChange={(e) =>
-                    setDraft((d) => ({ ...d, diagnostico: e.target.value }))
-                  }
-                  onBlur={() => setTouched((t) => ({ ...t, diagnostico: true }))}
-                  error={errores.diagnostico}
-                  rows={2}
-                />
-                <Textarea
-                  id="tratamiento"
-                  label="Tratamiento indicado"
-                  placeholder="Indicaciones y medicación post-consulta…"
-                  value={draft.tratamiento}
-                  onChange={(e) =>
-                    setDraft((d) => ({ ...d, tratamiento: e.target.value }))
-                  }
-                  rows={3}
-                />
-              </div>
-            )}
-          </SectionCard>
-
-          {/* ── MEDICACIÓN / INSUMOS APLICADOS ─── */}
-          <SectionCard
-            title="Medicación e insumos aplicados"
-            icon={<Pill className="h-4 w-4" aria-hidden="true" />}
-          >
-            <div className="flex flex-col gap-3">
-              {insumos.length === 0 ? (
-                <p className="text-sm text-text-secondary">
-                  {esCerrada ? "Sin insumos registrados." : "Sin insumos agregados aún."}
-                </p>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {insumos.map((ins) => (
-                    <InsumoRow
-                      key={ins.articuloId}
-                      insumo={ins}
-                      onRemove={handleQuitarInsumo}
-                      readOnly={esCerrada}
-                    />
-                  ))}
-                </div>
-              )}
-
-              {!esCerrada && (
-                <div className="mt-1 rounded-md border border-border bg-cream-100 px-4 py-4">
-                  <p className="mb-3 text-xs font-bold uppercase tracking-wide text-text-secondary">
-                    Agregar insumo
-                  </p>
-                  <div className="flex flex-wrap items-end gap-3">
-                    <div className="min-w-[260px] flex-1">
-                      <Combobox
-                        id="insumo-articulo"
-                        placeholder="Buscar artículo por nombre o código…"
-                        options={articuloOptions}
-                        value={insumoSeleccionado}
-                        onChange={(v) => {
-                          setInsumoSeleccionado(v);
-                          setInsumoError("");
-                        }}
-                        noResultsText="Sin artículos disponibles"
-                      />
-                    </div>
-                    <div className="w-28">
-                      <Input
-                        id="insumo-cantidad"
-                        type="number"
-                        min="0.01"
-                        step="0.01"
-                        placeholder="Cant."
-                        value={insumoCantidad}
-                        onChange={(e) => {
-                          setInsumoCantidad(e.target.value);
-                          setInsumoError("");
-                        }}
-                        aria-label="Cantidad del insumo"
-                      />
-                    </div>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="md"
-                      onClick={handleAgregarInsumo}
-                      className="shrink-0"
-                    >
-                      <Plus className="h-4 w-4" aria-hidden="true" />
-                      Agregar
-                    </Button>
-                  </div>
-                  {insumoError && (
-                    <p role="alert" className="mt-2 text-sm font-semibold text-destructive">
-                      {insumoError}
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-          </SectionCard>
-
-          {/* ── NOTAS ACLARATORIAS (solo visible si cerrada) ─── */}
-          {esCerrada && (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 pb-8">
+          {/* ── COLUMNA IZQUIERDA (4 cols): Datos del Turno (SIEMPRE FIJOS) ─── */}
+          <div className="flex flex-col gap-5 lg:col-span-4">
             <SectionCard
-              title="Notas aclaratorias"
-              icon={<MessageSquarePlus className="h-4 w-4" aria-hidden="true" />}
+              title="Datos del turno"
+              icon={<Calendar className="h-4 w-4" aria-hidden="true" />}
             >
-              <div className="flex flex-col gap-3">
-                {notas.length === 0 ? (
-                  <p className="text-sm text-text-secondary">Sin notas aclaratorias.</p>
-                ) : (
-                  notas.map((nota) => (
-                    <div
-                      key={nota.id}
-                      className="rounded-md border border-border bg-cream-100 px-4 py-3"
-                    >
-                      <div className="mb-1 flex items-center gap-2">
-                        <span className="text-xs font-bold text-brand-900">
-                          {nota.profesional}
-                        </span>
-                        <span className="text-xs text-text-secondary">
-                          · {formatHoraMin(nota.fechaHora)}
-                        </span>
-                      </div>
-                      <p className="text-sm text-text-primary">{nota.nota}</p>
-                    </div>
-                  ))
-                )}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setNotaOpen(true)}
-                  className="self-start"
-                >
-                  <MessageSquarePlus className="h-4 w-4" aria-hidden="true" />
-                  Agregar nota
-                </Button>
+              <div className="flex flex-col gap-3.5 rounded-sm border border-border bg-cream-50 p-4">
+                <DatoDetalle
+                  label="Cliente"
+                  valor={cliente ? `${cliente.nombre} ${cliente.apellido}` : "—"}
+                />
+                <DatoDetalle label="DNI" valor={cliente?.documento ?? "—"} />
+                <DatoDetalle
+                  label="Mascota"
+                  valor={
+                    mascota
+                      ? `${mascota.nombre} · ${mascota.especie}${mascota.raza ? ` · ${mascota.raza}` : ""}${mascota.sexo ? `, ${mascota.sexo}` : ""}${mascota.peso ? `, ${mascota.peso} kg` : ""}`
+                      : "—"
+                  }
+                />
+                <DatoDetalle
+                  label="Fecha y hora"
+                  valor={`${formatFecha(turno.fecha)} · ${turno.horaInicio} – ${turno.horaFin}`}
+                />
+                <DatoDetalle label="Profesional" valor={profesionalDisplay} />
+                <DatoDetalle label="Práctica" valor={practicaDisplay} />
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs font-bold uppercase tracking-wide text-text-secondary">
+                    Estado
+                  </span>
+                  <div>
+                    <EstadoTurnoBadge estadoId={turno.estadoId} />
+                  </div>
+                </div>
               </div>
             </SectionCard>
-          )}
+          </div>
 
-          {/* ── Acciones ─── */}
-          {!esCerrada && (
-            <div className="flex items-center justify-end gap-3 border-t border-border pt-4 print:hidden">
-              <Button type="button" variant="outline" onClick={handleAtras}>
-                Cancelar
-              </Button>
-              <Button
-                type="button"
-                variant="primary"
-                onClick={handleFinalizar}
-                disabled={!puedeGuardar}
-                className="min-w-[180px]"
-                title={
-                  !puedeGuardar
-                    ? "Completá el motivo de consulta y el diagnóstico para continuar."
-                    : undefined
-                }
-              >
-                <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                Finalizar consulta
-              </Button>
-            </div>
-          )}
+          {/* ── COLUMNA DERECHA (8 cols): WIZARD EN 3 PASOS ─── */}
+          <div className="flex flex-col gap-5 lg:col-span-8">
+            {/* STEPPER (solo si la consulta está abierta/en edición) */}
+            {!esCerrada && (
+              <div className="flex items-center justify-between rounded-md border border-border bg-surface px-6 py-3.5 shadow-card">
+                <button
+                  type="button"
+                  onClick={() => setPasoActual(1)}
+                  className={`flex items-center gap-2.5 text-xs font-extrabold uppercase tracking-wide transition-colors ${
+                    pasoActual === 1
+                      ? "text-brand-900"
+                      : "text-text-secondary hover:text-brand-700"
+                  }`}
+                >
+                  <span
+                    className={`flex h-7 w-7 items-center justify-center rounded-full font-extrabold transition-colors ${
+                      pasoActual === 1
+                        ? "bg-brand-900 text-cream-50"
+                        : "bg-cream-200 text-brand-900"
+                    }`}
+                  >
+                    1
+                  </span>
+                  <span>Signos Vitales</span>
+                </button>
+
+                <div className="h-px w-8 bg-border sm:w-16" />
+
+                <button
+                  type="button"
+                  onClick={() => setPasoActual(2)}
+                  className={`flex items-center gap-2.5 text-xs font-extrabold uppercase tracking-wide transition-colors ${
+                    pasoActual === 2
+                      ? "text-brand-900"
+                      : "text-text-secondary hover:text-brand-700"
+                  }`}
+                >
+                  <span
+                    className={`flex h-7 w-7 items-center justify-center rounded-full font-extrabold transition-colors ${
+                      pasoActual === 2
+                        ? "bg-brand-900 text-cream-50"
+                        : "bg-cream-200 text-brand-900"
+                    }`}
+                  >
+                    2
+                  </span>
+                  <span>Diagnóstico</span>
+                </button>
+
+                <div className="h-px w-8 bg-border sm:w-16" />
+
+                <button
+                  type="button"
+                  onClick={() => setPasoActual(3)}
+                  className={`flex items-center gap-2.5 text-xs font-extrabold uppercase tracking-wide transition-colors ${
+                    pasoActual === 3
+                      ? "text-brand-900"
+                      : "text-text-secondary hover:text-brand-700"
+                  }`}
+                >
+                  <span
+                    className={`flex h-7 w-7 items-center justify-center rounded-full font-extrabold transition-colors ${
+                      pasoActual === 3
+                        ? "bg-brand-900 text-cream-50"
+                        : "bg-cream-200 text-brand-900"
+                    }`}
+                  >
+                    3
+                  </span>
+                  <span>Medicamentos</span>
+                </button>
+              </div>
+            )}
+
+            {/* MODO CONSULTA CERRADA (Mostrar todos los datos acumulados) */}
+            {esCerrada ? (
+              <>
+                <SectionCard
+                  title="Signos vitales"
+                  icon={<Thermometer className="h-4 w-4" aria-hidden="true" />}
+                >
+                  <div className="flex flex-col gap-2">
+                    <DataRow
+                      label="Temperatura"
+                      value={consulta?.temperatura != null ? `${consulta.temperatura} °C` : "—"}
+                    />
+                    <DataRow
+                      label="Frec. cardíaca"
+                      value={consulta?.frecuenciaCardiaca != null ? `${consulta.frecuenciaCardiaca} lpm` : "—"}
+                    />
+                    <DataRow
+                      label="Peso al momento"
+                      value={consulta?.pesoMomento != null ? `${consulta.pesoMomento} kg` : "—"}
+                    />
+                    <DataRow label="Est. físico general" value={consulta?.estadoFisicoGeneral ?? "—"} />
+                  </div>
+                </SectionCard>
+
+                <SectionCard
+                  title="Anamnesis y diagnóstico"
+                  icon={<ClipboardList className="h-4 w-4" aria-hidden="true" />}
+                >
+                  <div className="flex flex-col gap-0">
+                    <DataRow label="Motivo de consulta" value={consulta?.motivoConsulta ?? "—"} />
+                    <DataRow label="Diagnóstico" value={consulta?.diagnostico ?? "—"} />
+                    <DataRow label="Tratamiento" value={consulta?.tratamiento ?? "—"} />
+                  </div>
+                </SectionCard>
+
+                <SectionCard
+                  title="Medicación e insumos aplicados"
+                  icon={<Pill className="h-4 w-4" aria-hidden="true" />}
+                >
+                  <div className="flex flex-col gap-3">
+                    {insumos.length === 0 ? (
+                      <p className="text-sm text-text-secondary">Sin insumos registrados.</p>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        {insumos.map((ins) => (
+                          <InsumoRow
+                            key={ins.articuloId}
+                            insumo={ins}
+                            onRemove={handleQuitarInsumo}
+                            readOnly
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </SectionCard>
+
+                <SectionCard
+                  title="Notas aclaratorias"
+                  icon={<MessageSquarePlus className="h-4 w-4" aria-hidden="true" />}
+                >
+                  <div className="flex flex-col gap-3">
+                    {notas.length === 0 ? (
+                      <p className="text-sm text-text-secondary">Sin notas aclaratorias.</p>
+                    ) : (
+                      notas.map((nota) => (
+                        <div
+                          key={nota.id}
+                          className="rounded-md border border-border bg-cream-100 px-4 py-3"
+                        >
+                          <div className="mb-1 flex items-center gap-2">
+                            <span className="text-xs font-bold text-brand-900">
+                              {nota.profesional}
+                            </span>
+                            <span className="text-xs text-text-secondary">
+                              · {formatHoraMin(nota.fechaHora)}
+                            </span>
+                          </div>
+                          <p className="text-sm text-text-primary">{nota.nota}</p>
+                        </div>
+                      ))
+                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setNotaOpen(true)}
+                      className="self-start"
+                    >
+                      <MessageSquarePlus className="h-4 w-4" aria-hidden="true" />
+                      Agregar nota
+                    </Button>
+                  </div>
+                </SectionCard>
+              </>
+            ) : (
+              /* MODO CONSULTA ABIERTA (PASO A PASO) */
+              <>
+                {/* PASO 1: SIGNOS VITALES */}
+                {pasoActual === 1 && (
+                  <SectionCard
+                    title="Paso 1: Signos vitales"
+                    icon={<Thermometer className="h-4 w-4" aria-hidden="true" />}
+                  >
+                    <div className="flex flex-col gap-4">
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <Input
+                          id="temperatura"
+                          label="Temperatura (°C)"
+                          type="number"
+                          step="0.1"
+                          min="30"
+                          max="45"
+                          placeholder="ej. 38.5"
+                          value={draft.temperatura}
+                          onChange={(e) =>
+                            setDraft((d) => ({ ...d, temperatura: e.target.value }))
+                          }
+                          error={errores.temperatura}
+                          hint={
+                            !errores.temperatura &&
+                            draft.temperatura &&
+                            (parseFloat(draft.temperatura) < 37.5 ||
+                              parseFloat(draft.temperatura) > 39.5)
+                              ? "Fuera de rango habitual (37.5–39.5 °C)"
+                              : undefined
+                          }
+                        />
+                        <Input
+                          id="frecuencia-cardiaca"
+                          label="Frec. cardíaca (lpm)"
+                          type="number"
+                          step="1"
+                          min="30"
+                          max="300"
+                          placeholder="ej. 90"
+                          value={draft.frecuenciaCardiaca}
+                          onChange={(e) =>
+                            setDraft((d) => ({ ...d, frecuenciaCardiaca: e.target.value }))
+                          }
+                          error={errores.frecuenciaCardiaca}
+                        />
+                      </div>
+                      <Input
+                        id="peso-momento"
+                        label="Peso al momento (kg)"
+                        type="number"
+                        step="0.1"
+                        min="0.1"
+                        max="200"
+                        placeholder="ej. 28.5"
+                        value={draft.pesoMomento}
+                        onChange={(e) =>
+                          setDraft((d) => ({ ...d, pesoMomento: e.target.value }))
+                        }
+                        error={errores.pesoMomento}
+                        hint={
+                          !errores.pesoMomento && mascota?.peso
+                            ? `Peso anterior registrado: ${mascota.peso} kg`
+                            : undefined
+                        }
+                      />
+                      <Textarea
+                        id="estado-fisico-general"
+                        label="Estado físico general"
+                        placeholder="Describí el estado físico general del animal…"
+                        value={draft.estadoFisicoGeneral}
+                        onChange={(e) =>
+                          setDraft((d) => ({ ...d, estadoFisicoGeneral: e.target.value }))
+                        }
+                        rows={3}
+                      />
+                    </div>
+                  </SectionCard>
+                )}
+
+                {/* PASO 2: ANAMNESIS Y DIAGNÓSTICO */}
+                {pasoActual === 2 && (
+                  <SectionCard
+                    title="Paso 2: Anamnesis y diagnóstico"
+                    icon={<ClipboardList className="h-4 w-4" aria-hidden="true" />}
+                  >
+                    <div className="flex flex-col gap-4">
+                      <Textarea
+                        id="motivo-consulta"
+                        label="Motivo de consulta"
+                        requiredMark
+                        placeholder="¿Por qué trae al paciente?"
+                        value={draft.motivoConsulta}
+                        onChange={(e) =>
+                          setDraft((d) => ({ ...d, motivoConsulta: e.target.value }))
+                        }
+                        onBlur={() => setTouched((t) => ({ ...t, motivoConsulta: true }))}
+                        error={errores.motivoConsulta}
+                        rows={2}
+                      />
+                      <Textarea
+                        id="diagnostico"
+                        label="Diagnóstico"
+                        requiredMark
+                        placeholder="Diagnóstico principal y secundario si aplica…"
+                        value={draft.diagnostico}
+                        onChange={(e) =>
+                          setDraft((d) => ({ ...d, diagnostico: e.target.value }))
+                        }
+                        onBlur={() => setTouched((t) => ({ ...t, diagnostico: true }))}
+                        error={errores.diagnostico}
+                        rows={3}
+                      />
+                      <Textarea
+                        id="tratamiento"
+                        label="Tratamiento indicado"
+                        placeholder="Indicaciones y medicación post-consulta…"
+                        value={draft.tratamiento}
+                        onChange={(e) =>
+                          setDraft((d) => ({ ...d, tratamiento: e.target.value }))
+                        }
+                        rows={3}
+                      />
+                    </div>
+                  </SectionCard>
+                )}
+
+                {/* PASO 3: MEDICACIÓN / INSUMOS APLICADOS */}
+                {pasoActual === 3 && (
+                  <SectionCard
+                    title="Paso 3: Medicación e insumos aplicados"
+                    icon={<Pill className="h-4 w-4" aria-hidden="true" />}
+                  >
+                    <div className="flex flex-col gap-3">
+                      {insumos.length === 0 ? (
+                        <p className="text-sm text-text-secondary">
+                          Sin insumos agregados aún.
+                        </p>
+                      ) : (
+                        <div className="flex flex-col gap-2">
+                          {insumos.map((ins) => (
+                            <InsumoRow
+                              key={ins.articuloId}
+                              insumo={ins}
+                              onRemove={handleQuitarInsumo}
+                              readOnly={false}
+                            />
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="mt-1 rounded-md border border-border bg-cream-100 px-4 py-4">
+                        <p className="mb-3 text-xs font-bold uppercase tracking-wide text-text-secondary">
+                          Agregar insumo
+                        </p>
+                        <div className="flex flex-wrap items-end gap-3">
+                          <div className="min-w-[240px] flex-1">
+                            <Combobox
+                              id="insumo-articulo"
+                              placeholder="Buscar artículo por nombre o código…"
+                              options={articuloOptions}
+                              value={insumoSeleccionado}
+                              onChange={(v) => {
+                                setInsumoSeleccionado(v);
+                                setInsumoError("");
+                              }}
+                              noResultsText="Sin artículos disponibles"
+                            />
+                          </div>
+                          <div className="w-24">
+                            <Input
+                              id="insumo-cantidad"
+                              type="number"
+                              min="0.01"
+                              step="0.01"
+                              placeholder="Cant."
+                              value={insumoCantidad}
+                              onChange={(e) => {
+                                setInsumoCantidad(e.target.value);
+                                setInsumoError("");
+                              }}
+                              aria-label="Cantidad del insumo"
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="md"
+                            onClick={handleAgregarInsumo}
+                            className="shrink-0"
+                          >
+                            <Plus className="h-4 w-4" aria-hidden="true" />
+                            Agregar
+                          </Button>
+                        </div>
+                        {insumoError && (
+                          <p role="alert" className="mt-2 text-sm font-semibold text-destructive">
+                            {insumoError}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </SectionCard>
+                )}
+
+                {/* ── BOTONES DE NAVEGACIÓN Y ACCIONES (ABAKO A LA DERECHA) ─── */}
+                <div className="mt-2 flex items-center justify-between border-t border-border pt-4 print:hidden">
+                  <div>
+                    {pasoActual > 1 && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setPasoActual((p) => (p - 1) as 1 | 2 | 3)}
+                      >
+                        Anterior
+                      </Button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <Button type="button" variant="outline" onClick={handleAtras}>
+                      Cancelar
+                    </Button>
+
+                    {pasoActual < 3 ? (
+                      <Button
+                        type="button"
+                        variant="primary"
+                        onClick={() => setPasoActual((p) => (p + 1) as 1 | 2 | 3)}
+                        className="font-bold"
+                      >
+                        Siguiente
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="primary"
+                        onClick={handleFinalizar}
+                        disabled={!puedeGuardar}
+                        className="min-w-[180px] shadow-sm font-bold"
+                        title={
+                          !puedeGuardar
+                            ? "Completá el motivo de consulta y el diagnóstico para continuar."
+                            : undefined
+                        }
+                      >
+                        <CheckCircle2 className="h-4 w-4 mr-1.5" aria-hidden="true" />
+                        Finalizar consulta
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </main>
 
@@ -897,6 +1059,24 @@ function ConsultaPageContent({ turnoId }: { turnoId: number }) {
         profesional={profesionalDisplay}
         onClose={() => setNotaOpen(false)}
         onGuardar={handleGuardarNota}
+      />
+
+      <ConfirmarDialog
+        open={pdfModalOpen}
+        tone="success"
+        title="¡Consulta registrada con éxito!"
+        description="El paciente fue derivado a mostrador. ¿Deseás descargar la Ficha Médica en PDF?"
+        confirmLabel="📄 Descargar PDF"
+        cancelLabel="Ir a Clínica"
+        onClose={() => {
+          setPdfModalOpen(false);
+          router.push("/consulta");
+        }}
+        onConfirm={() => {
+          handleDescargarPdf();
+          setPdfModalOpen(false);
+          router.push("/consulta");
+        }}
       />
     </div>
   );
