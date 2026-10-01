@@ -18,6 +18,7 @@ import { MascotasTable } from "@/components/mascotas/MascotasTable";
 import type { TabRecepcion } from "@/components/recepcion/RecepcionTabs";
 import { RecepcionTabs } from "@/components/recepcion/RecepcionTabs";
 import { TurnosContent } from "@/components/turnos/TurnosContent";
+import { VentasContent } from "@/components/ventas/VentasContent";
 import { Button } from "@/components/ui/Button";
 import { Pagination } from "@/components/ui/Pagination";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
@@ -68,11 +69,13 @@ function ClientesScreen() {
       ? "mascotas"
       : searchParams.get("tab") === "turnos"
         ? "turnos"
-        : searchParams.get("tab") === "agenda"
-          ? "agenda"
-          : searchParams.get("tab") === "cajas"
-            ? "cajas"
-            : "clientes";
+        : searchParams.get("tab") === "ventas"
+          ? "ventas"
+          : searchParams.get("tab") === "agenda"
+            ? "agenda"
+            : searchParams.get("tab") === "cajas"
+              ? "cajas"
+              : "clientes";
   const dueno: number | null = useMemo(() => {
     const raw = searchParams.get("dueno");
     if (!raw) return null;
@@ -105,7 +108,9 @@ function ClientesScreen() {
   const [pageSizeMascotas, setPageSizeMascotas] = useState(10);
   const [pageMascotas, setPageMascotas] = useState(1);
 
-  const [modalClienteOpen, setModalClienteOpen] = useState(false);
+  const isNuevoClienteParam = searchParams.get("nuevo") === "cliente";
+  const [modalClienteOpenState, setModalClienteOpenState] = useState(false);
+  const modalClienteOpen = modalClienteOpenState || isNuevoClienteParam;
   const [modalClienteMode, setModalClienteMode] = useState<ClienteModalMode>("crear");
   const [clienteActivo, setClienteActivo] = useState<Cliente | null>(null);
 
@@ -217,7 +222,14 @@ function ClientesScreen() {
   const abrirModalCliente = (modo: ClienteModalMode, cli?: Cliente) => {
     setModalClienteMode(modo);
     setClienteActivo(cli || null);
-    setModalClienteOpen(true);
+    setModalClienteOpenState(true);
+  };
+
+  const handleCerrarModalCliente = () => {
+    setModalClienteOpenState(false);
+    if (isNuevoClienteParam) {
+      router.replace("/clientes?tab=clientes");
+    }
   };
 
   // 👤 "Ver dueño" (MascotasTable): reusa ClienteFormModal en modo lectura con
@@ -276,6 +288,9 @@ function ClientesScreen() {
       const nuevo: Cliente = { ...draft, id: Math.max(0, ...clientes.map((c) => c.id)) + 1 };
       setClientes((prev) => [...prev, nuevo]);
       showToast("success", "Cliente creado correctamente");
+      if (isNuevoClienteParam) {
+        router.replace("/clientes?tab=clientes");
+      }
       return {};
     }
     if (modalClienteMode === "editar" && clienteActivo) {
@@ -333,11 +348,12 @@ function ClientesScreen() {
 
   // El CTA del header es UNA sola acción clara por viewport (regla Pet Bliss):
   // cambia según la tab activa (Nuevo cliente / Nueva mascota / Nuevo turno /
-  // Abrir caja), nunca dos a la vez.
+  // Nueva venta / Abrir caja), nunca dos a la vez.
   const accionPrincipal =
     tab === "clientes" ? { label: "Nuevo cliente", onOpen: () => abrirModalCliente("crear") }
     : tab === "mascotas" ? { label: "Nueva mascota", onOpen: () => abrirModalMascota("crear") }
     : tab === "turnos" ? { label: "Nuevo turno", onOpen: solicitarNuevoTurno }
+    : tab === "ventas" ? { label: "Nueva venta", onOpen: () => router.push("/ventas/nueva") }
     : tab === "cajas" ? { label: "Abrir caja", onOpen: () => setAbrirCajaOpen(true) }
     : null;
   const ctaDisabled = tab === "clientes" ? cargando || error : false;
@@ -549,6 +565,19 @@ function ClientesScreen() {
             </div>
           )}
 
+          {tab === "ventas" && (
+            <div
+              role="tabpanel"
+              id={`panel-recepcion-${tab}`}
+              aria-labelledby={`tab-recepcion-${tab}`}
+              className="flex flex-col gap-6"
+            >
+              <VentasContent
+                onNuevaVenta={() => router.push("/ventas/nueva")}
+              />
+            </div>
+          )}
+
           {tab === "agenda" && (
             <div
               role="tabpanel"
@@ -591,7 +620,7 @@ function ClientesScreen() {
         clientes={clientes}
         // BACKEND: reemplazar por GET /api/clientes/:id/mascotas (tabla mascota).
         mascotas={clienteActivo ? mascotasPorCliente[clienteActivo.id] ?? [] : []}
-        onClose={() => setModalClienteOpen(false)}
+        onClose={handleCerrarModalCliente}
         onSave={handleSaveCliente}
       />
 

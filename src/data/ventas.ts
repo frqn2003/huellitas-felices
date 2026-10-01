@@ -30,7 +30,13 @@ export interface Venta {
   subtotalNeto: number; // Base imponible antes de impuestos
   impuestosIva: number; // 21% IVA
   total: number;
-  medioPago: "efectivo" | "transferencia";
+  medioPago: string;
+  mediosPago?: {
+    formaPagoId?: number;
+    medio: string;
+    monto: number;
+    referencia?: string;
+  }[];
   estado: "vigente" | "anulada";
 }
 
@@ -176,12 +182,36 @@ export const VENTAS_INICIALES: Venta[] = [
   },
 ];
 
+let cachedVentasSnapshot: Venta[] | null = null;
+let lastRawStorage: string | null = null;
+const listeners = new Set<() => void>();
+
+export function subscribeVentas(callback: () => void): () => void {
+  listeners.add(callback);
+  return () => {
+    listeners.delete(callback);
+  };
+}
+
+function notificarVentas(): void {
+  listeners.forEach((listener) => listener());
+}
+
 // BACKEND: GET /api/ventas
 export function obtenerVentas(): Venta[] {
   if (typeof window === "undefined") return VENTAS_INICIALES;
   try {
     const raw = sessionStorage.getItem(STORAGE_KEY_VENTAS);
-    if (!raw) return VENTAS_INICIALES;
+    if (!raw) {
+      if (!cachedVentasSnapshot || lastRawStorage !== null) {
+        cachedVentasSnapshot = VENTAS_INICIALES;
+        lastRawStorage = null;
+      }
+      return cachedVentasSnapshot;
+    }
+    if (raw === lastRawStorage && cachedVentasSnapshot) {
+      return cachedVentasSnapshot;
+    }
     const guardadas: Venta[] = JSON.parse(raw);
     const combinadas = [...guardadas];
     for (const init of VENTAS_INICIALES) {
@@ -189,7 +219,9 @@ export function obtenerVentas(): Venta[] {
         combinadas.push(init);
       }
     }
-    return combinadas;
+    lastRawStorage = raw;
+    cachedVentasSnapshot = combinadas;
+    return cachedVentasSnapshot;
   } catch {
     return VENTAS_INICIALES;
   }
@@ -210,7 +242,12 @@ export function guardarVenta(nuevaVenta: Venta): void {
   try {
     const actuales = obtenerVentas();
     const filtradas = actuales.filter((v) => v.id !== nuevaVenta.id);
-    sessionStorage.setItem(STORAGE_KEY_VENTAS, JSON.stringify([nuevaVenta, ...filtradas]));
+    const nuevas = [nuevaVenta, ...filtradas];
+    const raw = JSON.stringify(nuevas);
+    sessionStorage.setItem(STORAGE_KEY_VENTAS, raw);
+    lastRawStorage = raw;
+    cachedVentasSnapshot = nuevas;
+    notificarVentas();
   } catch (err) {
     console.error("Error al persistir venta en sessionStorage:", err);
   }

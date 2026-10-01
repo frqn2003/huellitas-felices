@@ -2,7 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, RotateCcw, Search } from "lucide-react";
+import {
+  AlertTriangle,
+  Banknote,
+  CheckCircle2,
+  RotateCcw,
+  Search,
+  Sparkles,
+  Wallet,
+} from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Pagination } from "@/components/ui/Pagination";
 import { useToast } from "@/components/ui/Toast";
@@ -178,8 +186,101 @@ export function CajasContent({
     router.push(`/cajas/${nuevoId}`);
   };
 
+  const metricasCajas = useMemo(() => {
+    const abiertas = aperturas.filter((a) => a.estado === true);
+    const cerradas = aperturas.filter((a) => a.estado === false);
+    const saldoTotalGaveta = abiertas.reduce((acc, a) => {
+      const caja = cajas.find((c) => c.id === a.cajaId);
+      return acc + (caja?.saldoActual ?? a.montoInicial);
+    }, 0);
+    const totalIniciales = abiertas.reduce((acc, a) => acc + a.montoInicial, 0);
+
+    return {
+      totalAbiertas: abiertas.length,
+      totalCerradas: cerradas.length,
+      saldoTotalGaveta,
+      totalIniciales,
+      cajaAbiertaPrincipal: abiertas[0] ?? null,
+    };
+  }, [aperturas]);
+
   return (
-    <>
+    <div className="flex flex-col gap-6">
+      {/* Tarjetas métricas superiores estilo Pet Bliss */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="flex items-center gap-4 rounded-md border border-border bg-surface p-4 shadow-card">
+          <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-pill ${
+            metricasCajas.totalAbiertas > 0 ? "bg-emerald-100 text-emerald-800" : "bg-cream-100 text-text-secondary"
+          }`}>
+            <Wallet className="h-6 w-6" aria-hidden="true" />
+          </span>
+          <div className="flex flex-col">
+            <span className="text-xs font-bold uppercase tracking-wider text-text-secondary">
+              Cajas Activas
+            </span>
+            <span className="font-mono text-xl font-extrabold text-brand-900">
+              {metricasCajas.totalAbiertas} {metricasCajas.totalAbiertas === 1 ? "abierta" : "abiertas"}
+            </span>
+            <span className="text-[11px] font-semibold text-text-secondary">
+              {metricasCajas.totalAbiertas > 0
+                ? "Turnos en curso en sucursal"
+                : "Sin turnos activos"}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4 rounded-md border border-border bg-surface p-4 shadow-card">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-pill bg-brand-900/10 text-brand-900">
+            <Banknote className="h-6 w-6" aria-hidden="true" />
+          </span>
+          <div className="flex flex-col">
+            <span className="text-xs font-bold uppercase tracking-wider text-text-secondary">
+              Efectivo en Gavetas
+            </span>
+            <span className="font-mono text-xl font-extrabold text-brand-900">
+              ${metricasCajas.saldoTotalGaveta.toLocaleString("es-AR")}
+            </span>
+            <span className="text-[11px] font-semibold text-text-secondary">
+              Saldo físico estimado
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4 rounded-md border border-border bg-surface p-4 shadow-card">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-pill bg-amber-100 text-amber-900">
+            <Sparkles className="h-6 w-6" aria-hidden="true" />
+          </span>
+          <div className="flex flex-col">
+            <span className="text-xs font-bold uppercase tracking-wider text-text-secondary">
+              Fondos de Apertura
+            </span>
+            <span className="font-mono text-xl font-extrabold text-brand-900">
+              ${metricasCajas.totalIniciales.toLocaleString("es-AR")}
+            </span>
+            <span className="text-[11px] font-semibold text-text-secondary">
+              Monto inicial declarado
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4 rounded-md border border-border bg-surface p-4 shadow-card">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-pill bg-cream-100 text-text-secondary">
+            <CheckCircle2 className="h-6 w-6" aria-hidden="true" />
+          </span>
+          <div className="flex flex-col">
+            <span className="text-xs font-bold uppercase tracking-wider text-text-secondary">
+              Jornadas Cerradas
+            </span>
+            <span className="font-mono text-xl font-extrabold text-brand-900">
+              {metricasCajas.totalCerradas}
+            </span>
+            <span className="text-[11px] font-semibold text-text-secondary">
+              Arqueos finalizados
+            </span>
+          </div>
+        </div>
+      </div>
+
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative flex-1">
@@ -308,6 +409,6 @@ export function CajasContent({
         cancelLabel="Cancelar"
         tone="neutral"
       />
-    </>
+    </div>
   );
 }

@@ -81,7 +81,7 @@ export function MovimientosCajaTable({
             onClick={onClearFilters}
             className="h-11 cursor-pointer rounded-pill border border-brand-900 px-5 text-sm font-bold text-brand-900 transition-colors duration-fast ease-out hover:bg-brand-900/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900"
           >
-            Limpiar búsqueda
+            Limpiar filtros
           </button>
         ) : null}
       </div>

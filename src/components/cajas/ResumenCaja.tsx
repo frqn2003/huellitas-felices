@@ -1,9 +1,14 @@
-import { Info, Wallet } from "lucide-react";
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  Banknote,
+  Coins,
+  QrCode,
+} from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { type CajaApertura, type MovimientoCaja, esperadoPreview } from "@/data/cajas";
 import { cobradoFueraDeCaja } from "@/data/venta-medios-pago";
-import { EstadoCajaBadge } from "./EstadoCajaBadge";
 
 interface ResumenCajaProps {
   apertura: CajaApertura;
@@ -22,7 +27,8 @@ const formatMonto = (n: number) =>
 interface StatItem {
   label: string;
   value: string;
-  accent: string;
+  icon: React.ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
+  iconBg: string;
   valueClass: string;
   sign?: string;
 }
@@ -52,76 +58,81 @@ export function ResumenCaja({ apertura, movimientos, className }: ResumenCajaPro
     {
       label: "Monto inicial",
       value: formatMonto(apertura.montoInicial),
-      accent: "border-l-4 border-border",
+      icon: Coins,
+      iconBg: "bg-brand-900/10 text-brand-900",
       valueClass: "text-brand-900",
     },
     {
       label: "Ingresos",
       value: formatMonto(ingresos),
-      accent: "border-l-4 border-status-success",
+      icon: ArrowUpRight,
+      iconBg: "bg-status-success/15 text-status-success-strong",
       valueClass: "text-status-success-strong",
       sign: "+",
     },
     {
       label: "Egresos",
       value: formatMonto(egresos),
-      accent: "border-l-4 border-status-danger",
+      icon: ArrowDownRight,
+      iconBg: "bg-status-danger/15 text-status-danger-strong",
       valueClass: "text-status-danger-strong",
       sign: "−",
     },
     {
       label: "Efectivo esperado",
       value: formatMonto(esperado),
-      accent: "border-l-4 border-accent-500",
+      icon: Banknote,
+      iconBg: "bg-accent-500/20 text-brand-900",
       valueClass: "text-brand-900",
+    },
+    {
+      label: "Transferencias (Fuera caja)",
+      value: formatMonto(fueraDeCaja),
+      icon: QrCode,
+      iconBg: "bg-sky-100 text-sky-800",
+      valueClass: "text-sky-900",
     },
   ];
 
   return (
-    <div className={`grid grid-cols-2 gap-4 md:grid-cols-4 ${className ?? ""}`}>
-      {stats.map((s) => (
-        <div
-          key={s.label}
-          className={`rounded-md border border-border bg-surface p-4 shadow-card ${s.accent}`}
-        >
-          <div className="mb-1 text-xs font-extrabold uppercase tracking-wide text-text-secondary">
-            {s.label}
-          </div>
-          <div className={`text-2xl font-bold tabular-nums ${s.valueClass}`}>
-            {s.sign ?? ""}
-            {s.value}
-          </div>
-        </div>
-      ))}
-
-      {/* Cobros por transferencia en la ventana de la apertura: no son buenos
-          ni malos para la caja (no impactan el efectivo), por eso acento info. */}
-      <div className="rounded-md border border-border bg-surface p-4 shadow-card border-l-4 border-status-info md:col-span-4">
-        <div className="text-xs font-extrabold uppercase tracking-wide text-text-secondary">
-          Cobrado fuera de caja
-        </div>
-        <div className="text-2xl font-bold tabular-nums text-status-info-strong">
-          {formatMonto(fueraDeCaja)}
-        </div>
-        <p className="mt-2 text-xs leading-relaxed text-text-secondary">
-          Corresponde a cobros por <strong className="font-bold text-text-primary">transferencia</strong>{" "}
-          en la jornada: no ingresan al efectivo de la caja ni modifican el monto esperado, porque
-          solo el efectivo genera movimientos de caja.
-        </p>
+    <div className={`flex flex-col gap-4 ${className ?? ""}`}>
+      {/* 5 Índices en 1 sola fila horizontal */}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+        {stats.map((s) => {
+          const Icon = s.icon;
+          return (
+            <div
+              key={s.label}
+              className="flex items-center gap-3 rounded-md border border-border bg-surface p-4 shadow-card"
+            >
+              <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-pill ${s.iconBg}`}>
+                <Icon className="h-5 w-5" aria-hidden={true} />
+              </span>
+              <div className="flex flex-col min-w-0">
+                <span className="text-xs font-bold uppercase tracking-wider text-text-secondary truncate" title={s.label}>
+                  {s.label}
+                </span>
+                <span className={`font-mono text-lg sm:text-xl font-extrabold truncate ${s.valueClass}`}>
+                  {s.sign ?? ""}
+                  {s.value}
+                </span>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
-      {/* La diferencia solo existe cuando la caja está cerrada: mientras está
-          abierta no hay monto contado con qué compararla. */}
+      {/* La diferencia solo existe cuando la caja está cerrada */}
       {!abierto && diferencia !== null && (
         <div
-          className={`rounded-md border bg-surface p-4 shadow-card md:col-span-4 ${
+          className={`rounded-md border bg-surface p-4 shadow-card ${
             diferencia < 0 ? "border-l-4 border-status-danger" : "border-l-4 border-status-success"
           }`}
         >
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <div className="text-xs font-extrabold uppercase tracking-wide text-text-secondary">
-                Diferencia
+                Diferencia al cierre
               </div>
               <div
                 className={`text-2xl font-bold tabular-nums ${
@@ -144,32 +155,11 @@ export function ResumenCaja({ apertura, movimientos, className }: ResumenCajaPro
             </div>
           </div>
           <p className="mt-2 text-sm text-text-secondary">
-            {diferencia < 0 ? "Faltante" : diferencia > 0 ? "Sobrante" : "Caja cuadrada"} · Monto
+            {diferencia < 0 ? "Faltante registrado" : diferencia > 0 ? "Sobrante registrado" : "Caja cuadrada"} · Monto
             contado: {formatMonto(apertura.montoContado ?? 0)}
           </p>
         </div>
       )}
-
-      {abierto && (
-        <div className="flex items-center justify-between gap-4 rounded-md border border-border bg-surface p-4 shadow-card md:col-span-4">
-          <span className="flex items-center gap-2 text-sm text-text-secondary">
-            <Wallet className="h-4 w-4 shrink-0" aria-hidden="true" />
-            La diferencia se calcula al cerrar la caja.
-          </span>
-          <EstadoCajaBadge abierto />
-        </div>
-      )}
-
-      {/* Alcance del resumen: los cobros por transferencia ya los cubre el
-          bloque "Cobrado fuera de caja", acá no se repiten. */}
-      <div className="flex items-start gap-2 rounded-md border border-border bg-cream-50 px-4 py-3 md:col-span-4">
-        <Info className="mt-0.5 h-4 w-4 shrink-0 text-text-secondary" aria-hidden="true" />
-        <p className="text-xs leading-relaxed text-text-secondary">
-          Este resumen cubre solo el <strong className="font-bold text-text-primary">efectivo</strong>{" "}
-          de la jornada: ingresos y egresos sobre el monto inicial declarado y el efectivo
-          esperado al cierre.
-        </p>
-      </div>
     </div>
   );
 }

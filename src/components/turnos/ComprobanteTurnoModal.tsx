@@ -37,8 +37,11 @@ export function ComprobanteTurnoModal({
       practicaNombre: comprobante.practicaNombre,
       arancel: comprobante.arancel,
       productos: comprobante.productos,
+      subtotalNeto: comprobante.subtotalNeto,
+      impuestosIva: comprobante.impuestosIva,
       total: comprobante.total,
       medioPago: comprobante.medioPago,
+      mediosPago: comprobante.mediosPago,
       referencia: comprobante.referencia,
       observaciones: comprobante.observaciones,
     });
@@ -109,13 +112,16 @@ export function ComprobanteTurnoModal({
             </div>
             <div>
               <span className="font-bold uppercase tracking-wider text-[9px] text-text-secondary block">
-                Paciente & Atención
+                {comprobante.mascotaNombre ? "Paciente & Atención" : "Tipo de Operación"}
               </span>
               <p className="font-bold text-text-primary">
-                {comprobante.mascotaNombre} ({comprobante.mascotaEspecie}
-                {comprobante.mascotaRaza ? ` · ${comprobante.mascotaRaza}` : ""})
+                {comprobante.mascotaNombre
+                  ? `${comprobante.mascotaNombre} (${comprobante.mascotaEspecie}${comprobante.mascotaRaza ? ` · ${comprobante.mascotaRaza}` : ""})`
+                  : "Venta Directa de Mostrador"}
               </p>
-              <p className="text-text-secondary">{comprobante.profesional}</p>
+              <p className="text-text-secondary">
+                {comprobante.profesional || "Atención Mostrador"}
+              </p>
             </div>
           </div>
         </div>
@@ -131,15 +137,17 @@ export function ComprobanteTurnoModal({
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
-              <tr>
-                <td className="px-3 py-2 font-bold text-text-primary">
-                  {comprobante.practicaNombre}
-                </td>
-                <td className="px-2 py-2 text-center text-text-secondary">1</td>
-                <td className="px-3 py-2 text-right font-bold text-text-primary">
-                  ${comprobante.arancel.toLocaleString("es-AR")}
-                </td>
-              </tr>
+              {comprobante.arancel > 0 && (
+                <tr>
+                  <td className="px-3 py-2 font-bold text-text-primary">
+                    {comprobante.practicaNombre}
+                  </td>
+                  <td className="px-2 py-2 text-center text-text-secondary">1</td>
+                  <td className="px-3 py-2 text-right font-bold text-text-primary">
+                    ${comprobante.arancel.toLocaleString("es-AR")}
+                  </td>
+                </tr>
+              )}
               {comprobante.productos.map((prod, idx) => (
                 <tr key={`${prod.codigo}-${idx}`}>
                   <td className="px-3 py-1.5 text-text-primary">
@@ -166,26 +174,55 @@ export function ComprobanteTurnoModal({
           const impuestosIva = comprobante.impuestosIva ?? (comprobante.total - subtotalNeto);
           return (
             <div className="flex flex-col gap-2 rounded-md border border-border bg-cream-50/70 p-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex flex-col gap-0.5">
-                <div className="flex items-center gap-1.5">
-                  <span className="font-bold uppercase tracking-wider text-[9px] text-text-secondary">
-                    Medio de pago:
-                  </span>
-                  <span className="inline-flex items-center gap-1 font-bold text-brand-900">
-                    {comprobante.medioPago === "efectivo" ? (
-                      <>
-                        <Banknote className="h-3 w-3" aria-hidden="true" />
-                        Efectivo
-                      </>
-                    ) : (
-                      <>
-                        <QrCode className="h-3 w-3" aria-hidden="true" />
-                        Transferencia / QR
-                      </>
-                    )}
-                  </span>
-                </div>
-                {comprobante.referencia && (
+              <div className="flex flex-col gap-1">
+                <span className="font-bold uppercase tracking-wider text-[9px] text-text-secondary">
+                  {comprobante.mediosPago && comprobante.mediosPago.length > 1
+                    ? "Medios de pago (Combinado):"
+                    : "Medio de pago:"}
+                </span>
+
+                {comprobante.mediosPago && comprobante.mediosPago.length > 1 ? (
+                  <div className="flex flex-col gap-1">
+                    {comprobante.mediosPago.map((mp, idx) => {
+                      const Icon = mp.medio === "efectivo" ? Banknote : QrCode;
+                      const nombre = mp.medio === "efectivo" ? "Efectivo" : "Transferencia / QR";
+                      return (
+                        <div key={`${mp.id}-${idx}`} className="flex items-center gap-1.5 text-xs text-text-primary">
+                          <Icon className="h-3.5 w-3.5 text-brand-900 shrink-0" aria-hidden="true" />
+                          <span className="font-bold">{nombre}:</span>
+                          <span className="font-semibold text-brand-900">${mp.monto.toLocaleString("es-AR")}</span>
+                          {mp.referencia && (
+                            <span className="text-[10px] text-text-secondary font-mono">({mp.referencia})</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5">
+                    <span className="inline-flex items-center gap-1 font-bold text-brand-900">
+                      {(() => {
+                        const single = comprobante.mediosPago?.[0]?.medio || comprobante.medioPago;
+                        if (single === "transferencia") {
+                          return (
+                            <>
+                              <QrCode className="h-3.5 w-3.5" aria-hidden="true" />
+                              Transferencia / QR
+                            </>
+                          );
+                        }
+                        return (
+                          <>
+                            <Banknote className="h-3.5 w-3.5" aria-hidden="true" />
+                            Efectivo
+                          </>
+                        );
+                      })()}
+                    </span>
+                  </div>
+                )}
+
+                {comprobante.referencia && (!comprobante.mediosPago || comprobante.mediosPago.length <= 1) && (
                   <p className="text-[10px] text-text-secondary">
                     <span className="font-semibold">Ref:</span> {comprobante.referencia}
                   </p>

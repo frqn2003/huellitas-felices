@@ -11,6 +11,15 @@ export interface ItemCobroComprobante {
   precioUnitario: number;
 }
 
+export type TipoMedioPago = "efectivo" | "transferencia";
+
+export interface MedioPagoItem {
+  id: string;
+  medio: TipoMedioPago;
+  monto: number;
+  referencia?: string;
+}
+
 export interface ComprobanteTurno {
   numero: string;
   fechaHora: string;
@@ -28,7 +37,8 @@ export interface ComprobanteTurno {
   subtotalNeto?: number;
   impuestosIva?: number;
   total: number;
-  medioPago: "efectivo" | "transferencia";
+  medioPago: TipoMedioPago | "mixto";
+  mediosPago?: MedioPagoItem[];
   referencia?: string;
   observaciones?: string;
 }

@@ -13,6 +13,12 @@ export interface ItemComprobantePdf {
   precioUnitario: number;
 }
 
+export interface ItemMedioPagoPdf {
+  medio: string;
+  monto: number;
+  referencia?: string;
+}
+
 export interface DatosComprobantePdf {
   numero: string;
   fechaHora: string;
@@ -30,7 +36,8 @@ export interface DatosComprobantePdf {
   subtotalNeto?: number;
   impuestosIva?: number;
   total: number;
-  medioPago: "efectivo" | "transferencia";
+  medioPago: string;
+  mediosPago?: ItemMedioPagoPdf[];
   referencia?: string;
   observaciones?: string;
 }
@@ -129,20 +136,27 @@ export function construirPdfComprobanteBlob(datos: DatosComprobantePdf): Blob {
   text(`Documento (DNI): ${datos.clienteDoc || "—"}`, 54, 610, "/F1", 9, 0.25, 0.25, 0.25);
   text(`Telefono: ${datos.clienteTel || "—"}`, 54, 596, "/F1", 9, 0.25, 0.25, 0.25);
 
-  // Columna 2: Paciente y Profesional
-  text("PACIENTE Y ATENCION MEDICA", 300, 640, "/F2", 8.5, 0.33, 0.44, 0.4);
-  text(
-    `Paciente: ${datos.mascotaNombre} (${datos.mascotaEspecie}${datos.mascotaRaza ? ` · ${datos.mascotaRaza}` : ""})`,
-    300,
-    624,
-    "/F2",
-    10,
-    0.067,
-    0.31,
-    0.235,
-  );
-  text(`Profesional: ${datos.profesional}`, 300, 610, "/F1", 9, 0.25, 0.25, 0.25);
-  text(`Servicio: ${datos.practicaNombre}`, 300, 596, "/F1", 9, 0.25, 0.25, 0.25);
+  // Columna 2: Paciente y Profesional / Mostrador
+  if (datos.mascotaNombre) {
+    text("PACIENTE Y ATENCION MEDICA", 300, 640, "/F2", 8.5, 0.33, 0.44, 0.4);
+    text(
+      `Paciente: ${datos.mascotaNombre} (${datos.mascotaEspecie}${datos.mascotaRaza ? ` · ${datos.mascotaRaza}` : ""})`,
+      300,
+      624,
+      "/F2",
+      10,
+      0.067,
+      0.31,
+      0.235,
+    );
+    text(`Profesional: ${datos.profesional}`, 300, 610, "/F1", 9, 0.25, 0.25, 0.25);
+    text(`Servicio: ${datos.practicaNombre}`, 300, 596, "/F1", 9, 0.25, 0.25, 0.25);
+  } else {
+    text("OPERACION DE MOSTRADOR", 300, 640, "/F2", 8.5, 0.33, 0.44, 0.4);
+    text("Venta Directa de Articulos", 300, 624, "/F2", 10, 0.067, 0.31, 0.235);
+    text("Atencion Mostrador / Farmacia", 300, 610, "/F1", 9, 0.25, 0.25, 0.25);
+    text("Sucursal Principal", 300, 596, "/F1", 9, 0.25, 0.25, 0.25);
+  }
 
   line(54, 580, 540, 580, 0.82, 0.8, 0.74);
 
@@ -155,13 +169,15 @@ export function construirPdfComprobanteBlob(datos: DatosComprobantePdf): Blob {
 
   let currentY = 530;
 
-  // Renglón 1: Arancel del Servicio
-  text(datos.practicaNombre, 64, currentY, "/F2", 9, 0.067, 0.31, 0.235);
-  text("1 Servicio", 340, currentY, "/F1", 9, 0.25, 0.25, 0.25);
-  text(`$ ${datos.arancel.toLocaleString("es-AR")}`, 395, currentY, "/F1", 9, 0.25, 0.25, 0.25);
-  text(`$ ${datos.arancel.toLocaleString("es-AR")}`, 480, currentY, "/F2", 9, 0.067, 0.31, 0.235);
-  line(54, currentY - 7, 540, currentY - 7, 0.9, 0.88, 0.82);
-  currentY -= 20;
+  // Renglón 1: Arancel del Servicio (si aplica)
+  if (datos.arancel > 0) {
+    text(datos.practicaNombre, 64, currentY, "/F2", 9, 0.067, 0.31, 0.235);
+    text("1 Servicio", 340, currentY, "/F1", 9, 0.25, 0.25, 0.25);
+    text(`$ ${datos.arancel.toLocaleString("es-AR")}`, 395, currentY, "/F1", 9, 0.25, 0.25, 0.25);
+    text(`$ ${datos.arancel.toLocaleString("es-AR")}`, 480, currentY, "/F2", 9, 0.067, 0.31, 0.235);
+    line(54, currentY - 7, 540, currentY - 7, 0.9, 0.88, 0.82);
+    currentY -= 20;
+  }
 
   // Renglones: Insumos y Medicamentos
   datos.productos.forEach((p) => {
@@ -189,23 +205,52 @@ export function construirPdfComprobanteBlob(datos: DatosComprobantePdf): Blob {
   const boxTop = Math.min(currentY - 15, 330);
   rect(54, boxTop - 100, 486, 100, 1, 1, 1, 0.87, 0.85, 0.78);
 
-  text("MEDIO DE PAGO:", 68, boxTop - 25, "/F2", 9, 0.33, 0.44, 0.4);
-  text(
-    datos.medioPago === "efectivo" ? "EFECTIVO EN MOSTRADOR" : "TRANSFERENCIA BANCARIA / QR",
-    160,
-    boxTop - 25,
-    "/F2",
-    9.5,
-    0.067,
-    0.31,
-    0.235,
-  );
+  const formatNombreMedio = (m: string) => {
+    switch (m) {
+      case "efectivo":
+        return "Efectivo";
+      case "transferencia":
+        return "Transferencia / QR";
+      case "tarjeta_debito":
+        return "Tarjeta Debito";
+      case "tarjeta_credito":
+        return "Tarjeta Credito";
+      default:
+        return m.toUpperCase();
+    }
+  };
 
-  if (datos.referencia) {
-    text(`Nro de Comprobante / Ref: ${datos.referencia}`, 68, boxTop - 45, "/F1", 8.5, 0.25, 0.25, 0.25);
-  }
-  if (datos.observaciones) {
-    text(`Observaciones de caja: ${datos.observaciones}`, 68, boxTop - 65, "/F1", 8, 0.4, 0.4, 0.4);
+  if (datos.mediosPago && datos.mediosPago.length > 1) {
+    text("MEDIOS DE PAGO (COMBINADO):", 68, boxTop - 18, "/F2", 8.5, 0.33, 0.44, 0.4);
+    let mpY = boxTop - 32;
+    datos.mediosPago.slice(0, 3).forEach((item) => {
+      const refTxt = item.referencia ? ` (Ref: ${item.referencia})` : "";
+      text(`* ${formatNombreMedio(item.medio)}: $${item.monto.toLocaleString("es-AR")}${refTxt}`, 68, mpY, "/F1", 7.5, 0.15, 0.15, 0.15);
+      mpY -= 12;
+    });
+    if (datos.observaciones) {
+      text(`Obs: ${datos.observaciones}`, 68, boxTop - 80, "/F1", 7.5, 0.4, 0.4, 0.4);
+    }
+  } else {
+    const singleMedio = datos.mediosPago?.[0]?.medio || datos.medioPago;
+    text("MEDIO DE PAGO:", 68, boxTop - 25, "/F2", 9, 0.33, 0.44, 0.4);
+    text(
+      formatNombreMedio(singleMedio).toUpperCase(),
+      160,
+      boxTop - 25,
+      "/F2",
+      9.5,
+      0.067,
+      0.31,
+      0.235,
+    );
+    if (datos.referencia || datos.mediosPago?.[0]?.referencia) {
+      const ref = datos.referencia || datos.mediosPago?.[0]?.referencia;
+      text(`Nro de Comprobante / Ref: ${ref}`, 68, boxTop - 45, "/F1", 8.5, 0.25, 0.25, 0.25);
+    }
+    if (datos.observaciones) {
+      text(`Observaciones de caja: ${datos.observaciones}`, 68, boxTop - 65, "/F1", 8, 0.4, 0.4, 0.4);
+    }
   }
 
   // Desglose fiscal de Subtotal, IVA y Total

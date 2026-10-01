@@ -1,12 +1,17 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Plus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 export interface ComboboxOption {
   value: string;
   label: string;
   tone?: "neutral" | "warning" | "danger";
+}
+
+export interface ComboboxEmptyAction {
+  label: string;
+  onClick: () => void;
 }
 
 interface ComboboxProps {
@@ -22,6 +27,7 @@ interface ComboboxProps {
   onBlur?: () => void;
   placeholder?: string;
   noResultsText?: string;
+  emptyAction?: ComboboxEmptyAction;
   maxResults?: number;
   /** Filtro de caracteres al tipear (ej. solo letras): se descartan los no permitidos. */
   sanitize?: (value: string) => string;
@@ -40,6 +46,7 @@ export function Combobox({
   onBlur,
   placeholder = "",
   noResultsText = "Sin resultados",
+  emptyAction,
   maxResults = 8,
   sanitize,
 }: ComboboxProps) {
@@ -219,12 +226,28 @@ export function Combobox({
             className="absolute left-0 right-0 top-[calc(100%+4px)] z-20 overflow-hidden rounded-md border border-border bg-surface shadow-card"
           >
             {filtered.length === 0 ? (
-              <p
-                role="status"
-                className="px-4 py-3 text-sm font-medium text-text-secondary"
-              >
-                {noResultsText}
-              </p>
+              <div className="flex flex-col gap-2 p-3 text-sm">
+                <p
+                  role="status"
+                  className="font-medium text-text-secondary"
+                >
+                  {noResultsText}
+                </p>
+                {emptyAction && (
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      setOpen(false);
+                      emptyAction.onClick();
+                    }}
+                    className="flex cursor-pointer items-center justify-center gap-1.5 rounded-sm bg-brand-900/10 px-3 py-2 text-xs font-bold text-brand-900 transition-colors duration-fast hover:bg-brand-900/20"
+                  >
+                    <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                    {emptyAction.label}
+                  </button>
+                )}
+              </div>
             ) : (
               <ul className="max-h-64 overflow-y-auto py-1">
                 {filtered.map((option, index) => {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, FormEvent } from "react";
-import { Lock, Info } from "lucide-react";
+import { Lock, Info, Calculator } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -18,6 +18,8 @@ interface CerrarCajaModalProps {
   responsable: string;
   loading?: boolean;
 }
+
+const DENOMINACIONES = [20000, 10000, 2000, 1000, 500, 200, 100];
 
 const formatMonto = (n: number) =>
   new Intl.NumberFormat("es-AR", {
@@ -45,6 +47,8 @@ export function CerrarCajaModal({
   loading,
 }: CerrarCajaModalProps) {
   const [montoContado, setMontoContado] = useState("");
+  const [mostrarAsistente, setMostrarAsistente] = useState(false);
+  const [cantidadesBilletes, setCantidadesBilletes] = useState<Record<number, number>>({});
   const [showConfirm, setShowConfirm] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -78,11 +82,20 @@ export function CerrarCajaModal({
       return;
     }
 
-    if (tieneDiferencia) {
-      setShowConfirm(true);
-    } else {
-      onConfirm(Number(montoContado));
-    }
+    setShowConfirm(true);
+  };
+
+  const handleCambiarCantidadBillete = (denominacion: number, cantidadStr: string) => {
+    const cant = Math.max(0, parseInt(cantidadStr, 10) || 0);
+    const nuevas = { ...cantidadesBilletes, [denominacion]: cant };
+    setCantidadesBilletes(nuevas);
+    const sumaTotal = DENOMINACIONES.reduce((acc, d) => acc + (nuevas[d] ?? 0) * d, 0);
+    setMontoContado(String(sumaTotal));
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next.montoContado;
+      return next;
+    });
   };
 
   return (
@@ -131,10 +144,22 @@ export function CerrarCajaModal({
             </div>
           </div>
 
-          <div>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <label htmlFor="monto-contado" className="text-sm font-bold text-text-primary">
+                Conteo final de dinero en efectivo <span className="text-destructive">*</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setMostrarAsistente(!mostrarAsistente)}
+                className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-bold text-brand-900 transition-colors hover:underline"
+              >
+                <Calculator className="h-3.5 w-3.5" aria-hidden="true" />
+                {mostrarAsistente ? "Ocultar asistente" : "Contar por billetes"}
+              </button>
+            </div>
+
             <Input
-              label="Conteo final de dinero en efectivo"
-              requiredMark
               id="monto-contado"
               type="number"
               inputMode="decimal"
@@ -153,6 +178,38 @@ export function CerrarCajaModal({
               error={errors.montoContado}
               autoFocus
             />
+
+            {/* Asistente desplegable por billetes */}
+            {mostrarAsistente && (
+              <div className="mt-2 flex flex-col gap-2 rounded-md border border-border bg-cream-50/70 p-3 text-xs">
+                <div className="flex items-center justify-between border-b border-border/60 pb-1.5 font-bold text-text-secondary">
+                  <span>Denominación</span>
+                  <span>Cantidad de billetes</span>
+                  <span className="w-20 text-right">Subtotal</span>
+                </div>
+                <div className="flex flex-col gap-1.5 max-h-44 overflow-y-auto pr-1">
+                  {DENOMINACIONES.map((den) => {
+                    const cant = cantidadesBilletes[den] ?? 0;
+                    return (
+                      <div key={den} className="flex items-center justify-between gap-2">
+                        <span className="w-20 font-bold text-brand-900">${den.toLocaleString("es-AR")}</span>
+                        <input
+                          type="number"
+                          min="0"
+                          value={cant || ""}
+                          placeholder="0"
+                          onChange={(e) => handleCambiarCantidadBillete(den, e.target.value)}
+                          className="h-7 w-20 rounded border border-border bg-surface px-2 text-center text-xs font-mono font-bold focus:border-brand-900 focus:outline-none"
+                        />
+                        <span className="w-20 text-right font-mono font-bold text-text-primary">
+                          ${(cant * den).toLocaleString("es-AR")}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {montoContado !== "" && (
@@ -218,22 +275,39 @@ export function CerrarCajaModal({
           onConfirm(Number(montoContado));
           setShowConfirm(false);
         }}
-        title={diferencia > 0 ? "Sobrante en el cierre" : "Faltante en el cierre"}
+        title={
+          tieneDiferencia
+            ? diferencia > 0
+              ? "Sobrante en el cierre"
+              : "Faltante en el cierre"
+            : "Confirmar cierre definitivo"
+        }
         description={
-          <>
-            <p>
-              El conteo en efectivo difiere del esperado en{" "}
-              <strong>{formatMonto(Math.abs(diferencia))}</strong>.
-            </p>
-            <p className="mt-2">
-              {diferencia > 0 ? "Se detectó un sobrante." : "Se detectó un faltante."} Verificá el
-              conteo antes de confirmar el cierre.
-            </p>
-          </>
+          tieneDiferencia ? (
+            <>
+              <p>
+                El conteo en efectivo difiere del esperado en{" "}
+                <strong>{formatMonto(Math.abs(diferencia))}</strong>.
+              </p>
+              <p className="mt-2">
+                {diferencia > 0 ? "Se detectó un sobrante." : "Se detectó un faltante."} Verificá el
+                conteo antes de confirmar el cierre. Esta acción no se puede deshacer.
+              </p>
+            </>
+          ) : (
+            <>
+              <p>
+                El efectivo contado coincide con lo esperado (<strong>{formatMonto(montoEsperado)}</strong>).
+              </p>
+              <p className="mt-2">
+                ¿Confirmar el cierre de la jornada? Una vez cerrada, la caja no se podrá volver a abrir ni modificar sus movimientos.
+              </p>
+            </>
+          )
         }
         confirmLabel="Confirmar y cerrar"
-        cancelLabel="Volver a contar"
-        tone="success"
+        cancelLabel="Volver a revisar"
+        tone={tieneDiferencia ? "danger" : "neutral"}
         loading={loading}
       />
     </>

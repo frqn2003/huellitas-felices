@@ -13,8 +13,8 @@ import {
   Receipt,
   RotateCcw,
   Search,
-  Wallet,
 } from "lucide-react";
+import { Sidebar } from "@/components/layout/Sidebar";
 import { Button } from "@/components/ui/Button";
 import { Pagination } from "@/components/ui/Pagination";
 import { useToast } from "@/components/ui/Toast";
@@ -47,6 +47,8 @@ export default function CajaDetallePage() {
   const [movimientos, setMovimientos] = useState<MovimientoCaja[]>([]);
 
   const [busqueda, setBusqueda] = useState("");
+  const [filtroTipo, setFiltroTipo] = useState<"todos" | "Ingreso" | "Egreso">("todos");
+  const [filtroOrigen, setFiltroOrigen] = useState<"todos" | "venta" | "manual">("todos");
   const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
   const [nuevoMovOpen, setNuevoMovOpen] = useState(false);
@@ -89,14 +91,21 @@ export default function CajaDetallePage() {
   const movimientosFiltrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
     return movimientos.filter((m) => {
-      if (!q) return true;
-      return (
+      const matchBusqueda =
+        !q ||
         m.motivo.toLowerCase().includes(q) ||
         String(m.id).includes(q) ||
-        (m.ventaId !== null && String(m.ventaId).includes(q))
-      );
+        (m.ventaId !== null && String(m.ventaId).includes(q));
+
+      const matchTipo = filtroTipo === "todos" || m.tipo === filtroTipo;
+      const matchOrigen =
+        filtroOrigen === "todos" ||
+        (filtroOrigen === "venta" && m.ventaId !== null) ||
+        (filtroOrigen === "manual" && m.ventaId === null);
+
+      return matchBusqueda && matchTipo && matchOrigen;
     });
-  }, [movimientos, busqueda]);
+  }, [movimientos, busqueda, filtroTipo, filtroOrigen]);
 
   const totalPages = Math.max(1, Math.ceil(movimientosFiltrados.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -104,10 +113,12 @@ export default function CajaDetallePage() {
   const pageStart = movimientosFiltrados.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
   const pageEnd = Math.min(safePage * pageSize, movimientosFiltrados.length);
 
-  const hasActiveFilters = busqueda.trim() !== "";
+  const hasActiveFilters = busqueda.trim() !== "" || filtroTipo !== "todos" || filtroOrigen !== "todos";
 
   const limpiarFiltros = () => {
     setBusqueda("");
+    setFiltroTipo("todos");
+    setFiltroOrigen("todos");
     setPage(1);
   };
 
@@ -161,29 +172,27 @@ export default function CajaDetallePage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[60vh] flex-col">
-        <header className="sticky top-0 z-10 bg-cream-50/95 backdrop-blur">
-          <div className="mx-auto flex w-full max-w-7xl items-center gap-4 px-4 py-4 sm:px-8">
-            <button
-              type="button"
-              onClick={() => router.push("/clientes?tab=cajas")}
-              aria-label="Volver a cajas"
-              className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-pill text-text-secondary transition-colors duration-fast ease-out hover:bg-brand-900/10 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900"
-            >
-              <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-            </button>
-            <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-h-screen bg-cream-50">
+        <Sidebar />
+        <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+          <header className="border-b border-border bg-cream-50 px-4 py-4 sm:px-8">
+            <div className="mx-auto flex w-full max-w-7xl items-center gap-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push("/clientes?tab=cajas")}
+                className="gap-2 font-bold"
+              >
+                <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+                Volver a Cajas
+              </Button>
               <div className="h-7 w-48 animate-pulse rounded bg-cream-100" />
-              <div className="flex gap-2">
-                <div className="h-11 w-40 animate-pulse rounded-pill bg-cream-100" />
-                <div className="h-11 w-44 animate-pulse rounded-pill bg-cream-100" />
-              </div>
             </div>
+          </header>
+          <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 py-6 sm:px-8">
+            <div className="h-32 w-full animate-pulse rounded-md bg-cream-100" />
+            <div className="h-64 w-full animate-pulse rounded-md bg-cream-100" />
           </div>
-        </header>
-        <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 py-6 sm:px-8">
-          <div className="h-32 w-full animate-pulse rounded-md bg-cream-100" />
-          <div className="h-64 w-full animate-pulse rounded-md bg-cream-100" />
         </main>
       </div>
     );
@@ -191,52 +200,56 @@ export default function CajaDetallePage() {
 
   if (error || !apertura) {
     return (
-      <div className="flex min-h-[60vh] flex-col">
-        <header className="sticky top-0 z-10 bg-cream-50/95 backdrop-blur">
-          <div className="mx-auto flex w-full max-w-7xl items-center gap-4 px-4 py-4 sm:px-8">
-            <button
-              type="button"
-              onClick={() => router.push("/clientes?tab=cajas")}
-              aria-label="Volver a cajas"
-              className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-pill text-text-secondary transition-colors duration-fast ease-out hover:bg-brand-900/10 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900"
-            >
-              <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-            </button>
-            <h1 className="font-display text-2xl font-extrabold uppercase tracking-tight text-brand-900 sm:text-3xl">
-              Detalle de caja
-            </h1>
-          </div>
-        </header>
-        <main className="mx-auto flex w-full max-w-7xl flex-1 items-center justify-center px-4 py-6 sm:px-8">
-          <div className="flex flex-col items-center gap-4 rounded-md border border-border bg-surface px-6 py-16 text-center shadow-card">
-            <span className="flex h-14 w-14 items-center justify-center rounded-md bg-status-danger/10">
-              <AlertTriangle className="h-7 w-7 text-status-danger-strong" aria-hidden="true" />
-            </span>
-            <div className="flex flex-col gap-1">
-              <h3 className="font-display text-lg font-extrabold uppercase tracking-tight text-brand-900">
-                No se pudo cargar el detalle
-              </h3>
-              <p className="max-w-sm text-sm text-text-secondary">
-                {error
-                  ? "Hubo un problema al consultar la caja. Revisá tu conexión e intentá de nuevo."
-                  : "No encontramos la apertura de caja solicitada."}
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center justify-center gap-3">
+      <div className="flex min-h-screen bg-cream-50">
+        <Sidebar />
+        <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+          <header className="border-b border-border bg-cream-50 px-4 py-4 sm:px-8">
+            <div className="mx-auto flex w-full max-w-7xl items-center gap-4">
               <Button
-                variant="secondary"
-                onClick={() => {
-                  setError(false);
-                  setLoading(true);
-                  setRecargar((n) => n + 1);
-                }}
+                variant="outline"
+                size="sm"
+                onClick={() => router.push("/clientes?tab=cajas")}
+                className="gap-2 font-bold"
               >
-                <RotateCcw className="h-4 w-4" aria-hidden="true" />
-                Reintentar
+                <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+                Volver a Cajas
               </Button>
-              <Button variant="ghost" onClick={() => router.push("/clientes?tab=cajas")}>
-                Volver al listado
-              </Button>
+              <h1 className="font-display text-2xl font-extrabold uppercase tracking-tight text-brand-900">
+                Detalle de caja
+              </h1>
+            </div>
+          </header>
+          <div className="mx-auto flex w-full max-w-7xl flex-1 items-center justify-center px-4 py-12 sm:px-8">
+            <div className="flex flex-col items-center gap-4 rounded-md border border-border bg-surface px-6 py-16 text-center shadow-card">
+              <span className="flex h-14 w-14 items-center justify-center rounded-md bg-status-danger/10">
+                <AlertTriangle className="h-7 w-7 text-status-danger-strong" aria-hidden="true" />
+              </span>
+              <div className="flex flex-col gap-1">
+                <h3 className="font-display text-lg font-extrabold uppercase tracking-tight text-brand-900">
+                  No se pudo cargar el detalle
+                </h3>
+                <p className="max-w-sm text-sm text-text-secondary">
+                  {error
+                    ? "Hubo un problema al consultar la caja. Revisá tu conexión e intentá de nuevo."
+                    : "No encontramos la apertura de caja solicitada."}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setError(false);
+                    setLoading(true);
+                    setRecargar((n) => n + 1);
+                  }}
+                >
+                  <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                  Reintentar
+                </Button>
+                <Button variant="ghost" onClick={() => router.push("/clientes?tab=cajas")}>
+                  Volver al listado
+                </Button>
+              </div>
             </div>
           </div>
         </main>
@@ -245,140 +258,165 @@ export default function CajaDetallePage() {
   }
 
   return (
-    <div className="flex min-h-[60vh] flex-col">
-      <header className="sticky top-0 z-10 bg-cream-50/95 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-4 py-4 sm:px-8">
-          {/* Fila 1: volver + identificación (izquierda) y acciones (derecha).
-              `ml-auto` garantiza la alineación aunque la fila haga wrap. */}
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex min-w-0 items-center gap-3">
-              <button
-                type="button"
+    <div className="flex min-h-screen bg-cream-50">
+      <Sidebar />
+
+      <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+        <header className="border-b border-border bg-cream-50 px-4 py-4 sm:px-8">
+          <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
+            <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => router.push("/clientes?tab=cajas")}
-                aria-label="Volver a cajas"
-                className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-pill text-text-secondary transition-colors duration-fast ease-out hover:bg-brand-900/10 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900"
+                className="gap-2 font-bold"
               >
-                <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-              </button>
+                <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+                Volver a Cajas
+              </Button>
+              <span className="text-xs font-bold text-text-secondary">/</span>
+              <span className="text-xs font-bold uppercase tracking-wider text-text-secondary">
+                Módulo de Caja
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex min-w-0 flex-col gap-1">
-                <h1 className="font-display text-2xl font-extrabold uppercase tracking-tight text-brand-900 sm:text-3xl">
-                  Caja #{String(apertura.id).padStart(4, "0")}
-                </h1>
+                <div className="flex flex-wrap items-center gap-3">
+                  <h1 className="font-display text-2xl font-extrabold uppercase tracking-tight text-brand-900 sm:text-3xl">
+                    Caja #{String(apertura.id).padStart(4, "0")}
+                  </h1>
+                  <EstadoCajaBadge abierto={abierto} />
+                </div>
                 <div className="flex flex-wrap items-center gap-2 text-sm text-text-secondary">
-                  <span className="flex items-center gap-1.5">
-                    <Calendar className="h-4 w-4" aria-hidden="true" />
+                  <span className="flex items-center gap-1.5 font-medium">
+                    <Calendar className="h-4 w-4 text-brand-900" aria-hidden="true" />
                     {format(new Date(apertura.fechaApertura), "dd/MM/yyyy HH:mm", { locale: es })}
                   </span>
                   <span>· {apertura.cajaNombre}</span>
                   <span>· {apertura.sucursal}</span>
                   <span>
-                    · {apertura.cajero.nombre} {apertura.cajero.apellido}
+                    · Responsable: <strong className="text-brand-900">{apertura.cajero.nombre} {apertura.cajero.apellido}</strong>
                   </span>
-                  <EstadoCajaBadge abierto={abierto} />
                 </div>
               </div>
-            </div>
-            <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-2">
-              {abierto && (
-                <>
-                  <Button variant="primary" onClick={() => setNuevoMovOpen(true)}>
-                    <Plus className="h-4 w-4" aria-hidden="true" />
-                    Nuevo movimiento
-                  </Button>
-                  <Button variant="destructive" onClick={() => setCerrarCajaOpen(true)}>
-                    <Lock className="h-4 w-4" aria-hidden="true" />
-                    Cerrar caja
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
 
-          {/* Fila 2: buscador por motivo. */}
-          <div className="relative w-full sm:max-w-sm">
-            <Search
-              className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-text-secondary"
-              aria-hidden="true"
-            />
-            <input
-              type="search"
-              value={busqueda}
-              onChange={(e) => {
-                setBusqueda(e.target.value);
-                setPage(1);
-              }}
-              placeholder="Buscar por motivo..."
-              aria-label="Buscar movimiento por motivo, id o venta"
-              disabled={loading || error}
-              className="h-11 w-full cursor-text rounded-pill border border-border bg-surface pl-12 pr-4 text-base text-text-primary transition-colors duration-fast ease-out placeholder:text-text-secondary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20 disabled:cursor-not-allowed disabled:opacity-45"
-            />
-          </div>
-        </div>
-      </header>
-
-      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 py-6 sm:px-8">
-        <ResumenCaja apertura={apertura} movimientos={movimientos} />
-
-        <section className="flex flex-col gap-4">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <Receipt className="h-5 w-5 text-brand-900" aria-hidden="true" />
-              <h2 className="font-display text-lg font-extrabold uppercase tracking-tight text-brand-900">
-                Movimientos
-              </h2>
-            </div>
-            {hasActiveFilters && (
-              <Button variant="ghost" onClick={limpiarFiltros} size="sm">
-                Limpiar búsqueda
-              </Button>
-            )}
-          </div>
-
-          <MovimientosCajaTable
-            movimientos={pageItems}
-            loading={loading}
-            hasActiveFilters={hasActiveFilters}
-            onClearFilters={limpiarFiltros}
-          />
-
-          {!loading && movimientosFiltrados.length > 0 && (
-            <Pagination
-              page={safePage}
-              totalPages={totalPages}
-              totalItems={movimientosFiltrados.length}
-              pageStart={pageStart}
-              pageEnd={pageEnd}
-              pageSize={pageSize}
-              onPageChange={setPage}
-              onPageSizeChange={setPageSize}
-              disabled={loading}
-            />
-          )}
-
-          {!loading && movimientosFiltrados.length === 0 && (
-            <div className="flex flex-col items-center gap-4 rounded-md border border-border bg-surface px-6 py-12 text-center shadow-card">
-              <span className="flex h-14 w-14 items-center justify-center rounded-md bg-brand-900/10">
-                <Wallet className="h-7 w-7 text-brand-900" aria-hidden="true" />
-              </span>
-              <div className="flex flex-col gap-1">
-                <h3 className="font-display text-lg font-extrabold uppercase tracking-tight text-brand-900">
-                  {hasActiveFilters ? "Sin resultados" : "Sin movimientos registrados"}
-                </h3>
-                <p className="max-w-sm text-sm text-text-secondary">
-                  {hasActiveFilters
-                    ? "No hay movimientos que coincidan con la búsqueda aplicada."
-                    : "Los ingresos por cobro en efectivo aparecen automáticamente. Podés registrar un movimiento manual."}
-                </p>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                {abierto && (
+                  <>
+                    <Button variant="primary" onClick={() => setNuevoMovOpen(true)}>
+                      <Plus className="h-4 w-4" aria-hidden="true" />
+                      Nuevo movimiento
+                    </Button>
+                    <Button variant="destructive" onClick={() => setCerrarCajaOpen(true)}>
+                      <Lock className="h-4 w-4" aria-hidden="true" />
+                      Cerrar caja
+                    </Button>
+                  </>
+                )}
               </div>
-              {abierto && !hasActiveFilters && (
-                <Button variant="primary" onClick={() => setNuevoMovOpen(true)}>
-                  <Plus className="h-4 w-4" aria-hidden="true" />
-                  Registrar movimiento
-                </Button>
-              )}
             </div>
-          )}
-        </section>
+          </div>
+        </header>
+
+        <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 py-6 sm:px-8">
+          {/* Índices KPI de la caja en una sola fila horizontal */}
+          <ResumenCaja apertura={apertura} movimientos={movimientos} />
+
+          {/* Sección de Movimientos con controles de búsqueda y filtros */}
+          <section className="flex flex-col gap-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <Receipt className="h-5 w-5 text-brand-900" aria-hidden="true" />
+                <h2 className="font-display text-lg font-extrabold uppercase tracking-tight text-brand-900">
+                  Movimientos de la Jornada
+                </h2>
+              </div>
+              <span className="text-xs font-bold text-text-secondary">
+                {movimientosFiltrados.length} {movimientosFiltrados.length === 1 ? "registro" : "registros"}
+              </span>
+            </div>
+
+            {/* Buscador por motivo y filtros unificados debajo de los índices */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="relative flex-1 sm:max-w-md">
+                <Search
+                  className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-text-secondary"
+                  aria-hidden="true"
+                />
+                <input
+                  type="search"
+                  value={busqueda}
+                  onChange={(e) => {
+                    setBusqueda(e.target.value);
+                    setPage(1);
+                  }}
+                  placeholder="Buscar por motivo, ID o N° de venta..."
+                  aria-label="Buscar movimiento por motivo, id o venta"
+                  disabled={loading || error}
+                  className="h-11 w-full cursor-text rounded-pill border border-border bg-surface pl-12 pr-4 text-sm text-text-primary transition-colors duration-fast ease-out placeholder:text-text-secondary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20 disabled:cursor-not-allowed disabled:opacity-45"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={filtroTipo}
+                  onChange={(e) => {
+                    setFiltroTipo(e.target.value as "todos" | "Ingreso" | "Egreso");
+                    setPage(1);
+                  }}
+                  aria-label="Filtrar por tipo de movimiento"
+                  className="h-11 rounded-pill border border-border bg-surface px-4 text-xs font-bold uppercase tracking-wide text-text-primary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
+                >
+                  <option value="todos">Todos los tipos</option>
+                  <option value="Ingreso">Solo Ingresos (+)</option>
+                  <option value="Egreso">Solo Egresos (−)</option>
+                </select>
+
+                <select
+                  value={filtroOrigen}
+                  onChange={(e) => {
+                    setFiltroOrigen(e.target.value as "todos" | "venta" | "manual");
+                    setPage(1);
+                  }}
+                  aria-label="Filtrar por origen"
+                  className="h-11 rounded-pill border border-border bg-surface px-4 text-xs font-bold uppercase tracking-wide text-text-primary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
+                >
+                  <option value="todos">Todos los orígenes</option>
+                  <option value="venta">Ventas / Cobros</option>
+                  <option value="manual">Manual / Ajustes</option>
+                </select>
+
+                {hasActiveFilters && (
+                  <Button variant="ghost" onClick={limpiarFiltros} size="sm">
+                    Limpiar filtros
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            <MovimientosCajaTable
+              movimientos={pageItems}
+              loading={loading}
+              hasActiveFilters={hasActiveFilters}
+              onClearFilters={limpiarFiltros}
+            />
+
+            {!loading && movimientosFiltrados.length > 0 && (
+              <Pagination
+                page={safePage}
+                totalPages={totalPages}
+                totalItems={movimientosFiltrados.length}
+                pageStart={pageStart}
+                pageEnd={pageEnd}
+                pageSize={pageSize}
+                onPageChange={setPage}
+                onPageSizeChange={setPageSize}
+                disabled={loading}
+              />
+            )}
+          </section>
+        </div>
       </main>
 
       <MovimientoCajaFormModal
