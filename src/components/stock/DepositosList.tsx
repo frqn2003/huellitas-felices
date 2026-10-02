@@ -75,7 +75,9 @@ export function DepositosList({ depositos, sucursales, loading, onEdit, onNew, o
             <div className="mb-3 flex items-center gap-2">
               <MapPin className="h-4 w-4 text-brand-900" aria-hidden="true" />
               <h3 className="font-display text-sm font-extrabold uppercase tracking-tight text-brand-900">
-                Sucursal {sucursal.nombre}
+                {sucursal.nombre.toLowerCase().startsWith("sucursal")
+                  ? sucursal.nombre
+                  : `Sucursal ${sucursal.nombre}`}
               </h3>
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">

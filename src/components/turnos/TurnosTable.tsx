@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, CircleDollarSign, Eye } from "lucide-react";
+import { CalendarDays, CircleDollarSign, Eye, FileCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { formatearFecha } from "@/data/turnos";
@@ -253,7 +253,11 @@ export function TurnosTable({
                               : "text-text-secondary hover:bg-brand-900/10 hover:text-brand-900"
                           }`}
                         >
-                          <CircleDollarSign className="h-5 w-5" aria-hidden="true" />
+                          {pagadosMap[t.id] ? (
+                            <FileCheck className="h-5 w-5" aria-hidden="true" />
+                          ) : (
+                            <CircleDollarSign className="h-5 w-5" aria-hidden="true" />
+                          )}
                         </button>
                       )}
                     </div>
