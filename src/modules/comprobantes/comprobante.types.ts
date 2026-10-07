@@ -1,55 +1,70 @@
+import type { Row } from "@/lib/db/schema.types";
+
 /**
  * HU-PROV-04 — Tipos para comprobante_proveedor y su detalle.
  */
 
-export type EstadoDocumento = "vigente" | "anulado" | string;
+/**
+ * Los TRES valores del enum `estado_documento` de la base.
+ *
+ * ⚠️ `pagado` se agregó el 2026-09-09 junto con el trigger
+ *    `fn_actualiza_estado_comprobante_por_pago`, que marca el comprobante
+ *    apenas su saldo llega a cero. Este módulo no lo contemplaba, y como el
+ *    tipo terminaba en `| string` TypeScript no avisó de nada.
+ *
+ *    El `| string` se fue justamente por eso: volvía inútil la unión.
+ */
+export type EstadoDocumento = "vigente" | "anulado" | "pagado";
 
 /** Fila real de comprobante_proveedor con JOINs resueltos */
-export type ComprobanteRow = {
-  id: number;
-  tipo_comprobante_id: number;
+export type ComprobanteRow = Pick<
+  // Columnas de `comprobante_proveedor`, derivadas del esquema real.
+  Row<"comprobante_proveedor">,
+  | "id"
+  | "tipo_comprobante_id"
+  | "letra"
+  | "punto_venta"
+  | "numero_comprobante"
+  | "fecha_emision"
+  | "fecha_vencimiento"
+  | "proveedor_id"
+  | "orden_compra_id"
+  | "comprobante_corregido_id"
+  | "anula_comprobante_id"
+  | "monto_total"
+  | "estado"
+  | "usuario_id"
+  | "fecha_registro"
+> & {
+  // Resuelto por los JOIN. Son opcionales porque no todas las consultas del
+  // repo los piden: el listado sí, algunas lecturas puntuales no.
   tipo_comprobante_nombre?: string;
-  letra: string;
-  punto_venta: string;
-  numero_comprobante: string;
-  fecha_emision: string | Date;
-  fecha_vencimiento: string | Date;
-  proveedor_id: number;
   proveedor_razon_social?: string;
   proveedor_cuit?: string;
-  orden_compra_id: number;
   orden_compra_cod?: string;
   orden_compra_numero?: string;
-  comprobante_corregido_id: number | null;
   comprobante_corregido_numero?: string | null;
-  anula_comprobante_id: number | null;
   anula_comprobante_numero?: string | null;
-  monto_total: string;
-  estado: EstadoDocumento;
-  usuario_id: number;
-  fecha_registro: string | Date;
 };
 
 /** Fila real de comprobante_proveedor_detalle */
-export type ComprobanteDetalleRow = {
-  id: number;
-  comprobante_id: number;
-  articulo_id: number;
+export type ComprobanteDetalleRow = Pick<
+  Row<"comprobante_proveedor_detalle">,
+  "id" | "comprobante_id" | "articulo_id" | "cantidad" | "precio_facturado"
+> & {
+  /**
+   * La columna es nullable en la base (la completa un trigger), pero el SELECT
+   * del repo la trae siempre calculada. Se estrecha a `string`.
+   */
+  subtotal: string;
+  /** Del JOIN con `articulo`. */
   articulo_codigo?: string;
   articulo_nombre?: string;
   articulo_descripcion?: string;
-  cantidad: string;
-  precio_facturado: string;
-  subtotal: string;
 };
 
 /** Fila de la tabla tipo_comprobante */
-export type TipoComprobanteRow = {
-  id: number;
-  nombre: string;
-  afecta_saldo: number;
-  prefijo: string;
-};
+export type TipoComprobanteRow = Row<"tipo_comprobante">;
 
 /** Filtros para las consultas de historial */
 export type FiltrosComprobante = {

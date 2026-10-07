@@ -1,4 +1,4 @@
-// Datos placeholder del módulo Clientes (HU-CLI-01).
+// Contrato del módulo Clientes (HU-CLI-01); los datos salen de GET /api/clientes.
 // Contrato real del esquema (docs/esquema-bd-front.md, sección 8 "Clientes,
 // Mascotas y Turnos" — DD Sprint 3). Cada `id` es la PK que mandará la base.
 
@@ -41,54 +41,6 @@ export interface Mascota {
   especie: string;
   estado: EstadoCliente;
 }
-
-// BACKEND: reemplazar por la respuesta de GET /api/clientes. El listado arranca
-// con los clientes ACTIVOS; los inactivos se muestran solo si el filtro los incluye.
-export const clientesIniciales: Cliente[] = [
-  {
-    id: 1,
-    nombre: "Pablo",
-    apellido: "Celaya",
-    documento: "45115839",
-    telefono: "3875122693",
-    email: "pablo@gmail.com",
-    direccion: "Avenida veteranos de malvinas y juncal",
-    fecha_nacimiento: "2003-11-16",
-    estado: "activo",
-  },
-  {
-    id: 2,
-    nombre: "Emiliano",
-    apellido: "Aguirre",
-    documento: "43115839",
-    telefono: "3876566566",
-    email: "emiliano@gmail.com",
-    direccion: "Calle falsa 123",
-    fecha_nacimiento: "1998-05-02",
-    estado: "inactivo",
-  },
-  {
-    id: 3,
-    nombre: "Nicolas",
-    apellido: "Celaya",
-    documento: "46115839",
-    telefono: "3875122000",
-    email: "nico@gmail.com",
-    direccion: "Av. Central 456",
-    fecha_nacimiento: "1990-08-21",
-    estado: "activo",
-  },
-];
-
-// Mascotas vinculadas (placeholder, sección "Ver cliente") — tabla `mascota`
-// del esquema, sección 8. La clave es el id del cliente (mascota.cliente_id).
-// BACKEND: reemplazar por la respuesta de GET /api/clientes/:id/mascotas.
-export const mascotasPorCliente: Record<number, Mascota[]> = {
-  1: [
-    { id: 1, nombre: "Poppi", especie: "Perro", estado: "activo" },
-    { id: 2, nombre: "Azul", especie: "Perro", estado: "activo" },
-  ],
-};
 
 // Reglas de validación front (formato por campo):
 export const validaciones = {

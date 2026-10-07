@@ -17,7 +17,9 @@ import {
   FiltrosComprobantesChips,
   FILTROS_COMPROBANTES_VACIOS,
   type FiltrosComprobanteValues,
+  type TipoComprobanteOpcionFiltro,
 } from "@/components/comprobantes/FiltrosComprobantes";
+import { useCatalogo } from "@/lib/use-catalogo";
 import type { ProveedorModalMode } from "@/components/proveedores/ProveedorFormModal";
 import { ProveedorFormModal } from "@/components/proveedores/ProveedorFormModal";
 import { ProveedoresTable } from "@/components/proveedores/ProveedoresTable";
@@ -97,6 +99,10 @@ function ProveedoresScreen() {
   // Historial de comprobantes — la búsqueda y los filtros viven en el header de la pantalla.
   const [busquedaComprobantes, setBusquedaComprobantes] = useState("");
   const [filtrosComprobantes, setFiltrosComprobantes] = useState<FiltrosComprobanteValues>(FILTROS_COMPROBANTES_VACIOS);
+
+  // Catálogo del select "Tipo" del filtro de comprobantes. Los proveedores de
+  // ese mismo filtro salen del context (son los mismos que muestra la tabla).
+  const tiposComprobante = useCatalogo<TipoComprobanteOpcionFiltro>("/api/tipos-comprobante");
 
   const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
@@ -282,6 +288,7 @@ function ProveedoresScreen() {
                 onEstadoChange={handleEstado}
                 formaPago={formaPagoFiltro}
                 onFormaPagoChange={handleFormaPago}
+                formasPago={formasPago}
               />
             )}
 
@@ -305,6 +312,8 @@ function ProveedoresScreen() {
                   <FiltrosComprobantes
                     values={filtrosComprobantes}
                     onChange={handleFiltrosComprobantes}
+                    proveedores={proveedores}
+                    tipos={tiposComprobante}
                     hideChips
                   />
                 </div>
@@ -312,6 +321,7 @@ function ProveedoresScreen() {
                   <FiltrosComprobantesChips
                     filtros={filtrosComprobantes}
                     onChange={handleFiltrosComprobantes}
+                    proveedores={proveedores}
                   />
                 </div>
               </div>

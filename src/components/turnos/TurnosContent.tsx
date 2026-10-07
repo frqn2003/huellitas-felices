@@ -9,7 +9,11 @@ import {
   normalizarBusqueda,
   SIMULAR_ERROR,
   SIMULAR_VACIO,
+  type EstadoTurno,
+  type Practica,
+  type Profesional,
   type Turno,
+  type TurnoDraft,
 } from "@/data/turnos";
 import { Button } from "@/components/ui/Button";
 import { Pagination } from "@/components/ui/Pagination";
@@ -22,6 +26,7 @@ import {
 import { NuevoTurnoModal } from "./NuevoTurnoModal";
 import { TurnoDetalleModal } from "./TurnoDetalleModal";
 import { construirFilaTurno } from "./turnoRow";
+import { armarDirectorio } from "@/data/turnos";
 import { TurnosTable, type TurnoRow } from "./TurnosTable";
 
 interface TurnosContentProps {
@@ -31,7 +36,18 @@ interface TurnosContentProps {
   mascotas: Mascota[];
   /** Turnos viven en la página (persisten al cambiar de tab, patrón de clientes/mascotas). */
   turnos: Turno[];
-  onCrearTurno: (turno: Turno) => void;
+  /** Catálogo de veterinarios con sus franjas — GET /api/profesionales. */
+  profesionales: Profesional[];
+  /** Catálogo de prácticas — GET /api/practicas. */
+  practicas: Practica[];
+  /** Catálogo `estado_turno` — GET /api/estados-turno. */
+  estados: EstadoTurno[];
+  /**
+   * Manda el turno al backend y devuelve el turno creado, o un mensaje de error.
+   *
+   * La página es la que hace el POST: este componente no conoce la API.
+   */
+  onCrearTurno: (draft: TurnoDraft) => Promise<{ turno?: Turno; error?: string }>;
   /** Apertura del wizard controlada por la página (el CTA del header dispara). */
   nuevoTurnoOpen: boolean;
   /** Remount key del wizard: la página la incrementa en cada apertura para
@@ -45,6 +61,9 @@ export function TurnosContent({
   clientes,
   mascotas,
   turnos,
+  profesionales,
+  practicas,
+  estados,
   onCrearTurno,
   nuevoTurnoOpen,
   nuevoTurnoSession,
@@ -72,8 +91,10 @@ export function TurnosContent({
       [mascotas],
     );
 
+    const directorio = useMemo(() => armarDirectorio(profesionales, practicas), [profesionales, practicas]);
+
     function aRow(t: Turno): TurnoRow {
-      return construirFilaTurno(t, clientePorId, mascotaPorId);
+      return construirFilaTurno(t, clientePorId, mascotaPorId, directorio);
     }
 
     // Buscador: cliente (nombre/DNI), profesional (nombre) y práctica (nombre),
@@ -122,21 +143,30 @@ export function TurnosContent({
       window.setTimeout(() => setCargando(false), 400);
     };
 
-    const handleCreado = (nuevo: Turno) => {
-      // El id lo daría la base en el POST; el front lo asigna como placeholder.
-      const conId: Turno = { ...nuevo, id: Math.max(0, ...turnos.map((t) => t.id)) + 1 };
-      onCrearTurno(conId);
+    /**
+     * Criterio 3: "muestra confirmación visual del turno creado, con resumen".
+     *
+     * El detalle se abre con el turno que devolvió el SERVIDOR, no con el draft:
+     * trae el id real, la sucursal que derivó el trigger y el estado inicial.
+     * Antes el id se inventaba acá con `Math.max(...) + 1` y el resumen mostraba
+     * datos que no eran los que habían quedado guardados.
+     */
+    const handleCreado = async (draft: TurnoDraft): Promise<string | null> => {
+      const { turno, error } = await onCrearTurno(draft);
+      if (error || !turno) return error ?? "No se pudo crear el turno.";
+
       onCerrarNuevoTurno();
-      setDetalle(aRow(conId));
+      setDetalle(aRow(turno));
       showToast("success", "Turno creado correctamente");
-      // BACKEND: quedó registrado en auditoria (INSERT) por el backend del POST /turnos.
       setPage(1);
+      return null;
     };
 
     return (
       <div className="flex flex-col gap-6">
         <FiltrosTurnos
           filtros={filtros}
+          estados={estados}
           onChange={(f) => {
             setFiltros(f);
             setPage(1);
@@ -195,6 +225,8 @@ export function TurnosContent({
           clientes={clientes}
           mascotas={mascotas}
           turnos={turnos}
+          profesionales={profesionales}
+          practicas={practicas}
           onCreado={handleCreado}
           onRegistrarMascota={() => {
             onCerrarNuevoTurno();

@@ -12,7 +12,7 @@ import {
   type ComprobantePendiente,
   type EntidadCtaCte,
 } from "@/data/cuentas-corrientes";
-import { FORMAS_PAGO } from "@/data/formas-pago";
+import type { FormaPago } from "@/data/formas-pago";
 
 export interface PagoImputacionInput {
   comprobanteId: number;
@@ -33,6 +33,15 @@ interface RegistrarPagoCtaCteModalProps {
   entidad: { id: number; nombre: string; tipo: EntidadCtaCte } | null;
   comprobantes: ComprobantePendiente[];
   pagosExistentes: { numero_comprobante: string }[];
+  /**
+   * Catálogo `forma_pago` (GET /api/formas-pago) para el select del modal.
+   *
+   * El id elegido viaja al POST, así que tiene que ser un id real de la tabla:
+   * con la constante FORMAS_PAGO de src/data, una forma de pago agregada o
+   * renombrada en la base dejaba de ofrecerse, y un id que no existiera daría
+   * un 23503 (foreign_key_violation) al guardar.
+   */
+  formasPago: FormaPago[];
   onClose: () => void;
   /**
    * Manda el pago al backend.
@@ -57,6 +66,7 @@ export function RegistrarPagoCtaCteModal({
   entidad,
   comprobantes,
   pagosExistentes,
+  formasPago,
   onClose,
   onConfirm,
 }: RegistrarPagoCtaCteModalProps) {
@@ -279,7 +289,7 @@ export function RegistrarPagoCtaCteModal({
                 className={`h-11 cursor-pointer rounded-sm border bg-surface px-4 text-base text-text-primary transition-colors duration-fast ease-out focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20 ${errores.formaPago ? "border-destructive" : "border-border"}`}
               >
                 <option value="">Seleccioná la forma…</option>
-                {FORMAS_PAGO.map((f) => (
+                {formasPago.map((f) => (
                   <option key={f.id} value={f.id}>{f.nombre}</option>
                 ))}
               </select>

@@ -35,10 +35,10 @@ import { OrdenesTable } from "@/components/ordenes-compra/OrdenesTable";
 import { useCotizaciones, type AsignacionArticulo } from "@/context/CotizacionesContext";
 import type { CatalogosCotizacion, SolicitudCotizacion } from "@/data/cotizaciones";
 import type { OrdenCompra } from "@/data/ordenes-compra";
-import { FORMAS_PAGO } from "@/data/formas-pago";
 import { formatFecha, parseImporte } from "@/data/ordenes-compra";
 import type { CatalogosOrden } from "@/components/ordenes-compra/OrdenFormModal";
 import { apiGet, apiGetOpcional, apiSend, mensajeDeError } from "@/lib/api-client";
+import type { FormaPago } from "@/data/formas-pago";
 
 const CATALOGOS_VACIOS: CatalogosOrden = {
   proveedores: [],
@@ -202,14 +202,17 @@ function ComprasScreen() {
       // porque vive en un TAB: si falla, la pantalla de órdenes —que es la
       // principal— tiene que seguir funcionando igual.
       apiGetOpcional<{ items: Recepcion[] }>("/api/recepciones", { items: [] }),
-      // D4: condiciones de pago = placeholder compartido FORMAS_PAGO (misma
-      // tabla `forma_pago` que GET /api/condiciones-pago, ver src/data/formas-pago.ts),
-      // se asigna abajo en setCatalogos sin red.
       apiGetOpcional<
         { articuloId: number; stockActual: number; estadoCalculado: string }[]
       >("/api/fichas-stock", []),
+      // Condiciones de pago: la MISMA tabla `forma_pago`, expuesta con el
+      // nombre que entiende esta pantalla (ver src/app/api/condiciones-pago).
+      // Antes era el array fijo FORMAS_PAGO: el id elegido viaja en el POST de
+      // la orden, así que una condición agregada en la base no se podía elegir
+      // y un id inexistente habría dado 23503 al guardar.
+      apiGetOpcional<FormaPago[]>("/api/condiciones-pago", []),
     ])
-      .then(([lista, proveedores, articulos, depositos, recepcionesApi, fichasStock]) => {
+      .then(([lista, proveedores, articulos, depositos, recepcionesApi, fichasStock, condicionesPago]) => {
         if (cancelado) return;
         setOrdenes(lista);
         setDepositos(depositos);
@@ -222,7 +225,7 @@ function ComprasScreen() {
           // El catálogo del modal de órdenes tipa `ubicacion` como string; la
           // columna es nullable. Se normaliza acá, en el borde.
           depositos: depositos.map((d) => ({ ...d, ubicacion: d.ubicacion ?? "" })),
-          condicionesPago: FORMAS_PAGO,
+          condicionesPago,
         });
         setFichas(fichasStock);
       })
@@ -751,12 +754,17 @@ function ComprasScreen() {
                   <FiltrosOrdenes
                     filtros={filtros}
                     onChange={handleFiltros}
+                    proveedores={catalogos.proveedores}
                     disabled={loading || error}
                     hideChips
                   />
                 </div>
                 <div className="flex flex-wrap items-center">
-                  <FiltrosChips filtros={filtros} onChange={handleFiltros} />
+                  <FiltrosChips
+                    filtros={filtros}
+                    onChange={handleFiltros}
+                    proveedores={catalogos.proveedores}
+                  />
                 </div>
               </div>
             )}

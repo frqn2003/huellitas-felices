@@ -31,6 +31,7 @@ export function toApertura(r: AperturaRow): CajaApertura {
     cajeroId: r.cajero_id,
     cajero: { nombre: r.cajero_nombre, apellido: r.cajero_apellido },
     montoInicial: Number(r.monto_inicial),
+    saldoActual: Number(r.saldo_actual),
     fechaApertura: r.fecha_apertura,
     estado: r.estado,
     montoContado: num(r.monto_contado),

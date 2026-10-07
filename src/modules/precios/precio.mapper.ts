@@ -1,4 +1,3 @@
-import type { Categoria } from "@/data/articulos";
 import type { FilaListaPrecio, HistorialPrecio } from "@/data/lista-precios";
 import type { HistorialRow, PrecioRow } from "./precio.types";
 
@@ -30,7 +29,7 @@ export function toFilaArticulo(r: PrecioRow): FilaListaPrecio {
     codigo: r.codigo ?? "",
     nombre: r.nombre,
     descripcion: r.descripcion ?? "",
-    categoria: (r.categoria_nombre ?? "") as Categoria,
+    categoria: r.categoria_nombre ?? "",
     unidadMedida: r.unidad_medida_nombre ?? "",
     fabricante: r.fabricante_nombre ?? "",
     // `articulo.fecha_vencimiento` ya no existe (D1, lotes fuera del Sprint 1).

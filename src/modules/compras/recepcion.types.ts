@@ -67,6 +67,26 @@ export type ListadoRecepciones<T> = {
 /**
  * Una recepción = una fila de `movimiento_stock_cab`, con los JOIN resueltos.
  */
+/**
+ * ── POR QUÉ ESTOS TIPOS SIGUEN ESCRITOS A MANO ───────────────────────────────
+ *
+ * El resto del proyecto deriva sus `*Row` del esquema real
+ * (src/lib/db/schema.types.ts, `npm run db:types`). Estos no, y es una decisión:
+ *
+ *  · Salen de una VISTA, y Postgres no puede inferir la nullability de las
+ *    columnas de una vista: el generador las emite TODAS como `| null`.
+ *    Derivarlas obligaría a un chequeo de null en cada uso de una columna que
+ *    nunca es null — más ruido que seguridad.
+ *
+ *  · Varias no son columnas de nada: son agregaciones (SUM, MIN … FILTER) y
+ *    campos calculados con CASE que solo existen en el SELECT.
+ *
+ * Si la vista cambia, esto no lo detecta el compilador sino un 42703 en
+ * runtime, que `responses.ts` loguea con la pista de revisar db/correcciones/.
+ * Es el mismo trade-off que tenía todo el proyecto antes del generador, pero
+ * acotado a estos archivos.
+ */
+
 export type RecepcionRow = {
   /** `movimiento_stock_cab.id`. */
   id: number;

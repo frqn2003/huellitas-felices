@@ -225,15 +225,17 @@ export async function cerrar(id: number, d: DatosCierre, client: PoolClient): Pr
 }
 
 /**
- * Pasa el turno a 'atendido' (queda habilitado para cobrarse en mostrador).
- * Si ya lo estaba no hace nada, así el trigger de la base no se dispara de más.
+ * Pasa el turno de 'confirmado' a 'atendido' (queda habilitado para cobrarse en
+ * mostrador). Respeta la máquina de estados de HU-TUR-02: solo esa transición
+ * es válida, y si el turno ya está atendido no hace nada (así el trigger de
+ * auditoría no registra un cambio que no ocurrió).
  */
 export async function marcarTurnoAtendido(turnoId: number, client: PoolClient): Promise<void> {
   await client.query(
     `UPDATE turno
      SET estado_id = (SELECT id FROM estado_turno WHERE nombre = 'atendido')
      WHERE id = $1
-       AND estado_id IS DISTINCT FROM (SELECT id FROM estado_turno WHERE nombre = 'atendido')`,
+       AND estado_id = (SELECT id FROM estado_turno WHERE nombre = 'confirmado')`,
     [turnoId],
   );
 }

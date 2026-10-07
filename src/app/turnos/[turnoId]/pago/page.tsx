@@ -3,25 +3,20 @@
 import {
   AlertCircle,
   ArrowLeft,
-  Banknote,
   Calendar,
-  CheckCircle2,
   CircleDollarSign,
   Eye,
-  Layers,
   Minus,
   PawPrint,
   Pill,
   Plus,
-  QrCode,
-  Sparkles,
   Stethoscope,
   Trash2,
   User,
   X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { Suspense, use, useMemo, useState } from "react";
+import { Suspense, use, useEffect, useMemo, useState } from "react";
 
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Button } from "@/components/ui/Button";
@@ -31,28 +26,19 @@ import { Input } from "@/components/ui/Input";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
 import { ComprobanteTurnoModal } from "@/components/turnos/ComprobanteTurnoModal";
 import {
-  guardarComprobanteTurno,
-  obtenerComprobanteTurno,
   type ComprobanteTurno,
   type MedioPagoItem,
-  type TipoMedioPago,
+  aTipoMedio,
+  ETIQUETA_MEDIO,
 } from "@/data/pagos";
-import {
-  LISTA_PRECIOS_ARTICULOS,
-  LISTA_PRECIOS_PRACTICAS,
-  PRECIO_PRACTICA_DEFAULT,
-} from "@/data/lista-precios";
-import { guardarVenta, type Venta } from "@/data/ventas";
+import type { Venta } from "@/data/ventas";
+import type { Consulta } from "@/data/consultas";
+import { ApiError, apiGet, apiSend, mensajeDeError } from "@/lib/api-client";
+import { useArticulosVendibles, useMediosCobro, usePagos } from "@/lib/use-ventas";
+import { SelectorMediosPago } from "@/components/ventas/SelectorMediosPago";
 
-import {
-  turnosIniciales,
-  profesionalPorFranja,
-  practicaPorId,
-  formatearFecha,
-} from "@/data/turnos";
-import { clientesIniciales } from "@/data/clientes";
-import { mascotasIniciales } from "@/data/mascotas";
-import { obtenerConsultaPorTurno } from "@/data/consultas";
+import { formatearFecha } from "@/data/turnos";
+import { useTurnoCompleto } from "@/lib/use-turno";
 
 interface ItemCobro {
   id: number;
@@ -62,58 +48,12 @@ interface ItemCobro {
   unidad: string;
   cantidad: number;
   precioUnitario: number;
+  /**
+   * Viene de la atención médica (insumos aplicados): su cantidad la fijó el
+   * profesional y la base exige que coincida, así que no se edita ni se quita.
+   */
+  bloqueado?: boolean;
 }
-
-const PRODUCTOS_CLINICOS_INICIALES: ItemCobro[] = [
-  {
-    id: 1,
-    codigo: "MED-001",
-    nombre: "Amoxicilina 500mg suspensión",
-    categoria: "Medicamentos",
-    unidad: "Frasco",
-    cantidad: 1,
-    precioUnitario: 4500,
-  },
-  {
-    id: 8,
-    codigo: "INS-014",
-    nombre: "Jeringa descartable 5ml c/ aguja",
-    categoria: "Insumos",
-    unidad: "Unidad",
-    cantidad: 2,
-    precioUnitario: 950,
-  },
-  {
-    id: 7,
-    codigo: "VAC-008",
-    nombre: "Vacuna Séxtuple Canina (Refuerzo)",
-    categoria: "Medicamentos",
-    unidad: "Dosis",
-    cantidad: 1,
-    precioUnitario: 8900,
-  },
-  {
-    id: 4,
-    codigo: "ANT-003",
-    nombre: "Pipeta Antiparasitaria Externa 10-20kg",
-    categoria: "Medicamentos",
-    unidad: "Pipeta",
-    cantidad: 1,
-    precioUnitario: 6800,
-  },
-];
-
-interface MedioPagoOption {
-  id: TipoMedioPago;
-  label: string;
-  icon: typeof Banknote;
-  descripcion: string;
-}
-
-const MEDIOS_PAGO: MedioPagoOption[] = [
-  { id: "efectivo", label: "Efectivo", icon: Banknote, descripcion: "Pago en mostrador" },
-  { id: "transferencia", label: "Transferencia / QR", icon: QrCode, descripcion: "Alias / CBU o QR" },
-];
 
 function SectionCard({
   title,
@@ -157,118 +97,183 @@ function PagoTurnoContent({ turnoId }: { turnoId: number }) {
   const router = useRouter();
   const { showToast } = useToast();
 
-  // BACKEND: GET /api/turnos/:id
-  const turno = useMemo(
-    () => turnosIniciales.find((t) => t.id === turnoId) ?? null,
-    [turnoId],
-  );
+  // Turno, cliente, mascota, profesional y práctica: todo desde la API.
+  const {
+    turno,
+    cliente,
+    mascota,
+    practica,
+    profesionalDisplay,
+    cargando: cargandoTurno,
+  } = useTurnoCompleto(turnoId);
 
-  // BACKEND: JOIN clientes
-  const cliente = useMemo(
-    () => (turno ? clientesIniciales.find((c) => c.id === turno.clienteId) ?? null : null),
-    [turno],
-  );
+  // Atención médica del turno y precarga del cobro, desde la API:
+  //   GET  /api/consultas?turnoId=      → la atención (debe estar finalizada)
+  //   POST /api/ventas/calcular {consultaId} → servicio + insumos a precio de lista
+  const [consulta, setConsulta] = useState<Consulta | null>(null);
+  const [arancelBase, setArancelBase] = useState(0);
+  const [cargandoCobro, setCargandoCobro] = useState(true);
+  const [errorCobro, setErrorCobro] = useState<string | null>(null);
 
-  // BACKEND: JOIN mascotas
-  const mascota = useMemo(
-    () => (turno ? mascotasIniciales.find((m) => m.id === turno.mascotaId) ?? null : null),
-    [turno],
-  );
-
-  // BACKEND: GET /api/consultas?turno_id=:id
-  const consulta = useMemo(
-    () => obtenerConsultaPorTurno(turnoId),
-    [turnoId],
-  );
-
-  const profesionalDisplay = useMemo(() => {
-    if (!turno) return "—";
-    const pf = profesionalPorFranja[turno.agendaProfesionalId];
-    return pf ? `${pf.nombre} ${pf.apellido}` : "—";
-  }, [turno]);
-
-  const practica = turno ? practicaPorId[turno.practicaId] : null;
-
-  // Estado de productos e insumos aplicados en la atención
-  const [productos, setProductos] = useState<ItemCobro[]>(() => {
-    if (consulta && consulta.insumos && consulta.insumos.length > 0) {
-      return consulta.insumos.map((ins, index) => {
-        const refProd = LISTA_PRECIOS_ARTICULOS.find((p) => p.codigo === ins.codigo);
-        const precioUnitario = refProd ? refProd.precioUnitario : 2500;
-        return {
-          id: ins.id || index + 1,
-          codigo: ins.codigo,
-          nombre: ins.nombre,
-          categoria: refProd?.categoria || "Insumos",
-          unidad: ins.unidadMedida,
-          cantidad: ins.cantidad,
-          precioUnitario,
-        };
-      });
-    }
-    return PRODUCTOS_CLINICOS_INICIALES;
-  });
+  // Insumos aplicados en la atención (bloqueados) + ítems adicionales del mostrador.
+  const [productos, setProductos] = useState<ItemCobro[]>([]);
 
   const [productoSeleccionado, setProductoSeleccionado] = useState("");
 
+  // Artículos activos con precio cargado en la Lista de Precios (base).
+  const catalogoArticulos = useArticulosVendibles();
+  const mediosCobro = useMediosCobro();
+
   const productoOptions: ComboboxOption[] = useMemo(() => {
-    return LISTA_PRECIOS_ARTICULOS.map((prod) => ({
+    return catalogoArticulos.map((prod) => ({
       value: prod.codigo,
       label: `[${prod.categoria}] ${prod.nombre} (${prod.codigo}) — $${prod.precioUnitario.toLocaleString("es-AR")} / ${prod.unidad}`,
     }));
-  }, []);
+  }, [catalogoArticulos]);
 
   // Estado del formulario de cobro
-  const [modoPago, setModoPago] = useState<"simple" | "combinado">("simple");
-  const [medioPagoSimple, setMedioPagoSimple] = useState<TipoMedioPago>("efectivo");
-  const [montoEfectivo, setMontoEfectivo] = useState<number>(0);
-  const [montoTransferencia, setMontoTransferencia] = useState<number>(0);
-  const [referenciaTransferencia, setReferenciaTransferencia] = useState<string>("");
-  const [comprobanteRef, setComprobanteRef] = useState("");
   const [observaciones, setObservaciones] = useState("");
   const [confirmarOpen, setConfirmarOpen] = useState(false);
   const [procesando, setProcesando] = useState(false);
   const [fichaModalOpen, setFichaModalOpen] = useState(false);
 
-  // Estado del modal de comprobante emitido
-  const [comprobanteData, setComprobanteData] = useState<ComprobanteTurno | null>(
-    () => obtenerComprobanteTurno(turnoId),
-  );
-  const [comprobanteModalOpen, setComprobanteModalOpen] = useState(
-    () => Boolean(obtenerComprobanteTurno(turnoId)),
-  );
+  // Comprobante: el recién emitido, o el de la venta que ya cobró esta atención
+  // (se reconstruye desde GET /api/ventas?consultaId=).
+  const [comprobanteData, setComprobanteData] = useState<ComprobanteTurno | null>(null);
+  const [ventaExistente, setVentaExistente] = useState<Venta | null>(null);
+  const [comprobanteVisible, setComprobanteVisible] = useState<boolean | null>(null);
 
-  // Cálculos de liquidación y desglose fiscal (HU-VTA-01)
-  const arancelBase = practica
-    ? LISTA_PRECIOS_PRACTICAS[practica.id] ?? PRECIO_PRACTICA_DEFAULT
-    : PRECIO_PRACTICA_DEFAULT;
+  useEffect(() => {
+    let cancelado = false;
+    const t = setTimeout(async () => {
+      try {
+        const c = await apiGet<Consulta>(`/api/consultas?turnoId=${turnoId}`).catch((e) => {
+          if (e instanceof ApiError && e.status === 404) return null;
+          throw e;
+        });
+        if (cancelado) return;
+        if (!c || c.estado !== "cerrada") {
+          setErrorCobro(
+            "La atención de este turno todavía no fue finalizada: no se puede cobrar una consulta en curso.",
+          );
+          return;
+        }
+        setConsulta(c);
+
+        // ¿Ya está cobrada? Entonces se muestra su comprobante en vez de cobrar de nuevo.
+        const ventas = await apiGet<Venta[]>(`/api/ventas?consultaId=${c.id}`);
+        if (cancelado) return;
+        if (ventas.length > 0) {
+          setVentaExistente(ventas[0]);
+          setErrorCobro("Esta atención ya fue cobrada.");
+          return;
+        }
+
+        const calculo = await apiSend<{
+          lineas: {
+            tipo: "articulo" | "practica";
+            articuloId: number | null;
+            codigo: string;
+            nombre: string;
+            categoria: string;
+            unidad: string;
+            cantidad: number;
+            precioUnitario: number;
+            subtotal: number;
+          }[];
+        }>("POST", "/api/ventas/calcular", { consultaId: c.id });
+        if (cancelado) return;
+
+        // El servicio de la atención es el arancel; los insumos, ítems bloqueados.
+        setArancelBase(
+          calculo.lineas.filter((l) => l.tipo === "practica").reduce((acc, l) => acc + l.subtotal, 0),
+        );
+        setProductos(
+          calculo.lineas
+            .filter((l) => l.tipo === "articulo")
+            .map((l) => ({
+              id: l.articuloId as number,
+              codigo: l.codigo,
+              nombre: l.nombre,
+              categoria: l.categoria,
+              unidad: l.unidad,
+              cantidad: l.cantidad,
+              precioUnitario: l.precioUnitario,
+              bloqueado: true,
+            })),
+        );
+        setErrorCobro(null);
+      } catch (e) {
+        // 409 CONSULTA_YA_COBRADA, SIN_PRECIO, etc.: el mensaje ya viene redactado.
+        if (!cancelado) setErrorCobro(mensajeDeError(e));
+      } finally {
+        if (!cancelado) setCargandoCobro(false);
+      }
+    }, 0);
+    return () => {
+      cancelado = true;
+      clearTimeout(t);
+    };
+  }, [turnoId]);
+
+  const comprobanteExistente = useMemo<ComprobanteTurno | null>(() => {
+    if (!ventaExistente || !turno) return null;
+    return {
+      numero: ventaExistente.numeroComprobante,
+      fechaHora: ventaExistente.fecha,
+      turnoId,
+      clienteNombre: cliente ? `${cliente.nombre} ${cliente.apellido}` : ventaExistente.clienteNombre,
+      clienteDoc: cliente?.documento ?? ventaExistente.clienteDoc,
+      clienteTel: cliente?.telefono,
+      mascotaNombre: mascota?.nombre ?? "—",
+      mascotaEspecie: mascota?.especie ?? "—",
+      mascotaRaza: mascota?.raza,
+      profesional: profesionalDisplay,
+      practicaNombre: ventaExistente.conceptoServicio,
+      arancel: ventaExistente.arancelServicio,
+      productos: ventaExistente.items.map((it) => ({
+        codigo: it.codigo,
+        nombre: it.nombre,
+        unidad: it.unidad,
+        cantidad: it.cantidad,
+        precioUnitario: it.precioUnitario,
+      })),
+      total: ventaExistente.total,
+      medioPago: ventaExistente.medioPago === "mixto" ? "mixto" : aTipoMedio(ventaExistente.medioPago),
+      mediosPago: (ventaExistente.mediosPago ?? []).map((m, i) => ({
+        id: String(i + 1),
+        medio: aTipoMedio(m.medio),
+        monto: m.monto,
+      })),
+    };
+  }, [ventaExistente, turno, turnoId, cliente, mascota, profesionalDisplay]);
+  const comprobanteActual = comprobanteData ?? comprobanteExistente;
+  const comprobanteModalOpen = comprobanteVisible ?? comprobanteActual !== null;
+
+  // Cálculos de liquidación (HU-VTA-01). Los precios son los de la lista vigente.
+  const puedeCobrar = !cargandoCobro && errorCobro === null && consulta !== null;
 
   const totalProductos = useMemo(() => {
     return productos.reduce((acc, item) => acc + item.cantidad * item.precioUnitario, 0);
   }, [productos]);
 
   const totalCobrar = arancelBase + totalProductos;
-  const subtotalNeto = Math.round(totalCobrar / 1.21);
-  const impuestosIva = totalCobrar - subtotalNeto;
 
-  // Balance y validación de medios de pago
-  const totalAsignado = useMemo(() => {
-    if (modoPago === "simple") return totalCobrar;
-    return (Number(montoEfectivo) || 0) + (Number(montoTransferencia) || 0);
-  }, [modoPago, totalCobrar, montoEfectivo, montoTransferencia]);
-
-  const saldoRestante = totalCobrar - totalAsignado;
-  const esMontoValido =
-    modoPago === "simple" ||
-    (saldoRestante === 0 &&
-      (Number(montoEfectivo) || 0) >= 0 &&
-      (Number(montoTransferencia) || 0) >= 0 &&
-      ((Number(montoEfectivo) || 0) > 0 || (Number(montoTransferencia) || 0) > 0));
+  // Medios de pago (HU-VTA-02): uno o varios, la suma debe dar el total.
+  const {
+    pagos,
+    setPagos,
+    asignado,
+    restante: saldoRestante,
+    valido: esMontoValido,
+  } = usePagos(mediosCobro, totalCobrar);
 
   // Manejo de cantidades de productos
   function handleIncrementar(id: number) {
     setProductos((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, cantidad: item.cantidad + 1 } : item)),
+      prev.map((item) =>
+        item.id === id && !item.bloqueado ? { ...item, cantidad: item.cantidad + 1 } : item,
+      ),
     );
   }
 
@@ -276,7 +281,7 @@ function PagoTurnoContent({ turnoId }: { turnoId: number }) {
     setProductos((prev) =>
       prev
         .map((item) => {
-          if (item.id === id) {
+          if (item.id === id && !item.bloqueado) {
             return { ...item, cantidad: Math.max(1, item.cantidad - 1) };
           }
           return item;
@@ -286,25 +291,25 @@ function PagoTurnoContent({ turnoId }: { turnoId: number }) {
   }
 
   function handleEliminar(id: number) {
-    setProductos((prev) => prev.filter((item) => item.id !== id));
+    setProductos((prev) => prev.filter((item) => item.id !== id || item.bloqueado));
   }
 
   function handleAgregarProducto() {
     if (!productoSeleccionado) return;
-    const prodRef = LISTA_PRECIOS_ARTICULOS.find((p) => p.codigo === productoSeleccionado);
+    const prodRef = catalogoArticulos.find((p) => p.codigo === productoSeleccionado);
     if (!prodRef) return;
 
     setProductos((prev) => {
-      const existe = prev.find((p) => p.codigo === prodRef.codigo);
+      const existe = prev.find((p) => p.codigo === prodRef.codigo && !p.bloqueado);
       if (existe) {
         return prev.map((p) =>
-          p.codigo === prodRef.codigo ? { ...p, cantidad: p.cantidad + 1 } : p,
+          p.codigo === prodRef.codigo && !p.bloqueado ? { ...p, cantidad: p.cantidad + 1 } : p,
         );
       }
       return [
         ...prev,
         {
-          id: prodRef.id || Date.now(),
+          id: prodRef.id,
           codigo: prodRef.codigo,
           nombre: prodRef.nombre,
           categoria: prodRef.categoria,
@@ -318,183 +323,95 @@ function PagoTurnoContent({ turnoId }: { turnoId: number }) {
     setProductoSeleccionado("");
   }
 
-  function handleCambiarModo(nuevoModo: "simple" | "combinado") {
-    setModoPago(nuevoModo);
-    if (nuevoModo === "combinado") {
-      const sum = (Number(montoEfectivo) || 0) + (Number(montoTransferencia) || 0);
-      if (sum === 0 || sum !== totalCobrar) {
-        const mitad1 = Math.round(totalCobrar / 2);
-        const mitad2 = totalCobrar - mitad1;
-        setMontoEfectivo(mitad1);
-        setMontoTransferencia(mitad2);
-      }
-    }
-  }
+  async function handleConfirmarCobro() {
+    if (!esMontoValido || !consulta) return;
 
-  function handleAsignarRestoEfectivo() {
-    setMontoEfectivo((prev) => Math.max(0, (Number(prev) || 0) + saldoRestante));
-  }
+    // Medios elegidos, con su tipo (para el comprobante) y su monto.
+    const medios = pagos.map((p) => ({
+      formaPagoId: p.formaPagoId,
+      medio: mediosCobro.find((m) => m.id === p.formaPagoId)?.tipo ?? "efectivo",
+      monto: Number(p.monto),
+      referencia: p.referencia.trim() || undefined,
+    }));
+    const mediosCobroFinal: MedioPagoItem[] = medios.map((m, i) => ({
+      id: String(i + 1),
+      medio: m.medio,
+      monto: m.monto,
+      referencia: m.referencia,
+    }));
+    const medioPagoResumen = medios.length > 1 ? "mixto" : medios[0].medio;
+    const refGeneral = medios
+      .filter((m) => m.referencia)
+      .map((m) => `${ETIQUETA_MEDIO[m.medio]}: ${m.referencia}`)
+      .join(" · ");
 
-  function handleAsignarRestoTransferencia() {
-    setMontoTransferencia((prev) => Math.max(0, (Number(prev) || 0) + saldoRestante));
-  }
-
-  function handleConfirmarCobro() {
-    if (!esMontoValido) return;
     setProcesando(true);
-
-    const mediosCobroFinal: MedioPagoItem[] =
-      modoPago === "simple"
-        ? [
-            {
-              id: "1",
-              medio: medioPagoSimple,
-              monto: totalCobrar,
-              referencia:
-                medioPagoSimple === "transferencia" && comprobanteRef.trim()
-                  ? comprobanteRef.trim()
-                  : undefined,
-            },
-          ]
-        : [
-            ...(montoEfectivo > 0
-              ? [
-                  {
-                    id: "1",
-                    medio: "efectivo" as TipoMedioPago,
-                    monto: Number(montoEfectivo) || 0,
-                  },
-                ]
-              : []),
-            ...(montoTransferencia > 0
-              ? [
-                  {
-                    id: "2",
-                    medio: "transferencia" as TipoMedioPago,
-                    monto: Number(montoTransferencia) || 0,
-                    referencia: referenciaTransferencia.trim() || undefined,
-                  },
-                ]
-              : []),
-          ];
-
-    const medioPagoResumen = modoPago === "simple" ? medioPagoSimple : "mixto";
-    const refGeneral =
-      modoPago === "simple"
-        ? medioPagoSimple === "transferencia"
-          ? comprobanteRef.trim()
-          : ""
-        : referenciaTransferencia.trim()
-        ? `TRX: ${referenciaTransferencia.trim()}`
-        : "";
-
-    // BACKEND: POST /api/ventas (crea venta, venta_detalle, venta_medio_pago)
-    // Body: {
-    //   cliente_id: cliente?.id,
-    //   sucursal_id: turno?.sucursalId ?? 1,
-    //   consulta_id: consulta?.id ?? null,
-    //   turno_id: turnoId,
-    //   usuario_id: 2, // Cajero/Recepcionista logueado
-    //   fecha: now.toISOString(),
-    //   subtotal: subtotalNeto,
-    //   impuestos: impuestosIva,
-    //   total: totalCobrar,
-    //   medio_pago: medioPagoResumen,
-    //   referencia: refGeneral,
-    //   observaciones: observaciones,
-    //   venta_medio_pago: mediosCobroFinal.map(m => ({
-    //     forma_pago_id: m.medio === "efectivo" ? 1 : 4,
-    //     monto: m.monto,
-    //     referencia: m.referencia
-    //   })),
-    //   lineas: [
-    //     { servicio_practica_id: practica?.id, precio_unitario: arancelBase, cantidad: 1 },
-    //     ...productos.map(p => ({ articulo_id: p.id, cantidad: p.cantidad, precio_unitario: p.precioUnitario }))
-    //   ]
-    // }
-    // Nota backend: Los triggers de la base de datos se encargan de:
-    // 1. trg_venta_medio_pago_validar_total: Valida que SUM(monto) == venta.total.
-    // 2. trg_venta_medio_pago_ingreso_caja: Si incluye efectivo, registra ingreso en la caja abierta.
-    // 3. Descontar automáticamente el stock físico en el depósito de mostrador (HU-STK-04).
-    // 4. Registrar la venta en la bitácora de auditoría (trg_auditoria_venta).
-    window.setTimeout(() => {
-      const now = new Date();
-      const fechaStr = `${now.toLocaleDateString("es-AR")} ${now.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}`;
-      const numRecibo =
-        comprobanteRef.trim() || `REC-2026-${String(turnoId).padStart(6, "0")}`;
+    try {
+      // El body NO lleva precios ni totales: con `consultaId` la base cobra el
+      // servicio de la atención y sus insumos a la Lista de Precios vigente;
+      // `lineas` son solo los ítems ADICIONALES agregados en el mostrador. El
+      // cliente sale de la consulta y el usuario de la sesión. La venta
+      // descuenta stock, asienta el efectivo en caja, marca el turno como
+      // pagado y queda en la bitácora de auditoría, todo en una transacción.
+      const venta = await apiSend<Venta>("POST", "/api/ventas", {
+        consultaId: consulta.id,
+        lineas: productos
+          .filter((p) => !p.bloqueado)
+          .map((p) => ({ articuloId: p.id, cantidad: p.cantidad })),
+        mediosPago: medios.map((m) => ({ formaPagoId: m.formaPagoId, monto: m.monto })),
+      });
 
       const nuevoComp: ComprobanteTurno = {
-        numero: numRecibo,
-        fechaHora: fechaStr,
+        numero: venta.numeroComprobante,
+        fechaHora: venta.fecha,
         turnoId,
-        clienteNombre: cliente ? `${cliente.nombre} ${cliente.apellido}` : `Cliente #${turnoId}`,
-        clienteDoc: cliente?.documento,
+        clienteNombre: cliente ? `${cliente.nombre} ${cliente.apellido}` : venta.clienteNombre,
+        clienteDoc: cliente?.documento ?? venta.clienteDoc,
         clienteTel: cliente?.telefono,
-        mascotaNombre: mascota?.nombre || "—",
-        mascotaEspecie: mascota?.especie || "—",
-        mascotaRaza: mascota?.raza,
-        profesional: profesionalDisplay,
-        practicaNombre: practica?.nombre || "Atención Clínica Profesional",
-        arancel: arancelBase,
-        productos: [...productos],
-        subtotalNeto,
-        impuestosIva,
-        total: totalCobrar,
+        mascotaNombre: mascota?.nombre || consulta.mascotaNombre || "—",
+        mascotaEspecie: mascota?.especie || consulta.mascotaEspecie || "—",
+        mascotaRaza: mascota?.raza ?? consulta.mascotaRaza ?? undefined,
+        profesional: profesionalDisplay !== "—" ? profesionalDisplay : consulta.profesionalNombre,
+        practicaNombre: venta.conceptoServicio,
+        arancel: venta.arancelServicio,
+        productos: venta.items.map((it) => ({
+          id: it.id,
+          codigo: it.codigo,
+          nombre: it.nombre,
+          categoria: it.categoria,
+          unidad: it.unidad,
+          cantidad: it.cantidad,
+          precioUnitario: it.precioUnitario,
+        })),
+        total: venta.total,
         medioPago: medioPagoResumen,
         mediosPago: mediosCobroFinal,
         referencia: refGeneral,
         observaciones: observaciones.trim(),
       };
 
-      guardarComprobanteTurno(nuevoComp);
       setComprobanteData(nuevoComp);
-
-      if (cliente) {
-        const nuevaVenta: Venta = {
-          id: Date.now(),
-          numeroComprobante: numRecibo,
-          clienteId: cliente.id,
-          clienteNombre: `${cliente.nombre} ${cliente.apellido}`,
-          clienteDoc: cliente.documento,
-          sucursalId: turno?.sucursalId ?? 1,
-          consultaId: consulta?.id ?? null,
-          turnoId,
-          usuarioId: 2,
-          fecha: fechaStr,
-          conceptoServicio: practica?.nombre || "Atención Clínica Profesional",
-          arancelServicio: arancelBase,
-          items: productos.map((p) => ({
-            id: p.id,
-            codigo: p.codigo,
-            nombre: p.nombre,
-            categoria: p.categoria || "Insumos",
-            unidad: p.unidad,
-            cantidad: p.cantidad,
-            precioUnitario: p.precioUnitario,
-            subtotal: p.cantidad * p.precioUnitario,
-          })),
-          subtotalNeto,
-          impuestosIva,
-          total: totalCobrar,
-          medioPago: medioPagoResumen,
-          mediosPago: mediosCobroFinal.map((m) => ({
-            formaPagoId: m.medio === "efectivo" ? 1 : 4,
-            medio: m.medio,
-            monto: m.monto,
-            referencia: m.referencia,
-          })),
-          estado: "vigente",
-        };
-        guardarVenta(nuevaVenta);
-      }
-
-      setProcesando(false);
       setConfirmarOpen(false);
-      setComprobanteModalOpen(true);
+      setComprobanteVisible(true);
       showToast("success", `Cobro del turno #${turnoId} registrado con éxito.`);
-    }, 350);
+    } catch (e) {
+      setConfirmarOpen(false);
+      showToast("error", mensajeDeError(e));
+    } finally {
+      setProcesando(false);
+    }
   }
 
+
+  if (cargandoTurno) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-cream-50">
+        <p className="text-sm font-semibold text-text-secondary" role="status">
+          Cargando turno…
+        </p>
+      </div>
+    );
+  }
 
   if (!turno) {
     return (
@@ -687,7 +604,7 @@ function PagoTurnoContent({ turnoId }: { turnoId: number }) {
                           const totalLinea = item.cantidad * item.precioUnitario;
                           return (
                             <div
-                              key={item.id}
+                              key={`${item.bloqueado ? "c" : "x"}-${item.id}`}
                               className="flex flex-col gap-2 p-3.5 transition-colors duration-fast sm:flex-row sm:items-center sm:justify-between hover:bg-cream-50/50"
                             >
                               <div className="flex-1">
@@ -703,7 +620,12 @@ function PagoTurnoContent({ turnoId }: { turnoId: number }) {
                               </div>
 
                               <div className="flex items-center justify-between gap-4 sm:justify-end">
-                                {/* Controles de cantidad */}
+                                {/* Controles de cantidad (los insumos de la atención son de solo lectura) */}
+                                {item.bloqueado ? (
+                                  <span className="rounded-pill border border-border bg-cream-50 px-3 py-1 text-xs font-bold text-brand-900">
+                                    {item.cantidad} · de la atención
+                                  </span>
+                                ) : (
                                 <div className="flex items-center gap-1.5 rounded-pill border border-border bg-cream-50 px-2 py-1">
                                   <button
                                     type="button"
@@ -725,14 +647,15 @@ function PagoTurnoContent({ turnoId }: { turnoId: number }) {
                                     <Plus className="h-3.5 w-3.5" aria-hidden="true" />
                                   </button>
                                 </div>
+                                )}
 
                                 {/* Total de línea */}
                                 <span className="min-w-[80px] text-right text-sm font-extrabold text-brand-900">
                                   ${totalLinea.toLocaleString("es-AR")}
                                 </span>
 
-                                {/* Quitar */}
-                                <button
+                                {!item.bloqueado && (
+                                                                <button
                                   type="button"
                                   onClick={() => handleEliminar(item.id)}
                                   aria-label={`Quitar ${item.nombre} de la cuenta`}
@@ -741,6 +664,7 @@ function PagoTurnoContent({ turnoId }: { turnoId: number }) {
                                 >
                                   <Trash2 className="h-4 w-4" aria-hidden="true" />
                                 </button>
+                                )}
                               </div>
                             </div>
                           );
@@ -801,20 +725,8 @@ function PagoTurnoContent({ turnoId }: { turnoId: number }) {
                           </div>
                         )}
 
-                        {/* Desglose fiscal de Subtotal, IVA y Total (HU-VTA-01) */}
+                        {/* Total de la venta (HU-VTA-01) */}
                         <div className="mt-4 flex flex-col gap-1.5 border-t border-border pt-3">
-                          <div className="flex items-center justify-between text-xs text-text-secondary">
-                            <span>Subtotal (Neto gravado):</span>
-                            <span className="font-semibold text-text-primary">
-                              ${subtotalNeto.toLocaleString("es-AR")}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between text-xs text-text-secondary">
-                            <span>IVA discriminado (21%):</span>
-                            <span className="font-semibold text-text-primary">
-                              ${impuestosIva.toLocaleString("es-AR")}
-                            </span>
-                          </div>
                           <div className="mt-2 flex items-baseline justify-between border-t border-border/80 pt-2">
                             <span className="text-base font-extrabold uppercase tracking-wide text-brand-900">
                               Total de la venta
@@ -827,274 +739,18 @@ function PagoTurnoContent({ turnoId }: { turnoId: number }) {
                       </div>
                     </div>
 
-                    {/* Selección de Modalidad y Medios de Pago */}
                     <div className="flex flex-col gap-4">
-                      {/* Segmented Control: Modo de Pago */}
-                      <div>
-                        <div className="mb-2 flex items-center justify-between">
-                          <h3 className="text-xs font-extrabold uppercase tracking-widest text-text-secondary">
-                            Modalidad de Pago
-                          </h3>
-                          <span className="rounded-pill bg-brand-900/10 px-2.5 py-0.5 text-[11px] font-bold text-brand-900">
-                            {modoPago === "simple"
-                              ? "1 solo medio"
-                              : "Efectivo + Transferencia"}
-                          </span>
-                        </div>
+                      {/* Medios de pago (HU-VTA-02) */}
+                      <SelectorMediosPago
+                        medios={mediosCobro}
+                        total={totalCobrar}
+                        pagos={pagos}
+                        onChange={setPagos}
+                        asignado={asignado}
+                        restante={saldoRestante}
+                      />
 
-                        <div className="grid grid-cols-2 gap-1.5 rounded-pill border border-border bg-cream-50 p-1">
-                          <button
-                            type="button"
-                            onClick={() => handleCambiarModo("simple")}
-                            className={`flex items-center justify-center gap-1.5 rounded-pill py-2 text-xs font-bold transition-all duration-fast ${
-                              modoPago === "simple"
-                                ? "bg-brand-900 text-cream-50 shadow-xs"
-                                : "text-text-secondary hover:text-brand-900"
-                            }`}
-                          >
-                            <CircleDollarSign className="h-4 w-4" aria-hidden="true" />
-                            Pago Único
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleCambiarModo("combinado")}
-                            className={`flex items-center justify-center gap-1.5 rounded-pill py-2 text-xs font-bold transition-all duration-fast ${
-                              modoPago === "combinado"
-                                ? "bg-brand-900 text-cream-50 shadow-xs"
-                                : "text-text-secondary hover:text-brand-900"
-                            }`}
-                          >
-                            <Layers className="h-4 w-4" aria-hidden="true" />
-                            Pago Combinado
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* VISTA: Pago Único */}
-                      {modoPago === "simple" && (
-                        <div className="flex flex-col gap-4">
-                          <div className="grid grid-cols-2 gap-2">
-                            {MEDIOS_PAGO.map((mp) => {
-                              const Icon = mp.icon;
-                              const isSelected = medioPagoSimple === mp.id;
-                              return (
-                                <button
-                                  key={mp.id}
-                                  type="button"
-                                  onClick={() => setMedioPagoSimple(mp.id)}
-                                  className={`flex flex-col items-start gap-1 rounded-md border p-3 text-left transition-all duration-fast ease-out ${
-                                    isSelected
-                                      ? "border-brand-900 bg-brand-900/5 ring-2 ring-brand-900"
-                                      : "border-border bg-surface hover:border-brand-900/40 hover:bg-cream-50/50"
-                                  }`}
-                                >
-                                  <div className="flex w-full items-center justify-between">
-                                    <Icon
-                                      className={`h-4 w-4 ${isSelected ? "text-brand-900" : "text-text-secondary"}`}
-                                      aria-hidden="true"
-                                    />
-                                    {isSelected && (
-                                      <CheckCircle2
-                                        className="h-4 w-4 text-brand-900"
-                                        aria-hidden="true"
-                                      />
-                                    )}
-                                  </div>
-                                  <span className="text-xs font-bold text-text-primary">
-                                    {mp.label}
-                                  </span>
-                                  <span className="text-[10px] leading-tight text-text-secondary">
-                                    {mp.descripcion}
-                                  </span>
-                                </button>
-                              );
-                            })}
-                          </div>
-
-                          {/* Campo de comprobante/referencia solo si es transferencia */}
-                          {medioPagoSimple === "transferencia" && (
-                            <Input
-                              label="Nº de comprobante / Referencia de transferencia (opcional)"
-                              placeholder="Ej: TRX-98124 o código de transferencia / Alias"
-                              value={comprobanteRef}
-                              onChange={(e) => setComprobanteRef(e.target.value)}
-                            />
-                          )}
-                        </div>
-                      )}
-
-                      {/* VISTA: Pago Combinado (Efectivo y Transferencia fijos) */}
-                      {modoPago === "combinado" && (
-                        <div className="flex flex-col gap-3.5">
-                          <div className="flex flex-col gap-3">
-                            {/* Tarjeta 1: Efectivo */}
-                            <div className="flex flex-col gap-2.5 rounded-md border border-border bg-cream-50/60 p-3.5 transition-all duration-fast hover:border-brand-900/40">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <span className="flex h-7 w-7 items-center justify-center rounded-md bg-brand-900 text-cream-50">
-                                    <Banknote className="h-4 w-4 text-cream-50" aria-hidden="true" />
-                                  </span>
-                                  <div>
-                                    <span className="text-xs font-extrabold uppercase tracking-wide text-brand-900">
-                                      Efectivo
-                                    </span>
-                                    <p className="text-[10px] text-text-secondary">Pago en mostrador</p>
-                                  </div>
-                                </div>
-
-                                {saldoRestante !== 0 && (
-                                  <button
-                                    type="button"
-                                    onClick={handleAsignarRestoEfectivo}
-                                    title="Completar el saldo restante en efectivo"
-                                    className="inline-flex items-center gap-1 rounded-pill bg-brand-900/10 px-2.5 py-1 text-[10px] font-bold text-brand-900 transition-colors hover:bg-brand-900 hover:text-cream-50"
-                                  >
-                                    <Sparkles className="h-3 w-3" aria-hidden="true" />
-                                    {saldoRestante > 0
-                                      ? `+ Asignar resto ($${saldoRestante.toLocaleString("es-AR")})`
-                                      : "Ajustar al exacto"}
-                                  </button>
-                                )}
-                              </div>
-
-                              <div className="flex flex-col gap-1">
-                                <label
-                                  htmlFor="monto-efectivo"
-                                  className="text-[11px] font-bold uppercase tracking-wider text-text-secondary"
-                                >
-                                  Monto en Efectivo ($)
-                                </label>
-                                <input
-                                  id="monto-efectivo"
-                                  type="number"
-                                  min="0"
-                                  step="100"
-                                  placeholder="0"
-                                  value={montoEfectivo || ""}
-                                  onChange={(e) =>
-                                    setMontoEfectivo(Math.max(0, Number(e.target.value) || 0))
-                                  }
-                                  className="h-10 w-full rounded-md border border-border bg-surface px-3 py-1.5 font-mono text-sm font-extrabold text-brand-900 transition-colors focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900"
-                                />
-                              </div>
-                            </div>
-
-                            {/* Tarjeta 2: Transferencia / QR */}
-                            <div className="flex flex-col gap-2.5 rounded-md border border-border bg-cream-50/60 p-3.5 transition-all duration-fast hover:border-brand-900/40">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <span className="flex h-7 w-7 items-center justify-center rounded-md bg-brand-900 text-cream-50">
-                                    <QrCode className="h-4 w-4 text-cream-50" aria-hidden="true" />
-                                  </span>
-                                  <div>
-                                    <span className="text-xs font-extrabold uppercase tracking-wide text-brand-900">
-                                      Transferencia / QR
-                                    </span>
-                                    <p className="text-[10px] text-text-secondary">Alias / CBU o escaneo QR</p>
-                                  </div>
-                                </div>
-
-                                {saldoRestante !== 0 && (
-                                  <button
-                                    type="button"
-                                    onClick={handleAsignarRestoTransferencia}
-                                    title="Completar el saldo restante en transferencia"
-                                    className="inline-flex items-center gap-1 rounded-pill bg-brand-900/10 px-2.5 py-1 text-[10px] font-bold text-brand-900 transition-colors hover:bg-brand-900 hover:text-cream-50"
-                                  >
-                                    <Sparkles className="h-3 w-3" aria-hidden="true" />
-                                    {saldoRestante > 0
-                                      ? `+ Asignar resto ($${saldoRestante.toLocaleString("es-AR")})`
-                                      : "Ajustar al exacto"}
-                                  </button>
-                                )}
-                              </div>
-
-                              <div className="flex flex-col gap-1">
-                                <label
-                                  htmlFor="monto-transferencia"
-                                  className="text-[11px] font-bold uppercase tracking-wider text-text-secondary"
-                                >
-                                  Monto en Transferencia ($)
-                                </label>
-                                <input
-                                  id="monto-transferencia"
-                                  type="number"
-                                  min="0"
-                                  step="100"
-                                  placeholder="0"
-                                  value={montoTransferencia || ""}
-                                  onChange={(e) =>
-                                    setMontoTransferencia(Math.max(0, Number(e.target.value) || 0))
-                                  }
-                                  className="h-10 w-full rounded-md border border-border bg-surface px-3 py-1.5 font-mono text-sm font-extrabold text-brand-900 transition-colors focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900"
-                                />
-                              </div>
-
-                              {/* Referencia exclusiva de transferencia */}
-                              <div className="flex flex-col gap-1">
-                                <label
-                                  htmlFor="ref-transferencia"
-                                  className="text-[10px] font-bold text-text-secondary"
-                                >
-                                  Nº de Comprobante / Referencia TRX (opcional)
-                                </label>
-                                <input
-                                  id="ref-transferencia"
-                                  type="text"
-                                  placeholder="Ej: TRX-98124 o CBU / Alias..."
-                                  value={referenciaTransferencia}
-                                  onChange={(e) => setReferenciaTransferencia(e.target.value)}
-                                  className="h-8 w-full rounded-md border border-border bg-surface px-2.5 py-1 text-xs text-text-primary transition-colors focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900"
-                                />
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Estado de Balance en Tiempo Real */}
-                          <div className="rounded-md border border-border bg-cream-50 p-3 text-xs">
-                            <div className="flex items-center justify-between text-text-secondary">
-                              <span>Total a cubrir:</span>
-                              <span className="font-bold text-text-primary">
-                                ${totalCobrar.toLocaleString("es-AR")}
-                              </span>
-                            </div>
-                            <div className="mt-1 flex items-center justify-between text-text-secondary">
-                              <span>Total asignado:</span>
-                              <span className="font-bold text-brand-900">
-                                ${totalAsignado.toLocaleString("es-AR")}
-                              </span>
-                            </div>
-
-                            <div className="mt-2.5 border-t border-border/70 pt-2.5">
-                              {saldoRestante === 0 ? (
-                                <div className="flex items-center justify-between rounded bg-status-success/15 px-2.5 py-1.5 font-bold text-status-success-strong">
-                                  <span className="flex items-center gap-1.5">
-                                    <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
-                                    Total cubierto exactamente
-                                  </span>
-                                  <span>$0 restante</span>
-                                </div>
-                              ) : saldoRestante > 0 ? (
-                                <div className="flex items-center justify-between rounded bg-status-warning/15 px-2.5 py-1.5 font-bold text-status-warning-strong">
-                                  <span>⚠️ Faltan por asignar:</span>
-                                  <span className="font-mono">
-                                    ${saldoRestante.toLocaleString("es-AR")}
-                                  </span>
-                                </div>
-                              ) : (
-                                <div className="flex items-center justify-between rounded bg-status-danger/15 px-2.5 py-1.5 font-bold text-status-danger-strong">
-                                  <span>❌ Supera el total por:</span>
-                                  <span className="font-mono">
-                                    ${Math.abs(saldoRestante).toLocaleString("es-AR")}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Observaciones generales de caja */}
+                    {/* Observaciones generales de caja */}
                       <Input
                         label="Observaciones de caja (opcional)"
                         placeholder="Notas internas para el cierre de caja"
@@ -1108,14 +764,20 @@ function PagoTurnoContent({ turnoId }: { turnoId: number }) {
                       <Button
                         type="button"
                         variant="primary"
-                        disabled={!esMontoValido || procesando}
+                        disabled={!esMontoValido || procesando || !puedeCobrar}
                         onClick={() => setConfirmarOpen(true)}
                         className="w-full text-base font-extrabold shadow-sm"
                       >
                         {procesando ? "Procesando cobro..." : "Confirmar"}
                       </Button>
 
-                      {!esMontoValido && (
+                      {errorCobro !== null && (
+                        <p role="alert" className="text-center text-[11px] font-semibold text-destructive">
+                          {errorCobro}
+                        </p>
+                      )}
+
+                      {puedeCobrar && !esMontoValido && (
                         <p className="text-center text-[11px] font-semibold text-status-warning-strong">
                           {saldoRestante > 0
                             ? `Debés asignar los $${saldoRestante.toLocaleString("es-AR")} restantes para continuar.`
@@ -1200,9 +862,9 @@ function PagoTurnoContent({ turnoId }: { turnoId: number }) {
         open={confirmarOpen}
         title="¿Confirmar cobro del turno?"
         description={`Se registrará el cobro de $${totalCobrar.toLocaleString("es-AR")} (${practica?.nombre ?? "Servicio"} + ${productos.length} ítems clínicos) para el turno #${turno.id} (${cliente?.nombre ?? "Cliente"} · ${mascota?.nombre ?? "Mascota"}) abonado mediante ${
-          modoPago === "simple"
-            ? (MEDIOS_PAGO.find((m) => m.id === medioPagoSimple)?.label || "Efectivo")
-            : `pago combinado ($${montoEfectivo.toLocaleString("es-AR")} en Efectivo + $${montoTransferencia.toLocaleString("es-AR")} en Transferencia / QR)`
+          pagos.length > 1
+            ? `pago combinado (${pagos.map((p) => `$${Number(p.monto).toLocaleString("es-AR")} en ${mediosCobro.find((m) => m.id === p.formaPagoId)?.nombre ?? "medio"}`).join(" + ")})`
+            : (mediosCobro.find((m) => m.id === pagos[0]?.formaPagoId)?.nombre ?? "el medio elegido")
         }.`}
         confirmLabel="Confirmar"
         cancelLabel="Volver"
@@ -1215,10 +877,10 @@ function PagoTurnoContent({ turnoId }: { turnoId: number }) {
       <ComprobanteTurnoModal
         open={comprobanteModalOpen}
         onClose={() => {
-          setComprobanteModalOpen(false);
+          setComprobanteVisible(false);
           router.push("/clientes?tab=turnos");
         }}
-        comprobante={comprobanteData}
+        comprobante={comprobanteActual}
       />
     </div>
   );

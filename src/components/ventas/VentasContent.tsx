@@ -9,9 +9,10 @@ import {
   ShoppingBag,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pagination } from "@/components/ui/Pagination";
-import { obtenerVentas, subscribeVentas, VENTAS_INICIALES } from "@/data/ventas";
+import type { Venta } from "@/data/ventas";
+import { apiGet } from "@/lib/api-client";
 import { VentasTable } from "./VentasTable";
 
 interface VentasContentProps {
@@ -22,12 +23,29 @@ export function VentasContent({
   onNuevaVenta,
 }: VentasContentProps = {}) {
   const router = useRouter();
-  const ventas = useSyncExternalStore(
-    subscribeVentas,
-    obtenerVentas,
-    () => VENTAS_INICIALES,
-  );
-  const [loading] = useState(false);
+  const [ventas, setVentas] = useState<Venta[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let cancelado = false;
+    const t = setTimeout(async () => {
+      try {
+        const lista = await apiGet<Venta[]>("/api/ventas");
+        if (cancelado) return;
+        setVentas(lista);
+        setError(false);
+      } catch {
+        if (!cancelado) setError(true);
+      } finally {
+        if (!cancelado) setLoading(false);
+      }
+    }, 0);
+    return () => {
+      cancelado = true;
+      clearTimeout(t);
+    };
+  }, []);
 
   // Filtros
   const [busqueda, setBusqueda] = useState("");
@@ -39,24 +57,22 @@ export function VentasContent({
   const metricas = useMemo(() => {
     const totalRecaudado = ventas.reduce((acc, v) => acc + v.total, 0);
     let totalEfectivo = 0;
-    let totalTransferencia = 0;
 
     ventas.forEach((v) => {
       if (v.mediosPago && v.mediosPago.length > 0) {
         v.mediosPago.forEach((mp) => {
           if (mp.medio === "efectivo") totalEfectivo += mp.monto;
-          if (mp.medio === "transferencia") totalTransferencia += mp.monto;
         });
       } else {
         if (v.medioPago === "efectivo") totalEfectivo += v.total;
-        if (v.medioPago === "transferencia") totalTransferencia += v.total;
       }
     });
 
     return {
       totalRecaudado,
       totalEfectivo,
-      totalTransferencia,
+      // Todo lo que no es efectivo: transferencia, tarjeta y billetera virtual.
+      totalOtrosMedios: totalRecaudado - totalEfectivo,
       cantidadVentas: ventas.length,
     };
   }, [ventas]);
@@ -138,10 +154,10 @@ export function VentasContent({
           </span>
           <div className="flex flex-col">
             <span className="text-xs font-bold uppercase tracking-wider text-text-secondary">
-              En Transferencia / QR
+              Otros medios
             </span>
             <span className="font-mono text-xl font-extrabold text-brand-900">
-              ${metricas.totalTransferencia.toLocaleString("es-AR")}
+              ${metricas.totalOtrosMedios.toLocaleString("es-AR")}
             </span>
           </div>
         </div>
@@ -185,6 +201,8 @@ export function VentasContent({
             { id: "todos", label: "Todos" },
             { id: "efectivo", label: "Efectivo" },
             { id: "transferencia", label: "Transferencia" },
+            { id: "tarjeta", label: "Tarjeta" },
+            { id: "billetera_virtual", label: "Billetera virtual" },
             { id: "mixto", label: "Combinado" },
           ].map((m) => (
             <button
@@ -217,6 +235,12 @@ export function VentasContent({
           )}
         </div>
       </div>
+
+      {error && (
+        <p role="alert" className="rounded-md border border-destructive/40 bg-surface px-4 py-3 text-sm font-semibold text-destructive">
+          No se pudieron cargar las ventas. Recargá la pantalla para reintentar.
+        </p>
+      )}
 
       {/* Tabla de Ventas */}
       <VentasTable

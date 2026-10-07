@@ -1,0 +1,223 @@
+import type { PoolClient } from "pg";
+import { query } from "@/lib/db/client";
+import type { FiltrosMascota, MascotaInput, MascotaRow } from "./mascota.types";
+
+/**
+ * HU-MAS-01 — capa de acceso a datos de Mascotas.
+ *
+ * ACÁ VA: SQL parametrizado y nada más.
+ * ACÁ NO VA: validaciones, reglas de negocio, transacciones (las abre el service).
+ */
+
+// Columnas explícitas, nunca SELECT *. `created_at` y `updated_at` no se
+// exponen: el contrato del front (src/data/mascotas.ts) no los declara.
+const COLUMNAS = `
+  m.id, m.cliente_id, m.nombre, m.especie, m.raza, m.sexo, m.peso,
+  m.fecha_nacimiento, m.senas_particulares, m.estado,
+  c.nombre    AS cliente_nombre,
+  c.apellido  AS cliente_apellido,
+  c.documento AS cliente_documento
+`;
+
+// El JOIN es INNER y no LEFT a propósito: `cliente_id` es NOT NULL con FK, así
+// que toda mascota tiene dueño. Es el criterio "la asociación a un cliente
+// existente es obligatoria" garantizado por el esquema.
+const FROM = `
+  FROM mascota m
+  JOIN cliente c ON c.id = m.cliente_id
+`;
+
+// ---------------------------------------------------------
+// Lecturas
+// ---------------------------------------------------------
+
+export async function findAll(f: FiltrosMascota = {}): Promise<MascotaRow[]> {
+  const condiciones: string[] = [];
+  const params: unknown[] = [];
+
+  if (f.busqueda) {
+    params.push(`%${f.busqueda}%`);
+    const p = `$${params.length}`;
+    // Lo que pide el brief: nombre de la mascota, nombre del dueño o documento
+    // del dueño. El `nombre || ' ' || apellido` permite buscar "Juan Pérez".
+    condiciones.push(`(
+      m.nombre ILIKE ${p} OR
+      c.nombre ILIKE ${p} OR
+      c.apellido ILIKE ${p} OR
+      (c.nombre || ' ' || c.apellido) ILIKE ${p} OR
+      c.documento ILIKE ${p}
+    )`);
+  }
+
+  if (f.estado) {
+    params.push(f.estado);
+    condiciones.push(`m.estado = $${params.length}`);
+  }
+
+  if (f.especie) {
+    params.push(f.especie);
+    condiciones.push(`m.especie = $${params.length}`);
+  }
+
+  if (f.sexo) {
+    params.push(f.sexo);
+    condiciones.push(`m.sexo = $${params.length}`);
+  }
+
+  if (f.clienteId) {
+    params.push(f.clienteId);
+    condiciones.push(`m.cliente_id = $${params.length}`);
+  }
+
+  const where = condiciones.length ? `WHERE ${condiciones.join(" AND ")}` : "";
+
+  return query<MascotaRow>(
+    `SELECT ${COLUMNAS} ${FROM} ${where} ORDER BY m.nombre`,
+    params,
+  );
+}
+
+export async function findById(id: number): Promise<MascotaRow | null> {
+  const filas = await query<MascotaRow>(
+    `SELECT ${COLUMNAS} ${FROM} WHERE m.id = $1`,
+    [id],
+  );
+  return filas[0] ?? null;
+}
+
+/**
+ * Igual que findById pero con el `client` de una transacción abierta.
+ *
+ * Hace falta para releer después de un INSERT: desde el pool esa fila todavía
+ * no existe (falta el COMMIT) y la respuesta saldría vacía.
+ */
+export async function findByIdEnTransaccion(
+  id: number,
+  client: PoolClient,
+): Promise<MascotaRow | null> {
+  const { rows } = await client.query<MascotaRow>(
+    `SELECT ${COLUMNAS} ${FROM} WHERE m.id = $1`,
+    [id],
+  );
+  return rows[0] ?? null;
+}
+
+/**
+ * El cliente al que se quiere asociar la mascota.
+ *
+ * Devuelve también el estado porque el service necesita distinguir "no existe"
+ * (404) de "existe pero está inactivo" (409): son dos errores distintos y el
+ * usuario puede hacer cosas distintas con cada uno.
+ */
+export async function findClienteParaAsociar(
+  clienteId: number,
+): Promise<{ id: number; nombre: string; apellido: string; estado: string } | null> {
+  const filas = await query<{
+    id: number;
+    nombre: string;
+    apellido: string;
+    estado: string;
+  }>(`SELECT id, nombre, apellido, estado FROM cliente WHERE id = $1`, [clienteId]);
+  return filas[0] ?? null;
+}
+
+/**
+ * ¿El cliente ya tiene otra mascota activa con ese nombre?
+ *
+ * No hay UNIQUE en la base y no debería haberlo: dos clientes distintos pueden
+ * tener un perro llamado "Toby". Lo que no tiene sentido es que el MISMO dueño
+ * tenga dos "Toby" activos, porque después no se distinguen en el turno.
+ *
+ * `excluirId` sirve para la edición: una mascota no choca consigo misma.
+ */
+export async function findActivaPorNombreDelCliente(
+  clienteId: number,
+  nombre: string,
+  excluirId?: number,
+): Promise<MascotaRow | null> {
+  const filas = await query<MascotaRow>(
+    `SELECT ${COLUMNAS} ${FROM}
+     WHERE m.cliente_id = $1
+       AND lower(m.nombre) = lower($2)
+       AND m.estado = 'activo'
+       AND ($3::int IS NULL OR m.id <> $3)`,
+    [clienteId, nombre, excluirId ?? null],
+  );
+  return filas[0] ?? null;
+}
+
+// ---------------------------------------------------------
+// Escrituras (siempre con client, dentro de una transacción)
+// ---------------------------------------------------------
+
+/**
+ * Inserta la mascota y devuelve su id.
+ *
+ * NO se envía `id`: la columna es `GENERATED BY DEFAULT AS IDENTITY`, así que
+ * la base lo asigna sola. Tampoco `created_at`/`updated_at`, que tienen DEFAULT.
+ *
+ * El RETURNING trae solo el id; para devolver el objeto completo con el dueño
+ * resuelto hay que releer con el JOIN (lo hace el service).
+ */
+export async function insert(
+  data: MascotaInput,
+  client: PoolClient,
+): Promise<number> {
+  const { rows } = await client.query<{ id: number }>(
+    `INSERT INTO mascota
+       (cliente_id, nombre, especie, raza, sexo, peso, fecha_nacimiento,
+        senas_particulares, estado)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+     RETURNING id`,
+    [
+      data.clienteId,
+      data.nombre,
+      data.especie,
+      data.raza,
+      data.sexo,
+      data.peso,
+      data.fechaNacimiento,
+      data.senasParticulares,
+      data.estado,
+    ],
+  );
+  return rows[0].id;
+}
+
+/**
+ * Actualiza la mascota. Devuelve false si el id no existe.
+ *
+ * `updated_at` lo pone el trigger `fn_touch_updated_at`, no esta query.
+ */
+export async function update(
+  id: number,
+  data: MascotaInput,
+  client: PoolClient,
+): Promise<boolean> {
+  const { rowCount } = await client.query(
+    `UPDATE mascota SET
+       cliente_id         = $2,
+       nombre             = $3,
+       especie            = $4,
+       raza               = $5,
+       sexo               = $6,
+       peso               = $7,
+       fecha_nacimiento   = $8,
+       senas_particulares = $9,
+       estado             = $10
+     WHERE id = $1`,
+    [
+      id,
+      data.clienteId,
+      data.nombre,
+      data.especie,
+      data.raza,
+      data.sexo,
+      data.peso,
+      data.fechaNacimiento,
+      data.senasParticulares,
+      data.estado,
+    ],
+  );
+  return (rowCount ?? 0) > 0;
+}

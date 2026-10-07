@@ -93,32 +93,5 @@ export interface MovimientoTransferencia {
   movimientoVinculadoId: number;
 }
 
-export const movimientosTransferencia: MovimientoTransferencia[] = [
-  {
-    id: 101,
-    fichaStockId: 1,
-    origenId: 2,
-    origenEntidadId: 55,
-    tipo: "egreso",
-    cantidad: 10,
-    fechaHora: "2025-08-10T09:15:00Z",
-    empleadoId: 7,
-    motivo: "Transferencia a Dep. Norte",
-    movimientoVinculadoId: 102,
-  },
-  {
-    id: 102,
-    fichaStockId: 3,
-    origenId: 2,
-    origenEntidadId: 55,
-    tipo: "ingreso",
-    cantidad: 10,
-    fechaHora: "2025-08-10T09:15:00Z",
-    empleadoId: 7,
-    motivo: "Transferencia desde Dep. Central",
-    movimientoVinculadoId: 101,
-  },
-];
-
 export const SIMULAR_VACIO = false;
 export const SIMULAR_ERROR = false;

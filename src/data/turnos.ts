@@ -1,4 +1,5 @@
-// Datos placeholder del módulo Turnos (HU-TUR-01, HU-TUR-02).
+// Contrato y helpers del módulo Turnos (HU-TUR-01, HU-TUR-02). Los datos salen
+// de la API (/api/turnos, /api/profesionales, /api/practicas).
 // Contrato real del esquema (docs/esquema-bd-front.md, sección 8 "Clientes,
 // Mascotas y Turnos" — DD Sprint 3). Cada `id` es la PK que mandará la base.
 // El estado proviene del catálogo `estado_turno` (NO es enum). `dia_semana`
@@ -47,7 +48,7 @@ export const nombreEstado: Record<number, string> = {
 };
 
 // ─── Catálogo practica (la duración determina hora_fin = hora_inicio + duración) ──
-// BACKEND: poblar desde GET /api/practicas.
+/** GET /api/practicas. */
 export interface Practica {
   id: number;
   nombre: string;
@@ -55,15 +56,8 @@ export interface Practica {
   duracionMinutos: number;
 }
 
-export const practicas: Practica[] = [
-  { id: 1, nombre: "Consulta", duracionMinutos: 30 },
-  { id: 2, nombre: "Cirugía", duracionMinutos: 90 },
-  { id: 3, nombre: "Control", duracionMinutos: 15 },
-];
-
 // ─── Profesionales (usuario con rol Veterinario) ─────────────────────────────
-// BACKEND: reemplazar por GET /api/profesionales (JOIN usuario_rol =
-// Veterinario + agenda_profesional).
+// GET /api/profesionales (usuarios con rol Veterinario + sus franjas).
 export interface FranjaProfesional {
   /** dict: agenda_profesional.id (PK). */
   id: number;
@@ -83,50 +77,30 @@ export interface Profesional {
   franjas: FranjaProfesional[];
 }
 
-export const profesionales: Profesional[] = [
-  {
-    id: 3, // usuario.id (rol Veterinario) del directorio src/data/usuarios.ts
-    nombre: "Dr. Juan",
-    apellido: "Pérez",
-    dni: "32456789",
-    franjas: [
-      { id: 1, diaSemana: 1, horaInicio: "08:00", horaFin: "12:00" },
-      { id: 2, diaSemana: 1, horaInicio: "14:00", horaFin: "18:00" },
-      { id: 3, diaSemana: 2, horaInicio: "08:00", horaFin: "12:00" },
-      { id: 4, diaSemana: 2, horaInicio: "14:00", horaFin: "18:00" },
-      { id: 5, diaSemana: 3, horaInicio: "08:00", horaFin: "12:00" },
-      { id: 6, diaSemana: 3, horaInicio: "14:00", horaFin: "18:00" },
-      { id: 7, diaSemana: 4, horaInicio: "08:00", horaFin: "12:00" },
-      { id: 8, diaSemana: 4, horaInicio: "14:00", horaFin: "18:00" },
-      { id: 9, diaSemana: 5, horaInicio: "08:00", horaFin: "12:00" },
-      { id: 10, diaSemana: 5, horaInicio: "14:00", horaFin: "18:00" },
-    ],
-  },
-  {
-    id: 5, // usuario.id (rol Veterinario) del directorio src/data/usuarios.ts
-    nombre: "Dra. Laura",
-    apellido: "Gómez",
-    dni: "29876123",
-    franjas: [
-      { id: 11, diaSemana: 2, horaInicio: "08:00", horaFin: "12:00" },
-      { id: 12, diaSemana: 2, horaInicio: "14:00", horaFin: "18:00" },
-      { id: 13, diaSemana: 4, horaInicio: "08:00", horaFin: "12:00" },
-      { id: 14, diaSemana: 4, horaInicio: "14:00", horaFin: "18:00" },
-    ],
-  },
-];
-
-// Mapas de display compartidos (tab Turnos y Agenda): resuelven el nombre del
-// profesional y de la práctica desde las FK del turno, sin duplicar los JOINs.
-export const profesionalPorFranja: Record<number, { nombre: string; apellido: string }> = {};
-export const profesionalIdPorFranja: Record<number, number> = {};
-for (const p of profesionales) {
-  for (const f of p.franjas) {
-    profesionalPorFranja[f.id] = { nombre: p.nombre, apellido: p.apellido };
-    profesionalIdPorFranja[f.id] = p.id;
-  }
+// Directorio de display (tab Turnos, Agenda y Clínica): resuelve el nombre del
+// profesional y de la práctica desde las FK del turno. Se arma con los
+// catálogos que devuelven GET /api/profesionales y GET /api/practicas.
+export interface DirectorioTurnos {
+  profesionalPorFranja: Record<number, { nombre: string; apellido: string }>;
+  profesionalIdPorFranja: Record<number, number>;
+  practicaPorId: Record<number, Practica>;
 }
-export const practicaPorId = Object.fromEntries(practicas.map((p) => [p.id, p]));
+
+export function armarDirectorio(profesionales: Profesional[], practicas: Practica[]): DirectorioTurnos {
+  const profesionalPorFranja: DirectorioTurnos["profesionalPorFranja"] = {};
+  const profesionalIdPorFranja: DirectorioTurnos["profesionalIdPorFranja"] = {};
+  for (const p of profesionales) {
+    for (const f of p.franjas) {
+      profesionalPorFranja[f.id] = { nombre: p.nombre, apellido: p.apellido };
+      profesionalIdPorFranja[f.id] = p.id;
+    }
+  }
+  return {
+    profesionalPorFranja,
+    profesionalIdPorFranja,
+    practicaPorId: Object.fromEntries(practicas.map((pr) => [pr.id, pr])),
+  };
+}
 
 // ─── Turno ───────────────────────────────────────────────────────────────────
 export interface Turno {
@@ -156,6 +130,8 @@ export interface Turno {
   usuarioId: number;
   /** dict: turno.fecha_creacion timestamptz → ISO. */
   fechaCreacion: string;
+  /** dict: turno.pagado — true cuando la atención ya fue cobrada (HU-VTA-01). */
+  pagado: boolean;
 }
 
 /** Lo que POST /turnos manda; sucursal_id, estado_id y fecha_creacion las completa el backend. */
@@ -170,212 +146,6 @@ export type TurnoDraft = Pick<
   | "horaFin"
   | "notas"
 >;
-
-export const RECEPCIONISTA_ID = 4; // usuario.id "Ana Martínez" (rol Recepcionista) de src/data/usuarios.ts
-
-// BACKEND: reemplazar por GET /turnos?fecha=&estado_id=&q= ... los ids de FK
-// viajan con comentario (turno.cliente_id → cliente.id, etc.); el front los
-// junta con los directorios para display (no se duplica texto en el modelo).
-export const turnosIniciales: Turno[] = [
-  {
-    id: 1,
-    clienteId: 1, // Pablo Celaya
-    mascotaId: 3, // Poppi
-    sucursalId: 1,
-    agendaProfesionalId: 1, // Dr. Juan Pérez · lunes mañana
-    practicaId: 1, // consulta 30'
-    estadoId: 2, // confirmado
-    fecha: "2026-09-14",
-    horaInicio: "10:00",
-    horaFin: "10:30",
-    notas: null,
-    usuarioId: RECEPCIONISTA_ID,
-    fechaCreacion: "2026-09-12T09:20:00.000Z",
-  },
-  {
-    id: 2,
-    clienteId: 3, // Nicolas Celaya
-    mascotaId: 1, // Azul
-    sucursalId: 1,
-    agendaProfesionalId: 3, // Dr. Juan Pérez · martes mañana
-    practicaId: 3, // control 15'
-    estadoId: 1, // pendiente
-    fecha: "2026-09-15",
-    horaInicio: "09:00",
-    horaFin: "09:15",
-    notas: "Control anual",
-    usuarioId: RECEPCIONISTA_ID,
-    fechaCreacion: "2026-09-14T15:05:00.000Z",
-  },
-  {
-    id: 3,
-    clienteId: 1, // Pablo Celaya
-    mascotaId: 3, // Poppi
-    sucursalId: 1,
-    agendaProfesionalId: 12, // Dra. Laura Gómez · martes tarde
-    practicaId: 2, // cirugía 90'
-    estadoId: 4, // atendido
-    fecha: "2026-09-08",
-    horaInicio: "15:00",
-    horaFin: "16:30",
-    notas: "Castración programada",
-    usuarioId: RECEPCIONISTA_ID,
-    fechaCreacion: "2026-09-09T11:40:00.000Z",
-  },
-  {
-    id: 4,
-    clienteId: 3, // Nicolas Celaya
-    mascotaId: 1, // Azul
-    sucursalId: 1,
-    agendaProfesionalId: 7, // Dr. Juan Pérez · jueves mañana
-    practicaId: 3, // control 15'
-    estadoId: 5, // no_asistio
-    fecha: "2026-09-10",
-    horaInicio: "11:00",
-    horaFin: "11:15",
-    notas: null,
-    usuarioId: RECEPCIONISTA_ID,
-    fechaCreacion: "2026-09-08T14:12:00.000Z",
-  },
-  {
-    id: 5,
-    clienteId: 1, // Pablo Celaya
-    mascotaId: 3, // Poppi
-    sucursalId: 1,
-    agendaProfesionalId: 4, // Dr. Juan Pérez · martes tarde
-    practicaId: 1, // consulta 30'
-    estadoId: 3, // cancelado (liberó el hueco de agenda)
-    fecha: "2026-09-08",
-    horaInicio: "16:00",
-    horaFin: "16:30",
-    notas: "Cliente canceló",
-    usuarioId: RECEPCIONISTA_ID,
-    fechaCreacion: "2026-09-05T10:31:00.000Z",
-  },
-  // Semana de ejemplo de la agenda (HU-TUR-02): lunes 21/09 a viernes 25/09/2026.
-  // La grilla agrupa por franja (agenda_profesional.id) y fecha.
-  // BACKEND: GET /agenda/semana?fecha=&usuario_id= reemplaza el filtro local.
-  {
-    id: 10,
-    clienteId: 1, // Pablo Celaya
-    mascotaId: 3, // Poppi
-    sucursalId: 1,
-    agendaProfesionalId: 1, // Dr. Juan Pérez · lunes mañana (08-12)
-    practicaId: 1, // consulta 30'
-    estadoId: 4, // atendido
-    fecha: "2026-09-21",
-    horaInicio: "08:00",
-    horaFin: "08:30",
-    notas: null,
-    usuarioId: RECEPCIONISTA_ID,
-    fechaCreacion: "2026-09-19T10:00:00.000Z",
-  },
-  {
-    id: 11,
-    clienteId: 3, // Nicolas Celaya
-    mascotaId: 1, // Azul
-    sucursalId: 1,
-    agendaProfesionalId: 1, // Dr. Juan Pérez · lunes mañana
-    practicaId: 3, // control 15'
-    estadoId: 2, // confirmado
-    fecha: "2026-09-21",
-    horaInicio: "09:00",
-    horaFin: "09:15",
-    notas: null,
-    usuarioId: RECEPCIONISTA_ID,
-    fechaCreacion: "2026-09-18T11:20:00.000Z",
-  },
-  {
-    id: 12,
-    clienteId: 1, // Pablo Celaya
-    mascotaId: 3, // Poppi
-    sucursalId: 1,
-    agendaProfesionalId: 12, // Dra. Laura Gómez · martes tarde (14-18)
-    practicaId: 2, // cirugía 90'
-    estadoId: 2, // confirmado
-    fecha: "2026-09-22",
-    horaInicio: "14:00",
-    horaFin: "15:30",
-    notas: "Castración programada",
-    usuarioId: RECEPCIONISTA_ID,
-    fechaCreacion: "2026-09-19T09:05:00.000Z",
-  },
-  {
-    id: 13,
-    clienteId: 3, // Nicolas Celaya
-    mascotaId: 1, // Azul
-    sucursalId: 1,
-    agendaProfesionalId: 3, // Dr. Juan Pérez · martes mañana
-    practicaId: 3, // control 15'
-    estadoId: 1, // pendiente
-    fecha: "2026-09-22",
-    horaInicio: "08:00",
-    horaFin: "08:15",
-    notas: null,
-    usuarioId: RECEPCIONISTA_ID,
-    fechaCreacion: "2026-09-20T16:40:00.000Z",
-  },
-  {
-    id: 14,
-    clienteId: 1, // Pablo Celaya
-    mascotaId: 3, // Poppi
-    sucursalId: 1,
-    agendaProfesionalId: 6, // Dr. Juan Pérez · miércoles tarde
-    practicaId: 1, // consulta 30'
-    estadoId: 5, // no_asistio
-    fecha: "2026-09-23",
-    horaInicio: "15:00",
-    horaFin: "15:30",
-    notas: null,
-    usuarioId: RECEPCIONISTA_ID,
-    fechaCreacion: "2026-09-17T12:30:00.000Z",
-  },
-  {
-    id: 15,
-    clienteId: 3, // Nicolas Celaya
-    mascotaId: 1, // Azul
-    sucursalId: 1,
-    agendaProfesionalId: 7, // Dr. Juan Pérez · jueves mañana
-    practicaId: 3, // control 15'
-    estadoId: 3, // cancelado (liberó el hueco)
-    fecha: "2026-09-24",
-    horaInicio: "08:00",
-    horaFin: "08:15",
-    notas: "Cliente canceló",
-    usuarioId: RECEPCIONISTA_ID,
-    fechaCreacion: "2026-09-18T08:45:00.000Z",
-  },
-  {
-    id: 16,
-    clienteId: 1, // Pablo Celaya
-    mascotaId: 3, // Poppi
-    sucursalId: 1,
-    agendaProfesionalId: 13, // Dra. Laura Gómez · jueves mañana
-    practicaId: 2, // cirugía 90'
-    estadoId: 4, // atendido
-    fecha: "2026-09-24",
-    horaInicio: "09:00",
-    horaFin: "10:30",
-    notas: null,
-    usuarioId: RECEPCIONISTA_ID,
-    fechaCreacion: "2026-09-16T14:10:00.000Z",
-  },
-  {
-    id: 17,
-    clienteId: 3, // Nicolas Celaya
-    mascotaId: 1, // Azul
-    sucursalId: 1,
-    agendaProfesionalId: 9, // Dr. Juan Pérez · viernes mañana
-    practicaId: 3, // control 15'
-    estadoId: 2, // confirmado
-    fecha: "2026-09-25",
-    horaInicio: "09:00",
-    horaFin: "09:15",
-    notas: null,
-    usuarioId: RECEPCIONISTA_ID,
-    fechaCreacion: "2026-09-20T18:25:00.000Z",
-  },
-];
 
 // ─── Helpers de horarios (agenda) ────────────────────────────────────────────
 // Junto al EXCLUDE USING gist de BD, el front valida disponibilidad antes de
@@ -549,6 +319,31 @@ export function horaDentroDeTurno(turno: Turno, horaInicio: string): boolean {
  * dos turnos se solapan si cada uno empieza antes de que termine el otro.
  * Es espejo del EXCLUDE USING gist de BD; el backend también valida con OVERLAPS.
  */
+/**
+ * Igual que `haySuperposicion` pero para un turno que TODAVÍA NO EXISTE.
+ *
+ * El draft no tiene `id`, así que no hay nada que excluir de la comparación:
+ * antes se pasaba `id: 0`, que funcionaba de casualidad (ningún turno guardado
+ * tiene id 0) y escondía que el caso era distinto.
+ *
+ * ⚠️ Es feedback de UI, no la garantía. El backend revalida contra la base y,
+ *    bajo concurrencia, el constraint `turno_sin_superposicion_excl` es lo
+ *    único que impide el turno duplicado.
+ */
+export function haySuperposicionDraft(
+  draft: Pick<Turno, "agendaProfesionalId" | "fecha" | "horaInicio" | "horaFin">,
+  existentes: Turno[],
+): boolean {
+  return existentes.some(
+    (t) =>
+      t.agendaProfesionalId === draft.agendaProfesionalId &&
+      t.fecha === draft.fecha &&
+      t.estadoId !== 3 && // cancelado liberó el hueco
+      draft.horaInicio < t.horaFin &&
+      t.horaInicio < draft.horaFin,
+  );
+}
+
 export function haySuperposicion(turno: Pick<Turno, "id" | "agendaProfesionalId" | "fecha" | "horaInicio" | "horaFin">, existentes: Turno[]): boolean {
   return existentes.some(
     (t) =>

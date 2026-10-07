@@ -1,5 +1,5 @@
-import type { PoolClient } from "pg";
-import { query } from "@/lib/db/client";
+import type { Pool, PoolClient } from "pg";
+import { pool, query } from "@/lib/db/client";
 import type {
   ComprobanteRow,
   ComprobanteDetalleRow,
@@ -8,6 +8,15 @@ import type {
   CabeceraComprobanteInput,
   LineaComprobanteInput,
 } from "./comprobante.types";
+
+/**
+ * Pool o cliente de transacción.
+ *
+ * Las lecturas que se llaman DESPUÉS de escribir dentro de una transacción
+ * tienen que recibir el `client`: desde otra conexión del pool las filas recién
+ * insertadas todavía no existen.
+ */
+type Ejecutor = Pool | PoolClient;
 
 export async function listar(filtros: FiltrosComprobante): Promise<ComprobanteRow[]> {
   const conditions: string[] = [];
@@ -79,7 +88,24 @@ export async function listar(filtros: FiltrosComprobante): Promise<ComprobanteRo
   return query<ComprobanteRow>(sql, params);
 }
 
-export async function obtenerPorId(id: number): Promise<ComprobanteRow | null> {
+/**
+ * ⚠️ ACEPTA UN `ejecutor` Y NO ES OPCIONAL POR CAPRICHO.
+ *
+ * Sin él, `query()` toma OTRA conexión del pool. Si se lo llama dentro de una
+ * transacción —como hacen `crear()` y `anular()` para releer lo que acaban de
+ * escribir— esa otra conexión todavía no ve la fila: falta el COMMIT. Devolvía
+ * `null`, el `!` del service se lo tragaba en tiempo de compilación, y el
+ * mapper explotaba con un TypeError.
+ *
+ * O sea que **crear un comprobante por la API siempre terminaba en 500 y en
+ * ROLLBACK**. Los comprobantes que hay en la base entraron por SQL a mano: su
+ * fila de `auditoria` tiene `usuario_id` en NULL, que es lo que deja un INSERT
+ * que no pasó por `withAuditUser`.
+ */
+export async function obtenerPorId(
+  id: number,
+  ejecutor: Ejecutor = pool,
+): Promise<ComprobanteRow | null> {
   const sql = `
     SELECT
       c.*,
@@ -98,11 +124,15 @@ export async function obtenerPorId(id: number): Promise<ComprobanteRow | null> {
     LEFT JOIN comprobante_proveedor anul ON anul.id = c.anula_comprobante_id
     WHERE c.id = $1;
   `;
-  const rows = await query<ComprobanteRow>(sql, [id]);
+  const { rows } = await ejecutor.query<ComprobanteRow>(sql, [id]);
   return rows[0] ?? null;
 }
 
-export async function obtenerDetalles(comprobanteId: number): Promise<ComprobanteDetalleRow[]> {
+/** Mismo motivo que `obtenerPorId`: tiene que poder leer dentro de la transacción. */
+export async function obtenerDetalles(
+  comprobanteId: number,
+  ejecutor: Ejecutor = pool,
+): Promise<ComprobanteDetalleRow[]> {
   const sql = `
     SELECT
       d.*,
@@ -114,7 +144,8 @@ export async function obtenerDetalles(comprobanteId: number): Promise<Comprobant
     WHERE d.comprobante_id = $1
     ORDER BY d.id ASC;
   `;
-  return query<ComprobanteDetalleRow>(sql, [comprobanteId]);
+  const { rows } = await ejecutor.query<ComprobanteDetalleRow>(sql, [comprobanteId]);
+  return rows;
 }
 
 export async function existeNumero(
@@ -203,11 +234,10 @@ export async function insertarLineas(client: PoolClient, comprobanteId: number, 
         comprobante_id,
         articulo_id,
         cantidad,
-        precio_facturado,
-        subtotal
-      ) VALUES ($1, $2, $3, $4, $5);
+        precio_facturado
+      ) VALUES ($1, $2, $3, $4);
     `;
-    await client.query(sql, [comprobanteId, l.articuloId, l.cantidad, l.precioFacturado, l.subtotal]);
+    await client.query(sql, [comprobanteId, l.articuloId, l.cantidad, l.precioFacturado]);
   }
 }
 

@@ -23,6 +23,8 @@ export type AperturaRow = {
   cajero_nombre: string;
   cajero_apellido: string;
   monto_inicial: string;
+  /** inicial + ingresos − egresos hasta ahora (en vivo; al cerrar coincide con el esperado). */
+  saldo_actual: string;
   /** 'YYYY-MM-DDTHH24:MI:SS' sin zona (como los timestamp de la base). */
   fecha_apertura: string;
   /** true = abierta. */

@@ -14,11 +14,8 @@ import {
   diaSemanaDeFecha,
   fechasDeSemana,
   formatearSemana,
+  armarDirectorio,
   lunesDeFecha,
-  profesionalIdPorFranja,
-  profesionalPorFranja,
-  practicaPorId,
-  profesionales,
   SIMULAR_ERROR,
   SIMULAR_VACIO,
   sumarDias,
@@ -28,6 +25,7 @@ import {
 import { Button } from "@/components/ui/Button";
 import { EstadoTurnoBadge } from "./EstadoTurnoBadge";
 import {
+  type CatalogosAgenda,
   FILTROS_AGENDA_VACIOS,
   FiltrosAgenda,
   FiltrosAgendaChips,
@@ -76,16 +74,32 @@ interface AgendaSemanalProps {
   clientes: Cliente[];
   mascotas: Mascota[];
   turnos: Turno[];
-  /** HU-TUR-02: aplica el cambio de estado (PATCH). Devuelve si fue OK. */
-  onCambiarEstado: (turnoId: number, estadoId: number) => boolean;
+  /**
+   * Catálogos de los filtros (profesionales y prácticas), desde la API.
+   *
+   * `profesionales` además da las FRANJAS con las que la agenda dibuja las
+   * filas de horario: antes venían de la constante de src/data/turnos.ts, cuyas
+   * franjas (ids 1..14) no existen en la base — la agenda mostraba una grilla
+   * que no correspondía a los horarios reales de nadie.
+   */
+  catalogos: CatalogosAgenda;
+  /**
+   * HU-TUR-02: manda el cambio de estado (PATCH /api/turnos/:id/estado).
+   * Devuelve el mensaje de error, o `null` si salió bien.
+   */
+  onCambiarEstado: (turnoId: number, estadoId: number) => Promise<string | null>;
 }
 
 export function AgendaSemanal({
   clientes,
   mascotas,
   turnos,
+  catalogos,
   onCambiarEstado,
 }: AgendaSemanalProps) {
+  const { profesionales, practicas } = catalogos;
+  const directorio = useMemo(() => armarDirectorio(profesionales, practicas), [profesionales, practicas]);
+  const { profesionalIdPorFranja, profesionalPorFranja, practicaPorId } = directorio;
   const hoyISO = useMemo(() => aISO(new Date()), []);
   const [lunes, setLunes] = useState(() => lunesDeFecha(hoyISO));
   const [filtros, setFiltros] = useState<FiltrosAgendaValues>(FILTROS_AGENDA_VACIOS);
@@ -127,7 +141,7 @@ export function AgendaSemanal({
       if (filtros.hasta && t.fecha > filtros.hasta) return false;
       return t.fecha >= primero && t.fecha <= ultimo;
     });
-  }, [turnos, filtros, primero, ultimo]);
+  }, [turnos, filtros, primero, ultimo, profesionalIdPorFranja]);
 
   const turnosDeCelda = (fecha: string, banda: string) =>
     semanaTurnos
@@ -169,7 +183,7 @@ export function AgendaSemanal({
         </h2>
 
         <div className="flex flex-wrap items-center gap-2">
-          <FiltrosAgenda filtros={filtros} onChange={setFiltros} />
+          <FiltrosAgenda filtros={filtros} onChange={setFiltros} catalogos={catalogos} />
           <div className="flex items-center gap-2" role="group" aria-label="Navegación de semanas">
           <Button
             variant="outline"
@@ -202,7 +216,7 @@ export function AgendaSemanal({
       </div>
 
       <div className="flex flex-wrap items-center gap-4">
-        <FiltrosAgendaChips filtros={filtros} onChange={setFiltros} />
+        <FiltrosAgendaChips filtros={filtros} onChange={setFiltros} catalogos={catalogos} />
       </div>
 
       {error ? (
@@ -294,7 +308,7 @@ export function AgendaSemanal({
                                   <button
                                     key={t.id}
                                     type="button"
-                                    onClick={() => setDetalle(construirFilaTurno(t, clientePorId, mascotaPorId))}
+                                    onClick={() => setDetalle(construirFilaTurno(t, clientePorId, mascotaPorId, directorio))}
                                     className="flex min-h-12 w-full flex-col items-start gap-0.5 rounded-md border border-border bg-surface px-2.5 py-1.5 text-left transition-colors duration-fast ease-out hover:border-brand-900/50 hover:bg-brand-900/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-900"
                                   >
                                     <span className="text-[11px] font-bold leading-none text-text-secondary">

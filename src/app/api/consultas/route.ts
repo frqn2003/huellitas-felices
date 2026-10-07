@@ -24,7 +24,7 @@ export const GET = withRoute(async ({ req }) => {
 });
 
 /**
- * POST — abre la consulta de un turno vigente (pendiente, confirmado o atendido).
+ * POST — abre la consulta de un turno confirmado o atendido.
  * Si ya existe (p. ej. la creó el trigger al marcar 'atendido') devuelve la
  * existente (200).
  */

@@ -23,18 +23,8 @@ import { ResumenCaja } from "@/components/cajas/ResumenCaja";
 import { MovimientoCajaFormModal } from "@/components/cajas/MovimientoCajaFormModal";
 import { CerrarCajaModal } from "@/components/cajas/CerrarCajaModal";
 import { EstadoCajaBadge } from "@/components/cajas/EstadoCajaBadge";
-import {
-  actualizarApertura,
-  esperadoPreview,
-  guardarMovimiento,
-  obtenerAperturaPorId,
-  obtenerMovimientosPorApertura,
-  SIMULAR_ERROR,
-  SIMULAR_VACIO,
-  type CajaApertura,
-  type MovimientoCaja,
-  type TipoMovimientoCaja,
-} from "@/data/cajas";
+import type { CajaApertura, MovimientoCaja, TipoMovimientoCaja } from "@/data/cajas";
+import { ApiError, apiGet, apiSend, mensajeDeError } from "@/lib/api-client";
 
 export default function CajaDetallePage() {
   const params = useParams<{ aperturaId: string }>();
@@ -61,24 +51,32 @@ export default function CajaDetallePage() {
     let cancelado = false;
     // `loading` arranca en true y el retry lo setea desde el handler: el effect
     // solo resuelve el resultado (regla react-hooks/set-state-in-effect).
-    // BACKEND: GET /api/caja_apertura/{id} (JOIN caja,sucursal,usuario) + GET /api/caja_movimiento?caja_apertura_id={id}&order=fecha_hora ASC
-    const t = setTimeout(() => {
+    const t = setTimeout(async () => {
       if (cancelado) return;
-      if (SIMULAR_ERROR) {
-        setError(true);
-        setLoading(false);
-        return;
+      try {
+        // Apertura (con caja, sucursal y cajero) + TODOS sus movimientos: el
+        // esperado se calcula sobre el total, no sobre la página visible.
+        const [ap, movs] = await Promise.all([
+          apiGet<CajaApertura>(`/api/cajas/aperturas/${aperturaId}`),
+          apiGet<MovimientoCaja[]>(`/api/cajas/aperturas/${aperturaId}/movimientos`),
+        ]);
+        if (cancelado) return;
+        setApertura(ap);
+        setMovimientos(movs);
+        setError(false);
+      } catch (e) {
+        if (cancelado) return;
+        if (e instanceof ApiError && e.status === 404) {
+          setApertura(null); // la pantalla ya tiene su estado "no encontrada"
+          setMovimientos([]);
+          setError(false);
+        } else {
+          setError(true);
+        }
+      } finally {
+        if (!cancelado) setLoading(false);
       }
-      const ap = obtenerAperturaPorId(aperturaId);
-      setApertura(ap);
-      if (ap && !SIMULAR_VACIO) {
-        setMovimientos(obtenerMovimientosPorApertura(ap.id));
-      } else {
-        setMovimientos([]);
-      }
-      setError(false);
-      setLoading(false);
-    }, 700);
+    }, 0);
     return () => {
       cancelado = true;
       clearTimeout(t);
@@ -125,51 +123,43 @@ export default function CajaDetallePage() {
     setPage(1);
   };
 
-  const handleRegistrarMovimiento = (data: {
+  const handleRegistrarMovimiento = async (data: {
     tipo: TipoMovimientoCaja;
     monto: number;
     motivo: string;
   }) => {
     if (!apertura) return;
-    // BACKEND: POST /api/caja_movimiento (caja_apertura_id, tipo, monto, motivo, venta_id)
-    //          trigger actualiza caja.saldo_actual y valida que la caja esté abierta
-    const nuevoId = Math.max(0, ...movimientos.map((m) => m.id)) + 1;
-    const nuevoMov: MovimientoCaja = {
-      id: nuevoId,
-      cajaAperturaId: apertura.id,
-      tipo: data.tipo,
-      monto: data.monto,
-      motivo: data.motivo,
-      ventaId: null,
-      usuarioId: apertura.cajeroId,
-      fechaHora: new Date().toISOString(),
-    };
-    setMovimientos((prev) => [...prev, nuevoMov]);
-    guardarMovimiento(nuevoMov);
-    setNuevoMovOpen(false);
-    showToast("success", "Movimiento registrado");
-    setPage(1);
+    try {
+      // El usuario responsable es el de la sesión. El saldo lo actualiza la base.
+      const nuevo = await apiSend<MovimientoCaja>(
+        "POST",
+        `/api/cajas/aperturas/${apertura.id}/movimientos`,
+        data,
+      );
+      setMovimientos((prev) => [...prev, nuevo]);
+      setNuevoMovOpen(false);
+      showToast("success", "Movimiento registrado");
+      setPage(1);
+    } catch (e) {
+      showToast("error", mensajeDeError(e));
+    }
   };
 
-  const handleCerrarCaja = (montoContado: number) => {
+  const handleCerrarCaja = async (montoContado: number) => {
     if (!apertura) return;
-    // BACKEND: PATCH /api/caja_apertura/{id}/cerrar { montoContado }
-    //          fn_caja_cerrar_apertura calcula monto_esperado, diferencia,
-    //          fecha_cierre, estado=false
-    const esperado = esperadoPreview(apertura, movimientos);
-    const diferencia = montoContado - esperado;
-    const actualizada: CajaApertura = {
-      ...apertura,
-      estado: false,
-      montoContado,
-      montoEsperado: esperado,
-      diferencia,
-      fechaCierre: new Date().toISOString(),
-    };
-    setApertura(actualizada);
-    actualizarApertura(actualizada);
-    setCerrarCajaOpen(false);
-    showToast("success", "Caja cerrada correctamente");
+    try {
+      // La base calcula el esperado (inicial + ingresos − egresos) y la API la diferencia.
+      const cerrada = await apiSend<CajaApertura>(
+        "PATCH",
+        `/api/cajas/aperturas/${apertura.id}/cerrar`,
+        { montoContado },
+      );
+      setApertura(cerrada);
+      setCerrarCajaOpen(false);
+      showToast("success", "Caja cerrada correctamente");
+    } catch (e) {
+      showToast("error", mensajeDeError(e));
+    }
   };
 
   if (loading) {

@@ -33,16 +33,13 @@ import { ApiError, apiGet, apiSend, mensajeDeError } from "@/lib/api-client";
 import type { Articulo } from "@/data/articulos";
 
 import {
-  guardarConsulta,
   CONSULTA_DRAFT_VACIO,
   type Consulta,
   type ConsultaDraft,
   type ConsultaInsumo,
   type NotaConsulta,
 } from "@/data/consultas";
-import { turnosIniciales, profesionalPorFranja, practicaPorId } from "@/data/turnos";
-import { clientesIniciales } from "@/data/clientes";
-import { mascotasIniciales } from "@/data/mascotas";
+import { useTurnoCompleto } from "@/lib/use-turno";
 
 // ── Helpers de formato ─────────────────────────────────────────────────────────
 
@@ -113,32 +110,15 @@ function ConsultaPageContent({ turnoId }: { turnoId: number }) {
   const router = useRouter();
   const { showToast } = useToast();
 
-  // ── Resolver datos del turno ──────────────────────────────────────────────
-  const turno = useMemo(
-    () => turnosIniciales.find((t) => t.id === turnoId) ?? null,
-    [turnoId],
-  );
-
-  const cliente = useMemo(
-    () => (turno ? clientesIniciales.find((c) => c.id === turno.clienteId) ?? null : null),
-    [turno],
-  );
-
-  const mascota = useMemo(
-    () => (turno ? mascotasIniciales.find((m) => m.id === turno.mascotaId) ?? null : null),
-    [turno],
-  );
-
-  const profesionalDisplay = useMemo(() => {
-    if (!turno) return "—";
-    const pf = profesionalPorFranja[turno.agendaProfesionalId];
-    return pf ? `${pf.nombre} ${pf.apellido}` : "—";
-  }, [turno]);
-
-  const practicaDisplay = useMemo(() => {
-    if (!turno) return "—";
-    return practicaPorId[turno.practicaId]?.nombre ?? "—";
-  }, [turno]);
+  // ── Datos del turno: turno, cliente, mascota, profesional y práctica (API) ──
+  const {
+    turno,
+    cliente,
+    mascota,
+    profesionalDisplay,
+    practicaDisplay,
+    cargando: cargandoTurno,
+  } = useTurnoCompleto(turnoId);
 
   // ── Resolver consulta existente ───────────────────────────────────────────
   // La consulta vive en la base: se pide al montar (ver el efecto más abajo).
@@ -315,8 +295,6 @@ function ConsultaPageContent({ turnoId }: { turnoId: number }) {
       setConsulta(cerrada);
       setInsumos(cerrada.insumos);
       setNotas(cerrada.notas);
-      // Cache local: la pantalla de cobro del turno todavía lee de acá.
-      guardarConsulta(cerrada);
       setConfirmOpen(false);
       showToast("success", "Consulta registrada. Paciente derivado a mostrador.");
       // Abrir modal preguntando por el PDF
@@ -395,7 +373,6 @@ function ConsultaPageContent({ turnoId }: { turnoId: number }) {
       setNotas(listaActualizada);
       const conNotas: Consulta = { ...consulta, notas: listaActualizada };
       setConsulta(conNotas);
-      guardarConsulta(conNotas);
       setNotaOpen(false);
       showToast("success", "Nota agregada correctamente.");
     } catch (e) {
@@ -462,7 +439,7 @@ function ConsultaPageContent({ turnoId }: { turnoId: number }) {
   }
 
   // ── Estados de pantalla ───────────────────────────────────────────────────
-  if (cargando) {
+  if (cargando || cargandoTurno) {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-cream-50">
         <p className="text-sm font-semibold text-text-secondary" role="status">

@@ -1,5 +1,28 @@
 import type { ComprobanteRow, ComprobanteDetalleRow } from "./comprobante.types";
 
+/**
+ * El enum de la base -> el vocabulario del front.
+ *
+ * ⚠️ ANTES ESTO DEJABA PASAR `pagado` EN CRUDO, y eso ROMPÍA LA PANTALLA.
+ *    `EstadoComprobanteBadge` hace `map[estado]` y después destructura el
+ *    resultado: con una clave que no conoce, `map["pagado"]` es undefined y
+ *    destructurar undefined tira un TypeError que se lleva puesto el render de
+ *    toda la tabla.
+ *
+ *    No era un caso raro: los dos comprobantes de la base están en `pagado`.
+ */
+const ESTADOS_API = {
+  vigente: "Vigente",
+  anulado: "Anulado",
+  pagado: "Pagado",
+} as const;
+
+function aEstadoApi(estado: string): "Vigente" | "Anulado" | "Pagado" {
+  // El `??` cubre el día que la DBA agregue un cuarto valor al enum: mejor
+  // mostrar "Vigente" que romper la tabla entera.
+  return ESTADOS_API[estado as keyof typeof ESTADOS_API] ?? "Vigente";
+}
+
 export function toComprobanteDTO(row: ComprobanteRow, detalles: ComprobanteDetalleRow[] = []) {
   const pv = String(row.punto_venta).padStart(4, "0");
   const num = String(row.numero_comprobante).padStart(8, "0");
@@ -31,7 +54,7 @@ export function toComprobanteDTO(row: ComprobanteRow, detalles: ComprobanteDetal
     comprobanteAnulador: row.anula_comprobante_numero || null,
     monto: Number(row.monto_total),
     montoTotal: Number(row.monto_total),
-    estado: row.estado === "vigente" ? "Vigente" : (row.estado === "anulado" ? "Anulado" : row.estado),
+    estado: aEstadoApi(row.estado),
     lineas: detalles.map((d) => ({
       id: d.id,
       articuloId: d.articulo_id,

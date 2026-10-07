@@ -1,11 +1,19 @@
 "use client";
 
-import { Banknote, Download, PawPrint, QrCode, Receipt } from "lucide-react";
+import { Banknote, CreditCard, Download, PawPrint, QrCode, Receipt, Wallet } from "lucide-react";
+import type { ComponentType } from "react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/Toast";
-import type { ComprobanteTurno } from "@/data/pagos";
+import { aTipoMedio, ETIQUETA_MEDIO, type ComprobanteTurno, type TipoMedioPago } from "@/data/pagos";
 import { descargarPdfComprobante } from "@/lib/generarPdfComprobante";
+
+const ICONO_MEDIO: Record<TipoMedioPago, ComponentType<{ className?: string; "aria-hidden"?: boolean }>> = {
+  efectivo: Banknote,
+  transferencia: QrCode,
+  tarjeta: CreditCard,
+  billetera_virtual: Wallet,
+};
 
 interface ComprobanteTurnoModalProps {
   open: boolean;
@@ -37,8 +45,6 @@ export function ComprobanteTurnoModal({
       practicaNombre: comprobante.practicaNombre,
       arancel: comprobante.arancel,
       productos: comprobante.productos,
-      subtotalNeto: comprobante.subtotalNeto,
-      impuestosIva: comprobante.impuestosIva,
       total: comprobante.total,
       medioPago: comprobante.medioPago,
       mediosPago: comprobante.mediosPago,
@@ -168,10 +174,8 @@ export function ComprobanteTurnoModal({
           </table>
         </div>
 
-        {/* Resumen de cobro con desglose fiscal (HU-VTA-01) */}
+        {/* Resumen de cobro (HU-VTA-01) */}
         {(() => {
-          const subtotalNeto = comprobante.subtotalNeto ?? Math.round(comprobante.total / 1.21);
-          const impuestosIva = comprobante.impuestosIva ?? (comprobante.total - subtotalNeto);
           return (
             <div className="flex flex-col gap-2 rounded-md border border-border bg-cream-50/70 p-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-col gap-1">
@@ -184,11 +188,11 @@ export function ComprobanteTurnoModal({
                 {comprobante.mediosPago && comprobante.mediosPago.length > 1 ? (
                   <div className="flex flex-col gap-1">
                     {comprobante.mediosPago.map((mp, idx) => {
-                      const Icon = mp.medio === "efectivo" ? Banknote : QrCode;
-                      const nombre = mp.medio === "efectivo" ? "Efectivo" : "Transferencia / QR";
+                      const Icon = ICONO_MEDIO[aTipoMedio(mp.medio)];
+                      const nombre = ETIQUETA_MEDIO[aTipoMedio(mp.medio)];
                       return (
                         <div key={`${mp.id}-${idx}`} className="flex items-center gap-1.5 text-xs text-text-primary">
-                          <Icon className="h-3.5 w-3.5 text-brand-900 shrink-0" aria-hidden="true" />
+                          <Icon className="h-3.5 w-3.5 text-brand-900 shrink-0" aria-hidden={true} />
                           <span className="font-bold">{nombre}:</span>
                           <span className="font-semibold text-brand-900">${mp.monto.toLocaleString("es-AR")}</span>
                           {mp.referencia && (
@@ -202,19 +206,12 @@ export function ComprobanteTurnoModal({
                   <div className="flex items-center gap-1.5">
                     <span className="inline-flex items-center gap-1 font-bold text-brand-900">
                       {(() => {
-                        const single = comprobante.mediosPago?.[0]?.medio || comprobante.medioPago;
-                        if (single === "transferencia") {
-                          return (
-                            <>
-                              <QrCode className="h-3.5 w-3.5" aria-hidden="true" />
-                              Transferencia / QR
-                            </>
-                          );
-                        }
+                        const single = aTipoMedio(comprobante.mediosPago?.[0]?.medio || comprobante.medioPago);
+                        const Icon = ICONO_MEDIO[single];
                         return (
                           <>
-                            <Banknote className="h-3.5 w-3.5" aria-hidden="true" />
-                            Efectivo
+                            <Icon className="h-3.5 w-3.5" aria-hidden={true} />
+                            {ETIQUETA_MEDIO[single]}
                           </>
                         );
                       })()}
@@ -230,14 +227,6 @@ export function ComprobanteTurnoModal({
               </div>
 
               <div className="flex flex-col items-end gap-0.5 text-right">
-                <div className="flex items-center justify-between gap-4 text-xs text-text-secondary">
-                  <span>Subtotal (Neto):</span>
-                  <span className="font-semibold text-text-primary">${subtotalNeto.toLocaleString("es-AR")}</span>
-                </div>
-                <div className="flex items-center justify-between gap-4 text-xs text-text-secondary">
-                  <span>IVA (21%):</span>
-                  <span className="font-semibold text-text-primary">${impuestosIva.toLocaleString("es-AR")}</span>
-                </div>
                 <div className="mt-1 flex items-baseline justify-between gap-4 border-t border-border/80 pt-1">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-text-secondary">
                     Total

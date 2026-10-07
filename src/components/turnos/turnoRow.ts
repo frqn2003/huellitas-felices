@@ -1,9 +1,4 @@
-import {
-  formatearFechaHora,
-  practicaPorId,
-  profesionalPorFranja,
-  type Turno,
-} from "@/data/turnos";
+import { formatearFechaHora, type DirectorioTurnos, type Turno } from "@/data/turnos";
 import type { Cliente } from "@/data/clientes";
 import type { Mascota } from "@/data/mascotas";
 import type { TurnoRow } from "./TurnosTable";
@@ -16,6 +11,7 @@ export function construirFilaTurno(
   t: Turno,
   clientePorId: Record<number, Cliente>,
   mascotaPorId: Record<number, Mascota>,
+  { profesionalPorFranja, practicaPorId }: Pick<DirectorioTurnos, "profesionalPorFranja" | "practicaPorId">,
 ): TurnoRow {
   const cli = clientePorId[t.clienteId];
   const mas = mascotaPorId[t.mascotaId];
@@ -33,6 +29,7 @@ export function construirFilaTurno(
     profesionalNombre: pro ? `${pro.nombre} ${pro.apellido}` : `Profesional #${t.agendaProfesionalId}`,
     practicaNombre: pra?.nombre ?? `Práctica #${t.practicaId}`,
     estadoId: t.estadoId,
+    pagado: t.pagado,
     notas: t.notas,
     fechaCreacionHora: formatearFechaHora(t.fechaCreacion),
   };

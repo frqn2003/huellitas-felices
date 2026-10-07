@@ -3,7 +3,7 @@
 import { Banknote, Eye, Layers, QrCode, ShoppingBag } from "lucide-react";
 import { useState } from "react";
 import { ComprobanteTurnoModal } from "@/components/turnos/ComprobanteTurnoModal";
-import type { ComprobanteTurno } from "@/data/pagos";
+import { aTipoMedio, ETIQUETA_MEDIO, type ComprobanteTurno } from "@/data/pagos";
 import type { Venta } from "@/data/ventas";
 
 interface VentasTableProps {
@@ -53,18 +53,11 @@ export function VentasTable({
         cantidad: it.cantidad,
         precioUnitario: it.precioUnitario,
       })),
-      subtotalNeto: venta.subtotalNeto,
-      impuestosIva: venta.impuestosIva,
       total: venta.total,
-      medioPago:
-        venta.medioPago === "mixto"
-          ? "mixto"
-          : venta.medioPago === "efectivo"
-            ? "efectivo"
-            : "transferencia",
+      medioPago: venta.medioPago === "mixto" ? "mixto" : aTipoMedio(venta.medioPago),
       mediosPago: venta.mediosPago?.map((mp, idx) => ({
         id: `mp-${idx}`,
-        medio: mp.medio === "efectivo" ? "efectivo" : "transferencia",
+        medio: aTipoMedio(mp.medio),
         monto: mp.monto,
         referencia: mp.referencia,
       })),
@@ -163,7 +156,8 @@ export function VentasTable({
           <tbody>
             {ventas.map((v) => {
               const esCombinado = v.medioPago === "mixto" || (v.mediosPago && v.mediosPago.length > 1);
-              const esTransf = v.medioPago === "transferencia";
+              const tipoMedio = aTipoMedio(v.medioPago);
+              const IconoMedio = tipoMedio === "efectivo" ? Banknote : QrCode;
 
               return (
                 <tr
@@ -224,15 +218,14 @@ export function VentasTable({
                         <Layers className="h-3.5 w-3.5 text-brand-900" aria-hidden="true" />
                         Combinado
                       </span>
-                    ) : esTransf ? (
-                      <span className="inline-flex items-center gap-1.5 rounded-pill bg-sky-100 px-2.5 py-1 text-xs font-bold text-sky-800">
-                        <QrCode className="h-3.5 w-3.5 text-sky-800" aria-hidden="true" />
-                        Transferencia
-                      </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1.5 rounded-pill bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800">
-                        <Banknote className="h-3.5 w-3.5 text-emerald-800" aria-hidden="true" />
-                        Efectivo
+                      <span
+                        className={`inline-flex items-center gap-1.5 rounded-pill px-2.5 py-1 text-xs font-bold ${
+                          tipoMedio === "efectivo" ? "bg-emerald-100 text-emerald-800" : "bg-sky-100 text-sky-800"
+                        }`}
+                      >
+                        <IconoMedio className="h-3.5 w-3.5" aria-hidden={true} />
+                        {ETIQUETA_MEDIO[tipoMedio]}
                       </span>
                     )}
                   </td>

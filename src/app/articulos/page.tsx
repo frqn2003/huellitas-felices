@@ -313,12 +313,13 @@ function ArticulosScreen() {
                 <FiltrosArticulos
                   filtros={filtros}
                   onChange={handleFiltros}
+                  catalogos={catalogos}
                   disabled={loading || error}
                   hideChips
                 />
               </div>
               <div className="flex flex-wrap items-center">
-                <FiltrosChips filtros={filtros} onChange={handleFiltros} />
+                <FiltrosChips filtros={filtros} onChange={handleFiltros} catalogos={catalogos} />
               </div>
             </div>
           </div>

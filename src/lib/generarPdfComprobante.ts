@@ -33,8 +33,6 @@ export interface DatosComprobantePdf {
   practicaNombre: string;
   arancel: number;
   productos: ItemComprobantePdf[];
-  subtotalNeto?: number;
-  impuestosIva?: number;
   total: number;
   medioPago: string;
   mediosPago?: ItemMedioPagoPdf[];
@@ -116,7 +114,7 @@ export function construirPdfComprobanteBlob(datos: DatosComprobantePdf): Blob {
   rect(36, 705, 523.28, 75, 0.067, 0.31, 0.235, 0.067, 0.31, 0.235);
   text("HUELLITAS FELICES", 54, 750, "/F2", 18, 1, 0.98, 0.92);
   text("CENTRO VETERINARIO - CLINICA Y FARMACIA", 54, 733, "/F1", 9, 0.94, 0.93, 0.87);
-  text("CUIT: 30-71234567-8 | IVA RESPONSABLE INSCRIPTO", 54, 720, "/F1", 8, 0.82, 0.85, 0.8);
+  text("CUIT: 30-71234567-8", 54, 720, "/F1", 8, 0.82, 0.85, 0.8);
 
   text("COMPROBANTE DE COBRO", 360, 752, "/F2", 11, 0.976, 0.663, 0.0); // acento amarillo Pet Bliss
   text(`Recibo: ${datos.numero}`, 360, 736, "/F2", 10, 1, 1, 1);
@@ -198,9 +196,7 @@ export function construirPdfComprobanteBlob(datos: DatosComprobantePdf): Blob {
     currentY -= 20;
   });
 
-  // 6. Bloque de Totales y Liquidación con desglose fiscal (HU-VTA-01)
-  const subtotalNeto = datos.subtotalNeto ?? Math.round(datos.total / 1.21);
-  const impuestosIva = datos.impuestosIva ?? (datos.total - subtotalNeto);
+  // 6. Bloque de Totales y Liquidación (HU-VTA-01)
 
   const boxTop = Math.min(currentY - 15, 330);
   rect(54, boxTop - 100, 486, 100, 1, 1, 1, 0.87, 0.85, 0.78);
@@ -211,10 +207,10 @@ export function construirPdfComprobanteBlob(datos: DatosComprobantePdf): Blob {
         return "Efectivo";
       case "transferencia":
         return "Transferencia / QR";
-      case "tarjeta_debito":
-        return "Tarjeta Debito";
-      case "tarjeta_credito":
-        return "Tarjeta Credito";
+      case "tarjeta":
+        return "Tarjeta";
+      case "billetera_virtual":
+        return "Billetera virtual";
       default:
         return m.toUpperCase();
     }
@@ -223,7 +219,7 @@ export function construirPdfComprobanteBlob(datos: DatosComprobantePdf): Blob {
   if (datos.mediosPago && datos.mediosPago.length > 1) {
     text("MEDIOS DE PAGO (COMBINADO):", 68, boxTop - 18, "/F2", 8.5, 0.33, 0.44, 0.4);
     let mpY = boxTop - 32;
-    datos.mediosPago.slice(0, 3).forEach((item) => {
+    datos.mediosPago.slice(0, 4).forEach((item) => {
       const refTxt = item.referencia ? ` (Ref: ${item.referencia})` : "";
       text(`* ${formatNombreMedio(item.medio)}: $${item.monto.toLocaleString("es-AR")}${refTxt}`, 68, mpY, "/F1", 7.5, 0.15, 0.15, 0.15);
       mpY -= 12;
@@ -252,13 +248,6 @@ export function construirPdfComprobanteBlob(datos: DatosComprobantePdf): Blob {
       text(`Observaciones de caja: ${datos.observaciones}`, 68, boxTop - 65, "/F1", 8, 0.4, 0.4, 0.4);
     }
   }
-
-  // Desglose fiscal de Subtotal, IVA y Total
-  text("SUBTOTAL (Neto):", 345, boxTop - 25, "/F1", 8.5, 0.33, 0.44, 0.4);
-  text(`$ ${subtotalNeto.toLocaleString("es-AR")}`, 460, boxTop - 25, "/F2", 8.5, 0.15, 0.15, 0.15);
-
-  text("IVA (21%):", 345, boxTop - 42, "/F1", 8.5, 0.33, 0.44, 0.4);
-  text(`$ ${impuestosIva.toLocaleString("es-AR")}`, 460, boxTop - 42, "/F2", 8.5, 0.15, 0.15, 0.15);
 
   line(345, boxTop - 52, 525, boxTop - 52, 0.85, 0.85, 0.85);
 

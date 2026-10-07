@@ -62,7 +62,7 @@ export async function insumos(consultaId: number): Promise<ConsultaInsumo[]> {
 
 /**
  * Abre la consulta de un turno. Idempotente: si ya existe (la creó el trigger
- * al marcar 'atendido'), la devuelve. No procede si el turno está cancelado o ausente.
+ * al marcar 'atendido'), la devuelve. Solo procede si el turno está confirmado o atendido.
  */
 export async function abrir(
   turnoId: number,
@@ -76,12 +76,13 @@ export async function abrir(
 
     const turno = await repo.findTurno(turnoId, client);
     if (!turno) throw new NotFoundError("el turno", turnoId);
-    // Se puede abrir desde un turno vigente (pendiente/confirmado: el profesional
-    // empieza a atender) o ya 'atendido'. Uno cancelado o ausente no.
-    if (turno.estado_es_final && turno.estado_nombre !== "atendido") {
+    // Se abre desde un turno 'confirmado' (el profesional empieza a atender) o
+    // ya 'atendido'. HU-TUR-02: un pendiente primero se confirma; uno
+    // cancelado o ausente no se atiende.
+    if (turno.estado_nombre !== "confirmado" && turno.estado_nombre !== "atendido") {
       throw new BusinessRuleError(
         "TURNO_NO_ATENDIBLE",
-        `El turno está "${turno.estado_nombre}": no se puede registrar una consulta.`,
+        `El turno está "${turno.estado_nombre}": solo se puede registrar la consulta de un turno confirmado.`,
         "turnoId",
       );
     }
@@ -164,7 +165,7 @@ export async function cerrar(
       client,
     );
 
-    // El turno queda 'atendido' = habilitado para cobro en mostrador.
+    // El turno pasa de 'confirmado' a 'atendido' = habilitado para cobro en mostrador.
     await repo.marcarTurnoAtendido(actual.turno_id, client);
 
     if (input.pesoMomento !== null) {

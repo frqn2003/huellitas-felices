@@ -1,10 +1,8 @@
-// Datos placeholder del módulo Cajas (HU-VTA-03).
+// Contrato del módulo Cajas (HU-VTA-03): la forma EXACTA que devuelve /api/cajas
+// (src/modules/cajas/caja.mapper.ts). Los datos salen de la base.
 // Convención: camelCase en el front, id numérico (PK de la base), comentarios // BACKEND: con tabla + endpoint.
 // Los nombres de sucursal usan el texto real de la base: "Sucursal Centro", no "Centro".
 
-import { usuarios } from "./usuarios";
-
-// BACKEND: reemplazar por GET /api/sucursales.
 // Refleja `caja`: id, sucursal_id, nombre, saldo_actual, estado (estado_activo_inactivo).
 export interface Caja {
   id: number;
@@ -35,6 +33,8 @@ export interface CajaApertura {
   cajeroId: number;
   cajero: { nombre: string; apellido: string };
   montoInicial: number;
+  /** inicial + ingresos − egresos; lo calcula la API (opcional en los datos de prueba). */
+  saldoActual?: number;
   fechaApertura: string;          // ISO timestamp → la tabla separa FECHA y HORA
   estado: boolean;                // TRUE = abierta, FALSE = cerrada (columna boolean, no enum)
   montoContado: number | null;    // NULL mientras está abierta
@@ -56,98 +56,8 @@ export interface MovimientoCaja {
   fechaHora: string;
 }
 
-// `saldo_actual` es un valor VIVO por caja, no histórico: lo escribe la base
-// en dos lugares (trg_caja_actualizar_saldo_apertura lo SOBRESCRIBE en cada
-// apertura con monto_inicial; trg_caja_actualizar_saldo_movimiento suma/resta
-// por movimiento). Nunca se acumula entre jornadas, y el cierre no lo toca.
-export const cajas: Caja[] = [
-  { id: 1, sucursalId: 1, sucursal: "Sucursal Centro", nombre: "Caja principal", saldoActual: 1600.0, estado: "activo" },
-  // Apertura 3: monto_inicial 100000 sin movimientos → 100000, no 0.
-  { id: 2, sucursalId: 2, sucursal: "Sucursal Este", nombre: "Caja principal", saldoActual: 100000.0, estado: "activo" },
-  { id: 3, sucursalId: 3, sucursal: "Sucursal Oeste", nombre: "Caja principal", saldoActual: 0.0, estado: "activo" },
-  { id: 4, sucursalId: 4, sucursal: "Sucursal Sur", nombre: "Caja principal", saldoActual: 0.0, estado: "activo" },
-];
-
-// Los cajeros NO se declaran como catálogo aparte: se derivan del mismo array
-// `usuarios` (import { usuarios } from "./usuarios").
-// ⚠️ PENDIENTE: `src/data/usuarios.ts` todavía no tiene usuarios con
-// rol_id: 6 → agregarlos ahí (requiere dni, email, estado y fecha_creacion,
-// todos NOT NULL en `usuario`) y este filtro toma solo esos.
-// BACKEND: reemplazar por GET /api/usuarios?rol_id=6
-export const cajeros = usuarios.filter((u) => u.rol_id === 6 && u.estado === "Activo");
-// El filtro de SUCURSAL se aplica en el uso (una cajera solo ve su sucursal,
-// o el gerente ve todas), no acá: rol y sucursal son ejes distintos.
-
-// Escenario alineado con el demo del esquema (25 y 26/09/2026): la apertura 1
-// se cierra con 200 de faltante; la 2 sigue abierta. Divergencia deliberada: el
-// demo de `docs/esquema-bd-front.md` usa usuario_id 4 en las aperturas y en los
-// movimientos; acá se reemplaza por cajeros con rol_id 6 (ids 5, 6 y 7) porque
-// la HU exige que el responsable sea un Cajero. Ver PENDIENTE 5.
-export const aperturasIniciales: CajaApertura[] = [
-  {
-    id: 1,
-    cajaId: 1,
-    sucursalId: 1,
-    sucursal: "Sucursal Centro",
-    cajaNombre: "Caja principal",
-    cajeroId: 5,
-    cajero: { nombre: "Carlos", apellido: "Méndez" },
-    montoInicial: 20000.0,
-    fechaApertura: "2026-09-25T08:00:00",
-    estado: false,                 // cerrada
-    montoContado: 27300.0,
-    montoEsperado: 27500.0,
-    diferencia: -200.0,            // faltante
-    fechaCierre: "2026-09-25T18:30:00",
-  },
-  {
-    id: 2,
-    cajaId: 1,
-    sucursalId: 1,
-    sucursal: "Sucursal Centro",
-    cajaNombre: "Caja principal",
-    cajeroId: 6,
-    cajero: { nombre: "Pablo", apellido: "Celaya" },
-    montoInicial: 18000.0,
-    fechaApertura: "2026-09-26T08:05:00",
-    estado: true,                  // abierta
-    montoContado: null,
-    montoEsperado: null,
-    diferencia: null,
-    fechaCierre: null,
-  },
-  {
-    id: 3,
-    cajaId: 2,
-    sucursalId: 2,
-    sucursal: "Sucursal Este",
-    cajaNombre: "Caja principal",
-    // Distinto de los cajeros 5/6 (sucursal 1): el CA de visibilidad obliga a
-    // que el cajero pertenezca a la sucursal de la caja.
-    cajeroId: 7,
-    cajero: { nombre: "Lucía", apellido: "Gómez" },
-    montoInicial: 100000.0,
-    fechaApertura: "2026-09-26T15:00:00",
-    estado: true,                  // abierta
-    montoContado: null,
-    montoEsperado: null,
-    diferencia: null,
-    fechaCierre: null,
-  },
-];
-
-export const movimientosCajaIniciales: MovimientoCaja[] = [
-  // Apertura 1 (cerrada): esperado = 20.000 + 10.000 − 2.500 = 27.500; contó 27.300.
-  { id: 1, cajaAperturaId: 1, tipo: "Ingreso", monto: 10000.0, motivo: "Cobro venta N° 1 (efectivo)", ventaId: 1, usuarioId: 5, fechaHora: "2026-09-25T12:15:00" },
-  { id: 2, cajaAperturaId: 1, tipo: "Egreso", monto: 2500.0, motivo: "Compra de artículos de limpieza", ventaId: null, usuarioId: 5, fechaHora: "2026-09-25T15:40:00" },
-  // Apertura 2 (abierta): la tabla NO muestra la apertura como movimiento.
-  { id: 3, cajaAperturaId: 2, tipo: "Egreso", monto: 24900.0, motivo: "Devolución a cliente por error de cobro", ventaId: null, usuarioId: 6, fechaHora: "2026-09-26T11:45:00" },
-  { id: 4, cajaAperturaId: 2, tipo: "Ingreso", monto: 8500.0, motivo: "Fondo sencillo adicional para vueltos", ventaId: null, usuarioId: 6, fechaHora: "2026-09-26T12:30:00" },
-  // Apertura 3 (Sucursal Este) todavía sin movimientos → estado vacío de tabla.
-];
-
-// BACKEND: el trigger es la fuente de verdad del esperado y de la diferencia.
-// Esta función es SOLO previsualización en vivo antes de cerrar.
+// La base es la fuente de verdad del esperado y de la diferencia (trigger de
+// cierre). Esta función es SOLO previsualización en vivo antes de cerrar.
 // ⚠️ El cálculo tiene que correr sobre TODOS los movimientos de la apertura,
 // no sobre la página visible: con `ui/Pagination` (10/25/50) pasar el array
 // paginado acá devuelve un esperado malo. Recibir el total del backend o
@@ -157,73 +67,3 @@ export const esperadoPreview = (a: CajaApertura, movs: MovimientoCaja[]): number
       .reduce((acc, m) => acc + m.monto, a.montoInicial)
   - movs.filter((m) => m.cajaAperturaId === a.id && m.tipo === "Egreso")
       .reduce((acc, m) => acc + m.monto, 0);
-
-export const SIMULAR_VACIO = false;
-export const SIMULAR_ERROR = false;
-
-// =============================================================================
-// Persistencia en navegador (sessionStorage) para maquetado frontend sin backend
-// =============================================================================
-const STORAGE_KEY_APERTURAS = "huellitas_cajas_aperturas";
-const STORAGE_KEY_MOVIMIENTOS = "huellitas_cajas_movimientos";
-
-export function obtenerAperturas(): CajaApertura[] {
-  if (typeof window === "undefined") return aperturasIniciales;
-  try {
-    const raw = sessionStorage.getItem(STORAGE_KEY_APERTURAS);
-    if (!raw) return aperturasIniciales;
-    return JSON.parse(raw);
-  } catch {
-    return aperturasIniciales;
-  }
-}
-
-export function obtenerAperturaPorId(id: number): CajaApertura | null {
-  return obtenerAperturas().find((a) => a.id === id) ?? null;
-}
-
-export function guardarAperturas(aperturas: CajaApertura[]): void {
-  if (typeof window === "undefined") return;
-  try {
-    sessionStorage.setItem(STORAGE_KEY_APERTURAS, JSON.stringify(aperturas));
-  } catch (err) {
-    console.error("Error al persistir aperturas en sessionStorage:", err);
-  }
-}
-
-export function actualizarApertura(apertura: CajaApertura): void {
-  const actuales = [...obtenerAperturas()];
-  const index = actuales.findIndex((a) => a.id === apertura.id);
-  if (index >= 0) {
-    actuales[index] = apertura;
-  } else {
-    actuales.unshift(apertura);
-  }
-  guardarAperturas(actuales);
-}
-
-export function obtenerMovimientos(): MovimientoCaja[] {
-  if (typeof window === "undefined") return movimientosCajaIniciales;
-  try {
-    const raw = sessionStorage.getItem(STORAGE_KEY_MOVIMIENTOS);
-    if (!raw) return movimientosCajaIniciales;
-    return JSON.parse(raw);
-  } catch {
-    return movimientosCajaIniciales;
-  }
-}
-
-export function obtenerMovimientosPorApertura(aperturaId: number): MovimientoCaja[] {
-  return obtenerMovimientos().filter((m) => m.cajaAperturaId === aperturaId);
-}
-
-export function guardarMovimiento(movimiento: MovimientoCaja): void {
-  if (typeof window === "undefined") return;
-  try {
-    const actuales = obtenerMovimientos();
-    const nuevos = [...actuales, movimiento];
-    sessionStorage.setItem(STORAGE_KEY_MOVIMIENTOS, JSON.stringify(nuevos));
-  } catch (err) {
-    console.error("Error al persistir movimiento en sessionStorage:", err);
-  }
-}

@@ -23,18 +23,10 @@ import {
   type FiltrosCajasValues,
 } from "@/components/cajas/FiltrosCajas";
 import { AbrirCajaModal } from "@/components/cajas/AbrirCajaModal";
-import {
-  aperturasIniciales,
-  cajas,
-  cajeros,
-  esperadoPreview,
-  guardarAperturas,
-  obtenerAperturas,
-  obtenerMovimientos,
-  SIMULAR_ERROR,
-  SIMULAR_VACIO,
-  type CajaApertura,
-} from "@/data/cajas";
+import type { Caja, CajaApertura } from "@/data/cajas";
+import { ApiError, apiGet, apiGetOpcional, apiSend, mensajeDeError } from "@/lib/api-client";
+
+type Cajero = { id: number; nombre: string; apellido: string; sucursalId: number | null };
 
 interface CajasContentProps {
   /**
@@ -58,7 +50,10 @@ export function CajasContent({
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [aperturas, setAperturas] = useState(aperturasIniciales);
+  const [aperturas, setAperturas] = useState<CajaApertura[]>([]);
+  // Catálogos: cajas (con su sucursal) y cajeros, de la base.
+  const [cajas, setCajas] = useState<Caja[]>([]);
+  const [cajeros, setCajeros] = useState<Cajero[]>([]);
 
   const [busqueda, setBusqueda] = useState("");
   const [filtros, setFiltros] = useState<FiltrosCajasValues>({ ...FILTROS_CAJAS_VACIOS });
@@ -73,19 +68,26 @@ export function CajasContent({
     let cancelado = false;
     // `loading` arranca en true y el retry lo setea desde el handler: el effect
     // solo resuelve el resultado (regla react-hooks/set-state-in-effect).
-    // BACKEND: acá iría GET /api/caja_apertura con JOIN de caja, sucursal y
-    // usuario (los campos de display no están en la tabla de apertura).
-    const t = setTimeout(() => {
+    const t = setTimeout(async () => {
       if (cancelado) return;
-      if (SIMULAR_ERROR) {
-        setError(true);
-        setLoading(false);
-        return;
+      try {
+        // El listado manda (si falla, la pantalla no sirve); los catálogos son opcionales.
+        const [lista, cajasCat, cajerosCat] = await Promise.all([
+          apiGet<CajaApertura[]>("/api/cajas/aperturas"),
+          apiGetOpcional<Caja[]>("/api/cajas", []),
+          apiGetOpcional<Cajero[]>("/api/cajas/cajeros", []),
+        ]);
+        if (cancelado) return;
+        setAperturas(lista);
+        setCajas(cajasCat);
+        setCajeros(cajerosCat);
+        setError(false);
+      } catch {
+        if (!cancelado) setError(true);
+      } finally {
+        if (!cancelado) setLoading(false);
       }
-      setAperturas(SIMULAR_VACIO ? [] : obtenerAperturas());
-      setError(false);
-      setLoading(false);
-    }, 700);
+    }, 0);
     return () => {
       cancelado = true;
       clearTimeout(t);
@@ -96,23 +98,16 @@ export function CajasContent({
     const map = new Map<number, string>();
     cajas.forEach((c) => map.set(c.sucursalId, c.sucursal));
     return Array.from(map.entries()).map(([id, nombre]) => ({ id, nombre }));
-  }, []);
+  }, [cajas]);
 
   const cajerosFiltro = useMemo(
     () => cajeros.map((c) => ({ id: c.id, nombre: c.nombre, apellido: c.apellido })),
-    []
+    [cajeros]
   );
 
   const filas = useMemo<CajaRow[]>(() => {
-    const movs = obtenerMovimientos();
-    return aperturas.map((a) => {
-      const movsApertura = movs.filter((m) => m.cajaAperturaId === a.id);
-      const saldoVivo = esperadoPreview(a, movsApertura);
-      return {
-        ...a,
-        saldoActual: saldoVivo,
-      };
-    });
+    // `saldoActual` (inicial + ingresos − egresos) lo calcula la API sobre TODOS los movimientos.
+    return aperturas.map((a) => ({ ...a, saldoActual: a.saldoActual ?? a.montoInicial }));
   }, [aperturas]);
 
   const filtradas = useMemo(() => {
@@ -155,9 +150,11 @@ export function CajasContent({
     setPage(1);
   };
 
-  const handleAbrirCaja = (data: { cajaId: number; cajeroId: number; montoInicial: number }) => {
-    // Una caja física no admite dos aperturas vivas (unique_violation 23505).
-    const cajaAbierta = aperturas.find((a) => a.cajaId === data.cajaId && a.estado);
+  const handleAbrirCaja = async (data: { cajaId: number; cajeroId: number; montoInicial: number }) => {
+    // Una sola caja abierta por sucursal: se avisa antes de ir al servidor (el
+    // back y la base lo vuelven a garantizar, HF045).
+    const sucursalDeLaCaja = cajas.find((c) => c.id === data.cajaId)?.sucursalId;
+    const cajaAbierta = aperturas.find((a) => a.sucursalId === sucursalDeLaCaja && a.estado);
     if (cajaAbierta) {
       setAperturaBloqueada(cajaAbierta);
       setBloqueoOpen(true);
@@ -165,39 +162,19 @@ export function CajasContent({
       return;
     }
 
-    // BACKEND: POST /api/cajas → tabla caja_apertura (caja_id, usuario_id, monto_inicial)
-    //          fn_caja_actualizar_saldo_apertura setea caja.saldo_actual = monto_inicial
-    //          fn_caja_calcular_cierre (trigger) bloquea reapertura
-    //          fn_auditoria_* escribe en bitácora
-    const nuevoId = Math.max(0, ...aperturas.map((a) => a.id)) + 1;
-    const caja = cajas.find((c) => c.id === data.cajaId);
-    const cajero = cajeros.find((c) => c.id === data.cajeroId);
-
-    const nuevaApertura: CajaApertura = {
-      id: nuevoId,
-      cajaId: data.cajaId,
-      sucursalId: caja?.sucursalId ?? 1,
-      sucursal: caja?.sucursal ?? "Sucursal Centro",
-      cajaNombre: caja?.nombre ?? "Caja principal",
-      cajeroId: data.cajeroId,
-      cajero: { nombre: cajero?.nombre ?? "", apellido: cajero?.apellido ?? "" },
-      montoInicial: data.montoInicial,
-      fechaApertura: new Date().toISOString(),
-      estado: true,
-      montoContado: null,
-      montoEsperado: null,
-      diferencia: null,
-      fechaCierre: null,
-    };
-
-    setAperturas((prev) => {
-      const actualizadas = [nuevaApertura, ...prev];
-      guardarAperturas(actualizadas);
-      return actualizadas;
-    });
-    onCerrarAbrirCaja();
-    showToast("success", "Caja abierta correctamente");
-    router.push(`/cajas/${nuevoId}`);
+    try {
+      // El usuario que opera sale de la sesión; `cajeroId` es el responsable de la caja.
+      const nueva = await apiSend<CajaApertura>("POST", "/api/cajas/aperturas", data);
+      onCerrarAbrirCaja();
+      showToast("success", "Caja abierta correctamente");
+      router.push(`/cajas/${nueva.id}`);
+    } catch (e) {
+      if (e instanceof ApiError && e.codigo === "CAJA_YA_ABIERTA") {
+        // Otra persona la abrió mientras tanto: se refresca el listado.
+        setRecargar((n) => n + 1);
+      }
+      showToast("error", mensajeDeError(e));
+    }
   };
 
   const metricasCajas = useMemo(() => {

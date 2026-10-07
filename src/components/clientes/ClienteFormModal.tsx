@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, Users } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { BajaClienteModal } from "@/components/clientes/BajaClienteModal";
 import { EstadoClienteBadge } from "@/components/clientes/EstadoClienteBadge";
 import { Button } from "@/components/ui/Button";
@@ -12,7 +12,8 @@ import { Textarea } from "@/components/ui/Textarea";
 import { useCamposSecuenciales } from "@/hooks/useCamposSecuenciales";
 import type { Cliente, ClienteDraft, EstadoCliente, Mascota } from "@/data/clientes";
 import { validaciones } from "@/data/clientes";
-import { obtenerVentasPorCliente } from "@/data/ventas";
+import { apiGet, apiGetOpcional } from "@/lib/api-client";
+import type { Venta } from "@/data/ventas";
 
 // Secuencia de desbloqueo de obligatorios SOLO en el alta (crear), en orden
 // visual: nombre → apellido → documento → teléfono → email. Los opcionales
@@ -54,7 +55,7 @@ interface ClienteFormModalProps {
   /** Mascotas vinculadas para el modo lectura (tabla `mascota`, sección 8 del esquema). */
   mascotas: Mascota[];
   onClose: () => void;
-  onSave: (draft: ClienteDraft) => Promise<{ error?: string }>;
+  onSave: (draft: ClienteDraft, reactivarId?: number) => Promise<{ error?: string; campo?: string }>;
 }
 
 // El draft del formulario es todo string (son inputs). Dirección y fecha de
@@ -169,15 +170,7 @@ function validateDraft(
   return next;
 }
 
-/** Clientes inactivos con el mismo documento o email (advertencia al dar de alta). */
-function duplicadosInactivos(d: ClienteFormValues, clientes: Cliente[]): Cliente[] {
-  return clientes.filter(
-    (c) =>
-      c.estado === "inactivo" &&
-      (c.documento === d.documento.trim() ||
-        c.email.toLowerCase() === d.email.trim().toLowerCase()),
-  );
-}
+
 
 function MascotasVinculadas({ mascotas }: { mascotas: Mascota[] }) {
   if (mascotas.length === 0) {
@@ -220,8 +213,20 @@ function MascotasVinculadas({ mascotas }: { mascotas: Mascota[] }) {
 }
 
 function HistorialVentasCliente({ clienteId }: { clienteId: number }) {
-  // BACKEND: GET /api/ventas?cliente_id=:id
-  const ventas = obtenerVentasPorCliente(clienteId);
+  // Historial del cliente: las ventas cobradas desde sus atenciones médicas
+  // (en la base, venta → consulta_medica → cliente).
+  const [ventas, setVentas] = useState<Venta[]>([]);
+  useEffect(() => {
+    let cancelado = false;
+    const t = setTimeout(async () => {
+      const lista = await apiGetOpcional<Venta[]>(`/api/ventas?clienteId=${clienteId}`, []);
+      if (!cancelado) setVentas(lista);
+    }, 0);
+    return () => {
+      cancelado = true;
+      clearTimeout(t);
+    };
+  }, [clienteId]);
 
   if (ventas.length === 0) {
     return (
@@ -294,7 +299,7 @@ function ClienteFormFields({
   mascotas: Mascota[];
   modo: ClienteModalMode;
   onClose: () => void;
-  onSave: (draft: ClienteDraft) => Promise<{ error?: string }>;
+  onSave: (draft: ClienteDraft, reactivarId?: number) => Promise<{ error?: string; campo?: string }>;
 }) {
   const isLectura = modo === "ver";
 
@@ -307,6 +312,16 @@ function ClienteFormFields({
   const [advertenciaDuplicados, setAdvertenciaDuplicados] = useState<Cliente[] | null>(null);
   // Confirmación de baja lógica al guardar con el toggle en inactivo.
   const [confirmandoBaja, setConfirmandoBaja] = useState(false);
+  // Mascotas vinculadas cargadas de forma dinámica
+  const [mascotasLista, setMascotasLista] = useState<Mascota[]>(mascotas);
+
+  useEffect(() => {
+    if (isLectura && cliente?.id) {
+      void apiGet<Mascota[]>(`/api/clientes/${cliente.id}/mascotas`)
+        .then((data) => setMascotasLista(data))
+        .catch(() => { });
+    }
+  }, [isLectura, cliente?.id]);
 
   // Desbloqueo progresivo de obligatorios: solo en ALTA (crear). Los campos
   // bloqueados llevan disabled + hint "Completá primero: X"; una vez
@@ -337,19 +352,21 @@ function ClienteFormFields({
     }
   };
 
-  const confirmarGuardado = async () => {
-    const res = await onSave(aDraft(draft));
+  const confirmarGuardado = async (reactivarId?: number) => {
+    const res = await onSave(aDraft(draft), reactivarId);
     setGuardando(false);
     if (res.error) {
-      // El modal queda ABIERTO con los datos cargados (ej. 409 documento
-      // duplicado que el back detectó con su lista más actualizada).
-      setErrorGlobal(res.error);
+      if (res.campo && res.campo in draft) {
+        setErrors((prev) => ({ ...prev, [res.campo as keyof ClienteFormValues]: res.error }));
+      } else {
+        setErrorGlobal(res.error);
+      }
     } else {
       onClose();
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isLectura) return;
 
@@ -365,17 +382,23 @@ function ClienteFormFields({
     });
     if (Object.keys(nextErrors).length > 0) return;
 
-    // BACKEND: en el alta la verdad de la existencia de duplicados la tiene el
-    // servidor (lista desactualizada + dos altas simultáneas). Acá se advierte
-    // con la lista local; si el POST devuelve 409, se muestra ese mensaje.
-    // Advertencia SÓLO en alta: en edición el documento/email ya pertenecen al
-    // cliente y un inactivo duplicado significaría reactivar un registro cerrado.
     if (modo === "crear") {
-      const coincidencias = duplicadosInactivos(draft, clientes);
-      if (coincidencias.length > 0) {
-        setAdvertenciaDuplicados(coincidencias);
-        return;
+      setGuardando(true);
+      try {
+        const doc = encodeURIComponent(draft.documento.trim());
+        const em = encodeURIComponent(draft.email.trim());
+        const coincidencias = await apiGet<Cliente[]>(
+          `/api/clientes/duplicados-inactivos?documento=${doc}&email=${em}`,
+        );
+        if (coincidencias && coincidencias.length > 0) {
+          setAdvertenciaDuplicados(coincidencias);
+          setGuardando(false);
+          return;
+        }
+      } catch {
+        // Si falla la búsqueda de inactivos, continúa con el guardado normal
       }
+      setGuardando(false);
     }
 
     // Baja lógica: se guarda con estado inactivo, se pide confirmación
@@ -537,25 +560,9 @@ function ClienteFormFields({
         </div>
 
         {isLectura && (
-          <div className="flex flex-col gap-5 border-t border-border pt-4">
-            <div className="flex flex-col gap-2">
-              <p className="text-sm font-bold text-brand-900">Mascotas vinculadas</p>
-              <MascotasVinculadas mascotas={mascotas} />
-            </div>
-
-            {cliente && (
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-bold text-brand-900">
-                    Historial de compras y atenciones (HU-VTA-01)
-                  </p>
-                  <span className="text-[11px] font-semibold text-text-secondary">
-                    Ventas facturadas en mostrador
-                  </span>
-                </div>
-                <HistorialVentasCliente clienteId={cliente.id} />
-              </div>
-            )}
+          <div className="flex flex-col gap-2">
+            <p className="text-sm font-bold text-text-primary">Mascotas vinculadas</p>
+            <MascotasVinculadas mascotas={mascotasLista} />
           </div>
         )}
       </form>
@@ -573,17 +580,13 @@ function ClienteFormFields({
             </Button>
             <Button
               onClick={() => {
-                const coincidencias = advertenciaDuplicados;
+                const primerDuplicado = advertenciaDuplicados?.[0];
                 setAdvertenciaDuplicados(null);
-                if (coincidencias && draft.estado === "inactivo") {
-                  setConfirmandoBaja(true);
-                  return;
-                }
                 setGuardando(true);
-                void confirmarGuardado();
+                void confirmarGuardado(primerDuplicado?.id);
               }}
             >
-              Continuar de todos modos
+              Reactivar este cliente
             </Button>
           </>
         }
@@ -591,8 +594,8 @@ function ClienteFormFields({
         {advertenciaDuplicados && (
           <div className="flex flex-col gap-3">
             <p className="text-sm leading-relaxed text-text-secondary">
-              Ya hay clientes <strong>inactivos</strong> con este documento o email. Podés
-              continuar y crear igualmente el cliente, o volver a modificar los datos.
+              Ya existe un cliente <strong>inactivo</strong> con este documento o email.
+              ¿Deseás reactivar su registro con los nuevos datos ingresados?
             </p>
             <ul className="flex flex-col gap-2">
               {advertenciaDuplicados.map((c) => (

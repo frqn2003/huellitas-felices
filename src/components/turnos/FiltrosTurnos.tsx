@@ -2,7 +2,7 @@
 
 import { Search, SlidersHorizontal, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { estadosTurno } from "@/data/turnos";
+import type { EstadoTurno } from "@/data/turnos";
 import { Button } from "@/components/ui/Button";
 
 export interface FiltrosTurnosValues {
@@ -21,20 +21,28 @@ export const FILTROS_TURNOS_VACIOS: FiltrosTurnosValues = {
   hasta: "",
 };
 
-// Label del catálogo para el filtro (el select ofrece en plural, como clientes).
-const estadoOpciones: { value: string; label: string }[] = estadosTurno.map((e) => ({
-  value: String(e.id),
-  label:
-    e.id === 1
-      ? "Pendientes"
-      : e.id === 2
-        ? "Confirmados"
-        : e.id === 3
-          ? "Cancelados"
-          : e.id === 4
-            ? "Atendidos"
-            : "No asistieron",
-}));
+/**
+ * Label en plural del catálogo, para el select del filtro ("Pendientes", no
+ * "pendiente"). La base guarda el nombre crudo (`no_asistio`); esta traducción
+ * es de presentación y vive en el front, como corresponde.
+ *
+ * El fallback capitaliza el nombre que venga: si mañana se agrega un estado al
+ * catálogo, el filtro lo muestra igual en vez de saltearlo.
+ */
+const PLURALES: Record<string, string> = {
+  pendiente: "Pendientes",
+  confirmado: "Confirmados",
+  cancelado: "Cancelados",
+  atendido: "Atendidos",
+  no_asistio: "No asistieron",
+};
+
+function opcionesDeEstado(estados: EstadoTurno[]) {
+  return estados.map((e) => ({
+    value: String(e.id),
+    label: PLURALES[e.nombre] ?? e.nombre.charAt(0).toUpperCase() + e.nombre.slice(1),
+  }));
+}
 
 function formatFechaChip(fecha: string) {
   if (!fecha) return "";
@@ -45,7 +53,9 @@ function formatFechaChip(fecha: string) {
 export function buildTagsTurnos(
   filtros: FiltrosTurnosValues,
   onChange: (filtros: FiltrosTurnosValues) => void,
+  estados: EstadoTurno[],
 ) {
+  const estadoOpciones = opcionesDeEstado(estados);
   const tags: { label: string; onRemove: () => void }[] = [];
   if (filtros.estadoId) {
     const estado = estadoOpciones.find((e) => e.value === filtros.estadoId);
@@ -72,11 +82,13 @@ export function buildTagsTurnos(
 export function FiltrosTurnosChips({
   filtros,
   onChange,
+  estados,
 }: {
   filtros: FiltrosTurnosValues;
   onChange: (filtros: FiltrosTurnosValues) => void;
+  estados: EstadoTurno[];
 }) {
-  const tags = buildTagsTurnos(filtros, onChange);
+  const tags = buildTagsTurnos(filtros, onChange, estados);
   if (tags.length === 0) return null;
   return (
     <div className="flex flex-wrap items-center gap-2" aria-label="Filtros aplicados">
@@ -101,11 +113,19 @@ export function FiltrosTurnosChips({
 }
 
 interface FiltrosTurnosProps {
+  /**
+   * Catálogo `estado_turno` — GET /api/estados-turno.
+   *
+   * Llega por prop y no de la constante: el id elegido viaja como `?estadoId=`
+   * al backend, así que tiene que ser un id real de la tabla.
+   */
+  estados: EstadoTurno[];
   filtros: FiltrosTurnosValues;
   onChange: (filtros: FiltrosTurnosValues) => void;
 }
 
-export function FiltrosTurnos({ filtros, onChange }: FiltrosTurnosProps) {
+export function FiltrosTurnos({ filtros, onChange, estados }: FiltrosTurnosProps) {
+  const estadoOpciones = opcionesDeEstado(estados);
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -120,7 +140,7 @@ export function FiltrosTurnos({ filtros, onChange }: FiltrosTurnosProps) {
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [open]);
 
-  const tags = buildTagsTurnos(filtros, onChange);
+  const tags = buildTagsTurnos(filtros, onChange, estados);
 
   return (
     <div className="flex flex-col gap-3">
@@ -212,7 +232,7 @@ export function FiltrosTurnos({ filtros, onChange }: FiltrosTurnosProps) {
         </div>
       </div>
 
-      <FiltrosTurnosChips filtros={filtros} onChange={onChange} />
+      <FiltrosTurnosChips filtros={filtros} onChange={onChange} estados={estados} />
     </div>
   );
 }

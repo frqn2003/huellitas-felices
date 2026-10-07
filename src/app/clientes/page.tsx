@@ -2,7 +2,7 @@
 
 import { AlertTriangle, Plus, RotateCcw } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import type { ClienteModalMode } from "@/components/clientes/ClienteFormModal";
 import { ClienteFormModal } from "@/components/clientes/ClienteFormModal";
 import { ClientesTable } from "@/components/clientes/ClientesTable";
@@ -23,17 +23,20 @@ import { Button } from "@/components/ui/Button";
 import { Pagination } from "@/components/ui/Pagination";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
 import type { Cliente, ClienteDraft } from "@/data/clientes";
-import { clientesIniciales, mascotasPorCliente } from "@/data/clientes";
+import type { Mascota as MascotaResumen } from "@/data/clientes";
 import type { Mascota, MascotaDraft } from "@/data/mascotas";
-import {
-  mascotasIniciales,
-  SIMULAR_ERROR as SIMULAR_ERROR_MASCOTA,
-  SIMULAR_VACIO as SIMULAR_VACIO_MASCOTA,
-} from "@/data/mascotas";
 import type { Turno } from "@/data/turnos";
-import { nombreEstado, turnosIniciales } from "@/data/turnos";
+import {
+  nombreEstado,
+  type EstadoTurno,
+  type Practica,
+  type Profesional,
+  type TurnoDraft,
+} from "@/data/turnos";
 import { AgendaSemanal } from "@/components/turnos/AgendaSemanal";
 import { CajasContent } from "@/components/recepcion/CajasContent";
+import { apiGet, apiSend, ApiError, mensajeDeError } from "@/lib/api-client";
+import { useCatalogo } from "@/lib/use-catalogo";
 
 function ClientesScreen() {
   const { showToast } = useToast();
@@ -84,24 +87,106 @@ function ClientesScreen() {
   }, [searchParams]);
   const busquedaClientes = searchParams.get("busqueda") ?? "";
 
-  // BACKEND: reemplazar por GET /api/clientes (con su estado de carga/error
-  // compartido); el alta/edición/baja pasan a POST/PUT/PATCH en ClientesContext.
-  const [clientes, setClientes] = useState<Cliente[]>(clientesIniciales);
-  const [cargando, setCargando] = useState(false);
+  const [estadoFiltroClientes, setEstadoFiltroClientes] = useState<FiltroEstadoCliente>("Activo");
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(false);
+  const [recargaClientes, setRecargaClientes] = useState(0);
+
+  const recargarClientes = useCallback(() => {
+    setCargando(true);
+    setError(false);
+    setRecargaClientes((prev) => prev + 1);
+  }, []);
+
+  useEffect(() => {
+    let cancelado = false;
+    const params = new URLSearchParams();
+    if (busquedaClientes) params.set("busqueda", busquedaClientes);
+    if (estadoFiltroClientes !== "Todos") params.set("estado", estadoFiltroClientes.toLowerCase());
+
+    apiGet<Cliente[]>(`/api/clientes?${params.toString()}`)
+      .then((data) => {
+        if (cancelado) return;
+        setClientes(data);
+        setCargando(false);
+      })
+      .catch((e) => {
+        if (cancelado) return;
+        setError(true);
+        setCargando(false);
+        showToast("error", mensajeDeError(e));
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [busquedaClientes, estadoFiltroClientes, recargaClientes, showToast]);
+
+  // Mascotas de cada cliente (columna de la tabla y ficha "Ver cliente"): sale
+  // de GET /api/mascotas, agrupado por dueño. No depende de los filtros de la tab Mascotas.
+  const todasLasMascotas = useCatalogo<Mascota>("/api/mascotas");
+  const mascotasPorCliente = useMemo(() => {
+    const mapa: Record<number, MascotaResumen[]> = {};
+    for (const m of todasLasMascotas) {
+      (mapa[m.clienteId] ??= []).push({ id: m.id, nombre: m.nombre, especie: m.especie, estado: m.estado });
+    }
+    return mapa;
+  }, [todasLasMascotas]);
 
   // --- Estado de la tab Mascotas (HU-MAS-01) ---
-  // BACKEND: reemplazar por GET /api/mascotas (tabla mascota, contrato sección 8).
-  const [mascotas, setMascotas] = useState<Mascota[]>(mascotasIniciales);
-  const [cargandoMascotas, setCargandoMascotas] = useState(false);
-  const [errorMascotas, setErrorMascotas] = useState(SIMULAR_ERROR_MASCOTA);
-
-  const [estadoFiltroClientes, setEstadoFiltroClientes] = useState<FiltroEstadoCliente>("Activo");
+  const [mascotas, setMascotas] = useState<Mascota[]>([]);
+  const [cargandoMascotas, setCargandoMascotas] = useState(true);
+  const [errorMascotas, setErrorMascotas] = useState(false);
+  const [recargaMascotas, setRecargaMascotas] = useState(0);
 
   const [busquedaMascotas, setBusquedaMascotas] = useState("");
   const [estadoFiltroMascotas, setEstadoFiltroMascotas] = useState<FiltroEstadoCliente>("Activo");
   const [especieFiltroMascotas, setEspecieFiltroMascotas] = useState<FiltroEspecieMascota>("Todas");
   const [sexoFiltroMascotas, setSexoFiltroMascotas] = useState<FiltroSexoMascota>("Todos");
+
+  const recargarMascotas = useCallback(() => {
+    setCargandoMascotas(true);
+    setErrorMascotas(false);
+    setRecargaMascotas((prev) => prev + 1);
+  }, []);
+
+  // Los filtros se resuelven en el SERVIDOR (mismo criterio que clientes): la
+  // query viaja en la URL y el back arma el WHERE. El filtrado en memoria de
+  // `filtradasMascotas` queda igual y es inofensivo — actua sobre una lista ya
+  // filtrada — pero lo que decide que sale de la base es esto.
+  useEffect(() => {
+    let cancelado = false;
+    const params = new URLSearchParams();
+    if (busquedaMascotas) params.set("busqueda", busquedaMascotas);
+    if (estadoFiltroMascotas !== "Todos") params.set("estado", estadoFiltroMascotas.toLowerCase());
+    if (especieFiltroMascotas !== "Todas") params.set("especie", especieFiltroMascotas);
+    if (sexoFiltroMascotas !== "Todos") params.set("sexo", sexoFiltroMascotas);
+
+    apiGet<Mascota[]>(`/api/mascotas?${params.toString()}`)
+      .then((data) => {
+        if (cancelado) return;
+        setMascotas(data);
+        setCargandoMascotas(false);
+      })
+      .catch((e) => {
+        if (cancelado) return;
+        setErrorMascotas(true);
+        setCargandoMascotas(false);
+        showToast("error", mensajeDeError(e));
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [
+    busquedaMascotas,
+    estadoFiltroMascotas,
+    especieFiltroMascotas,
+    sexoFiltroMascotas,
+    recargaMascotas,
+    showToast,
+  ]);
 
   const [pageSizeClientes, setPageSizeClientes] = useState(10);
   const [pageClientes, setPageClientes] = useState(1);
@@ -121,7 +206,35 @@ function ClientesScreen() {
   // --- Estado de la tab Turnos (HU-TUR-01) ---
   // BACKEND: reemplazar por GET /api/turnos (tabla turno, contrato sección 8).
   // Vive a nivel página (como clientes/mascotas) para persistir al cambiar de tab.
-  const [turnos, setTurnos] = useState<Turno[]>(turnosIniciales);
+  const [turnos, setTurnos] = useState<Turno[]>([]);
+
+  // Catálogos del wizard. Van por `useCatalogo` (apiGetOpcional) y no dentro del
+  // Promise.all del listado: si un catálogo falla, la tab de turnos sigue
+  // mostrando la agenda; lo único que queda vacío es su select.
+  //
+  // ⚠️ Los dos SON tablas: las franjas de `profesionales` traen el
+  //    `agendaProfesionalId` que viaja en el POST, y la duración de `practicas`
+  //    define la hora de fin. Con las constantes que había en src/data/turnos.ts
+  //    el alta fallaba con un 23503 (esas franjas no existen en la base).
+  const profesionales = useCatalogo<Profesional>("/api/profesionales");
+  const practicas = useCatalogo<Practica>("/api/practicas");
+  const estadosTurnoCat = useCatalogo<EstadoTurno>("/api/estados-turno");
+
+  useEffect(() => {
+    let cancelado = false;
+
+    apiGet<Turno[]>("/api/turnos")
+      .then((data) => {
+        if (!cancelado) setTurnos(data);
+      })
+      .catch((e) => {
+        if (!cancelado) showToast("error", mensajeDeError(e));
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [showToast]);
 
   // Mapa cliente por id: resuelve el dueño de cada mascota (columna "Ver dueño"
   // y el chip pre-filtrado desde la patita).
@@ -159,7 +272,7 @@ function ClientesScreen() {
   // con búsqueda por nombre de mascota, nombre del dueño o documento del dueño,
   // y filtros de especie y sexo (lo que busca un recepcionista en el mostrador).
   const filtradasMascotas = useMemo(() => {
-    const base = SIMULAR_VACIO_MASCOTA ? [] : mascotas;
+    const base = mascotas;
     return base.filter((m) => {
       if (dueno !== null && m.clienteId !== dueno) return false;
       if (estadoFiltroMascotas !== "Todos" && m.estado !== estadoFiltroMascotas.toLowerCase()) return false;
@@ -251,8 +364,26 @@ function ClientesScreen() {
     setModalMascotaOpen(true);
   };
 
-  const handleCrearTurno = (nuevo: Turno) => {
-    setTurnos((prev) => [nuevo, ...prev]);
+  /**
+   * Alta de turno (HU-TUR-01).
+   *
+   * Devuelve el turno que respondió el servidor para que el wizard pueda armar
+   * el resumen de confirmación con los datos REALES: el id que generó la base,
+   * la sucursal que derivó el trigger y el estado inicial (pendiente).
+   *
+   * El `usuarioId` (la recepcionista que carga) NO se manda: lo toma el backend
+   * de la sesión.
+   */
+  const handleCrearTurno = async (
+    draft: TurnoDraft,
+  ): Promise<{ turno?: Turno; error?: string }> => {
+    try {
+      const turno = await apiSend<Turno>("POST", "/api/turnos", draft);
+      setTurnos((prev) => [turno, ...prev]);
+      return { turno };
+    } catch (e) {
+      return { error: mensajeDeError(e) };
+    }
   };
 
   // HU-TUR-02: cambio de estado desde la agenda. Vive a nivel página para que
@@ -261,89 +392,132 @@ function ClientesScreen() {
   // registra auditoria (tabla='turno', operacion='UPDATE', registro_id,
   // usuario_id de sesión, valores_anteriores/nuevos); el backend refresca y el
   // front aplica el cambio local para no recargar toda la página.
-  const handleCambiarEstado = (turnoId: number, estadoId: number): boolean => {
-    const previo = turnos.find((t) => t.id === turnoId);
-    if (!previo) return false;
-    setTurnos((prev) => prev.map((t) => (t.id === turnoId ? { ...t, estadoId } : t)));
-    showToast(
-      "success",
-      `El turno #${String(turnoId).padStart(5, "0")} pasó a ${nombreEstado[estadoId] ?? "desconocido"}`,
-    );
-    // BACKEND: el backend valida que la transición sea permitida (1→2, 2→{3,4,5})
-    // y registra la auditoría del UPDATE. Si cancelado, el horario queda libre
-    // al instante (EXCLUDE estado_id <> 3).
-    if (estadoId === 4) {
-      // HU-CLIN-01: Al cambiar el turno a "atendido", abre automáticamente la pantalla de consulta médica
-      router.push(`/consulta/${turnoId}`);
+  /**
+   * Cambio de estado del turno (HU-TUR-02).
+   *
+   * El backend valida la transición permitida (pendiente→confirmado→{atendido,
+   * cancelado, no_asistio}) y el trigger `trg_auditoria_turno_estado` registra
+   * el cambio con usuario, fecha y hora. Si pasa a cancelado, el horario queda
+   * libre en el mismo instante: el constraint EXCLUDE y el chequeo de
+   * disponibilidad filtran los dos por `estado_id <> 3`.
+   *
+   * El estado local se actualiza con el turno que DEVOLVIÓ el servidor, no con
+   * el `estadoId` que se pidió: si el backend hubiera hecho algo distinto, la
+   * pantalla mostraría lo que realmente quedó guardado.
+   */
+  const handleCambiarEstado = async (
+    turnoId: number,
+    estadoId: number,
+  ): Promise<string | null> => {
+    try {
+      const actualizado = await apiSend<Turno>("PATCH", `/api/turnos/${turnoId}/estado`, {
+        estadoId,
+      });
+      setTurnos((prev) => prev.map((t) => (t.id === turnoId ? actualizado : t)));
+      showToast(
+        "success",
+        `El turno #${String(turnoId).padStart(5, "0")} pasó a ${nombreEstado[actualizado.estadoId] ?? "desconocido"}`,
+      );
+      return null;
+    } catch (e) {
+      return mensajeDeError(e);
     }
-    return true;
   };
 
-  // BACKEND: los draft viajan al POST/PUT; el toggle a Inactivo → PATCH
-  // /api/mascotas/:id/inactivar. El id numérico lo genera la base. Cada alta y
-  // modificación registra public.auditoria (operacion INSERT/UPDATE, valores
-  // anterior y nuevo en jsonb).
-  const handleSaveCliente = async (draft: ClienteDraft): Promise<{ error?: string }> => {
-    if (modalClienteMode === "crear") {
-      const nuevo: Cliente = { ...draft, id: Math.max(0, ...clientes.map((c) => c.id)) + 1 };
-      setClientes((prev) => [...prev, nuevo]);
-      showToast("success", "Cliente creado correctamente");
-      if (isNuevoClienteParam) {
-        router.replace("/clientes?tab=clientes");
+  const handleSaveCliente = async (
+    draft: ClienteDraft,
+    reactivarId?: number,
+  ): Promise<{ error?: string; campo?: string }> => {
+    try {
+      if (reactivarId) {
+        const actualizado = await apiSend<Cliente>(
+          "PUT",
+          `/api/clientes/${reactivarId}`,
+          { ...draft, estado: "activo" },
+        );
+        showToast("success", `${actualizado.nombre} ${actualizado.apellido} fue reactivado correctamente`);
+        recargarClientes();
+        return {};
+      }
+      if (modalClienteMode === "crear") {
+        await apiSend<Cliente>("POST", "/api/clientes", draft);
+        showToast("success", "Cliente creado correctamente");
+        recargarClientes();
+        return {};
+      }
+      if (modalClienteMode === "editar" && clienteActivo) {
+        const actualizado = await apiSend<Cliente>(
+          "PUT",
+          `/api/clientes/${clienteActivo.id}`,
+          draft,
+        );
+        showToast(
+          "success",
+          actualizado.estado === "inactivo"
+            ? `${actualizado.nombre} ${actualizado.apellido} fue dado de baja correctamente`
+            : "Cliente guardado correctamente",
+        );
+        recargarClientes();
+        return {};
+      }
+    } catch (e) {
+      if (e instanceof ApiError) {
+        return { error: e.message, campo: e.campo };
+      }
+      const msg = mensajeDeError(e);
+      showToast("error", msg);
+      return { error: msg };
+    }
+    return {};
+  };
+
+  /**
+   * Alta y edición de mascota contra la API (HU-MAS-01).
+   *
+   * El id ya NO se calcula acá con `Math.max(...) + 1`: lo genera la base
+   * (`mascota.id` es GENERATED BY DEFAULT AS IDENTITY). Calcularlo en el front
+   * daba un id distinto del real y, con dos personas cargando a la vez, el
+   * mismo id para dos mascotas.
+   *
+   * Los errores vuelven como mensaje en vez de lanzarse: el modal los muestra
+   * y queda ABIERTO con los datos cargados, para no perder lo que la persona
+   * ya escribió (mismo patrón que clientes).
+   */
+  const handleSaveMascota = async (draft: MascotaDraft): Promise<{ error?: string }> => {
+    try {
+      if (modalMascotaMode === "crear") {
+        const creada = await apiSend<Mascota>("POST", "/api/mascotas", draft);
+        showToast("success", `${creada.nombre} fue registrada correctamente`);
+        recargarMascotas();
+        return {};
+      }
+      if (modalMascotaMode === "editar" && mascotaActiva) {
+        const actualizada = await apiSend<Mascota>(
+          "PUT",
+          `/api/mascotas/${mascotaActiva.id}`,
+          draft,
+        );
+        showToast(
+          "success",
+          actualizada.estado === "inactivo"
+            ? `${actualizada.nombre} fue dada de baja correctamente`
+            : "Mascota guardada correctamente",
+        );
+        recargarMascotas();
+        return {};
       }
       return {};
+    } catch (e) {
+      return { error: mensajeDeError(e) };
     }
-    if (modalClienteMode === "editar" && clienteActivo) {
-      const actualizado: Cliente = { ...draft, id: clienteActivo.id };
-      setClientes((prev) => prev.map((c) => (c.id === clienteActivo.id ? actualizado : c)));
-      showToast(
-        "success",
-        actualizado.estado === "inactivo"
-          ? `${actualizado.nombre} ${actualizado.apellido} fue dado de baja correctamente`
-          : "Cliente guardado correctamente",
-      );
-      return {};
-    }
-    return {};
-  };
-
-  const handleSaveMascota = async (draft: MascotaDraft): Promise<{ error?: string }> => {
-    if (modalMascotaMode === "crear") {
-      const nuevo: Mascota = { ...draft, id: Math.max(0, ...mascotas.map((m) => m.id)) + 1 };
-      setMascotas((prev) => [...prev, nuevo]);
-      showToast("success", "Mascota creada correctamente");
-      return {};
-    }
-    if (modalMascotaMode === "editar" && mascotaActiva) {
-      const actualizada: Mascota = { ...draft, id: mascotaActiva.id };
-      setMascotas((prev) => prev.map((m) => (m.id === mascotaActiva.id ? actualizada : m)));
-      showToast(
-        "success",
-        actualizada.estado === "inactivo"
-          ? `${actualizada.nombre} fue dada de baja correctamente`
-          : "Mascota guardada correctamente",
-      );
-      return {};
-    }
-    return {};
   };
 
   const handleReintentar = () => {
-    setError(false);
-    setCargando(true);
-    // BACKEND: acá iría el fetch real (recargar() del context).
-    window.setTimeout(() => {
-      setCargando(false);
-    }, 400);
+    recargarClientes();
   };
 
   const handleReintentarMascotas = () => {
-    setErrorMascotas(false);
-    setCargandoMascotas(true);
-    // BACKEND: acá iría el fetch real (recargar() del context).
-    window.setTimeout(() => {
-      setCargandoMascotas(false);
-    }, 400);
+    recargarMascotas();
   };
 
   // El CTA del header es UNA sola acción clara por viewport (regla Pet Bliss):
@@ -462,8 +636,6 @@ function ClientesScreen() {
                 <>
                   <ClientesTable
                     clientes={pageItemsClientes}
-                    // BACKEND: reemplazar por el mapa de mascotas de la API
-                    // (GET /api/clientes/:id/mascotas por cliente, tabla mascota).
                     mascotasPorCliente={mascotasPorCliente}
                     loading={cargando}
                     hasActiveFilters={hasActiveFiltersClientes}
@@ -556,6 +728,9 @@ function ClientesScreen() {
                 clientes={clientes}
                 mascotas={mascotas}
                 turnos={turnos}
+                profesionales={profesionales}
+                practicas={practicas}
+                estados={estadosTurnoCat}
                 onCrearTurno={handleCrearTurno}
                 nuevoTurnoOpen={turnoWizardOpen}
                 nuevoTurnoSession={turnoWizardSession}
@@ -589,6 +764,7 @@ function ClientesScreen() {
                 clientes={clientes}
                 mascotas={mascotas}
                 turnos={turnos}
+                catalogos={{ profesionales, practicas, estados: estadosTurnoCat }}
                 onCambiarEstado={handleCambiarEstado}
               />
             </div>
@@ -618,7 +794,6 @@ function ClientesScreen() {
         modo={modalClienteMode}
         cliente={clienteActivo}
         clientes={clientes}
-        // BACKEND: reemplazar por GET /api/clientes/:id/mascotas (tabla mascota).
         mascotas={clienteActivo ? mascotasPorCliente[clienteActivo.id] ?? [] : []}
         onClose={handleCerrarModalCliente}
         onSave={handleSaveCliente}

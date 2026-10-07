@@ -30,8 +30,8 @@
 │ │ Fecha, hora, veterinario      │ │ │ · Arancel Base: $65.000        │ │
 │ ├───────────────────────────────┤ │ │ · Insumos/Productos: $10.600   │ │
 │ │ Cliente y Paciente (Mascota)  │ │ │ ────────────────────────────── │ │
-│ │ Nombre, DNI, especie, raza    │ │ │ Subtotal (Neto):   $62.479     │ │
-│ ├───────────────────────────────┤ │ │ IVA (21%):         $13.121     │ │
+│ │ Nombre, DNI, especie, raza    │ │ │                                │ │
+│ ├───────────────────────────────┤ │ │                                │ │
 │ │ Detalle Clínico e Insumos:    │ │ │ Total de la Venta: $75.600     │ │
 │ │ · Amoxicilina x1   $4.500 (-) │ │ ├────────────────────────────────┤ │
 │ │ · Jeringa 5ml x2   $1.900 (-) │ │ │ Medio de pago: [Efectivo] [QR] │ │
@@ -53,7 +53,7 @@
    - Los precios se toman de la Lista de Precios vigente (HU-STK-03) y no son modificables manualmente.
    - El recepcionista puede agregar alimentos balanceados o accesorios que el cliente compre en mostrador.
 3. **Cálculo:**
-   - Se calcula en tiempo real: Subtotal (Neto gravado), IVA (21%) y Total.
+   - Se calcula en tiempo real el total (suma de las líneas a precio de lista).
 4. **Confirmación:**
    - Al confirmar, se emite el comprobante oficial (modal con visor y descarga en PDF nativo vectorizado).
    - Se registra la venta en el historial del cliente (`src/data/ventas.ts`).
@@ -76,6 +76,6 @@
 - [x] **Cabecera y detalle:** Cliente y fecha. Detalle con una o más líneas (artículo o servicio, cantidad y precio). Relación cabecera-detalle, incluyendo medicamentos, insumos, alimentos y accesorios asociados.
 - [x] **Lista de Precios vigente (HU-STK-03):** El precio de cada ítem se toma de la lista de precios vigente y no es editable manualmente en mostrador.
 - [x] **Inicio directo desde atención finalizada (HU-CLIN-01):** Precarga automática del costo de la consulta y de los insumos/medicamentos aplicados sin reingreso de datos.
-- [x] **Cálculo de importes:** Calcula automáticamente el subtotal neto, los impuestos (IVA 21%) y el total de la venta.
+- [x] **Cálculo de importes:** Calcula automáticamente el total de la venta (suma de las líneas a precio de lista).
 - [x] **Descuento de stock e historial del cliente:** Descuenta stock mediante egreso de artículos vendidos (HU-STK-04) y registra la venta en el historial de compras del cliente en Recepción.
 - [x] **Bitácora de auditoría:** Deja constancia del evento de venta para la auditoría del sistema.

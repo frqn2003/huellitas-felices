@@ -1,4 +1,4 @@
-import type { Articulo, Categoria, UnidadMedida } from "@/data/articulos";
+import type { Articulo } from "@/data/articulos";
 import type { ArticuloRow } from "./articulo.types";
 
 /**
@@ -31,14 +31,18 @@ export function toApi(row: ArticuloRow): Articulo {
     descripcion: row.descripcion ?? "",
 
     categoriaId: row.categoria_id,
-    // El cast es seguro mientras las categorías de la base sean las 4 del
-    // catálogo sembrado (Medicamentos, Insumos, Alimentos, Accesorios).
-    // Si alguien agrega una quinta desde el SQL Editor, el tipo del front miente
-    // y hay que ampliar la unión `Categoria` en src/data/articulos.ts.
-    categoria: row.categoria_nombre as Categoria,
+    // Sin cast: `Articulo.categoria` es `string`.
+    //
+    // Acá había un `as Categoria` contra una unión de 4 valores fijos, con un
+    // comentario que avisaba que si alguien agregaba una quinta categoría desde
+    // el SQL Editor el tipo pasaba a mentir. Eso convertía cada fila nueva de la
+    // tabla `categoria` en un cambio de código. El nombre es un dato de la base:
+    // se pasa tal cual y la lista de opciones se pide por
+    // GET /api/articulos/catalogos.
+    categoria: row.categoria_nombre,
 
     unidadMedidaId: row.unidad_medida_id,
-    unidadMedida: row.unidad_medida_nombre as UnidadMedida,
+    unidadMedida: row.unidad_medida_nombre,
 
     // C1: snake_case directo como el dict.
     fabricante_id: row.fabricante_id,

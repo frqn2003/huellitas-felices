@@ -8,15 +8,15 @@ import type { Mascota } from "@/data/mascotas";
 import {
   formatearFecha,
   generarSlots,
-  haySuperposicion,
+  haySuperposicionDraft,
   horasOcupadas,
-  practicas,
-  profesionales,
   proximosDiasLaborables,
   sumarMinutos,
   diaSemanaDeFecha,
-  RECEPCIONISTA_ID,
+  type Practica,
+  type Profesional,
   type Turno,
+  type TurnoDraft,
 } from "@/data/turnos";
 import { Button } from "@/components/ui/Button";
 import { Combobox } from "@/components/ui/Combobox";
@@ -51,8 +51,26 @@ interface NuevoTurnoModalProps {
   mascotas: Mascota[];
   /** Turnos existentes de la sucursal (para validar disponibilidad). */
   turnos: Turno[];
-  /** Se dispara tras el POST simulado con el turno pendiente creado. */
-  onCreado: (turno: Turno) => void;
+  /**
+   * Catálogo de veterinarios con sus franjas — GET /api/profesionales.
+   *
+   * Llega por prop y NO de la constante `profesionales` de src/data/turnos.ts.
+   * Esa lista traía franjas con ids inventados (1..14) y el id de la franja ES
+   * el `agendaProfesionalId` que viaja en el POST: elegir cualquiera de ellas
+   * habría hecho fallar el INSERT con un 23503 (la FK no existe).
+   */
+  profesionales: Profesional[];
+  /** Catálogo de prácticas — GET /api/practicas. La duración define hora_fin. */
+  practicas: Practica[];
+  /**
+   * Manda el turno al backend.
+   *
+   * Devuelve el mensaje de error si el servidor lo rechazó, o `null` si salió
+   * bien. Se resuelve así y no con un `throw` para que el wizard muestre el
+   * mensaje del backend —"el profesional ya tiene un turno de 09:00 a 09:30 ese
+   * día"— sin cerrarse y perder los tres pasos que la persona ya completó.
+   */
+  onCreado: (draft: TurnoDraft) => Promise<string | null>;
   /** Atajo del empty state de Paso 2: cierra el wizard y lleva a la tab Mascotas. */
   onRegistrarMascota: () => void;
 }
@@ -112,6 +130,8 @@ export function NuevoTurnoModal({
   clientes,
   mascotas,
   turnos,
+  profesionales,
+  practicas,
   onCreado,
   onRegistrarMascota,
 }: NuevoTurnoModalProps) {
@@ -215,28 +235,33 @@ export function NuevoTurnoModal({
     setErrorDisponibilidad("");
   };
 
-  const crear = () => {
+  /**
+   * Manda el turno al backend.
+   *
+   * El draft NO lleva `id`, `sucursalId`, `estadoId` ni `fechaCreacion`: los
+   * completa el backend (el id por IDENTITY, la sucursal por el trigger
+   * `fn_turno_sincronizar_sucursal`, el estado siempre en pendiente).
+   * Antes se armaban acá con valores inventados — `id: 0` y `sucursalId: 1` —
+   * que nunca coincidían con lo que quedaba guardado.
+   */
+  const crear = async () => {
     if (!franja || !practica || !mascotaSeleccionada) return;
-    const nuevo: Turno = {
-      id: 0, // ← el id real lo genera la base en el POST
+
+    const draft: TurnoDraft = {
       clienteId: Number(clienteId),
       mascotaId: mascotaSeleccionada.id,
-      sucursalId: 1, // la deriva el backend desde agenda_profesional
       agendaProfesionalId: franja.id,
       practicaId: practica.id,
-      estadoId: 1, // pendiente (requiere confirmación del profesional, HU futura)
       fecha,
       horaInicio: hora,
       horaFin: sumarMinutos(hora, practica.duracionMinutos),
       notas: notas.trim() || null,
-      usuarioId: RECEPCIONISTA_ID,
-      fechaCreacion: new Date().toISOString(),
     };
-    // BACKEND: POST /turnos con el draft { cliente_id, mascota_id,
-    // agenda_profesional_id, practica_id, fecha, hora_inicio, hora_fin, notas };
-    // el backend deriva sucursal_id y estado_id (pendiente) y registra el INSERT
-    // en auditoria (tabla='turno', operacion='INSERT', usuario_id, valores_nuevos).
-    if (haySuperposicion(nuevo, turnos)) {
+
+    // Chequeo local: da feedback inmediato sin ir al servidor. NO es la
+    // garantía — el backend revalida y, bajo concurrencia, el constraint
+    // EXCLUDE de la base es lo único que impide el turno duplicado.
+    if (haySuperposicionDraft(draft, turnos)) {
       setConfirmando(false);
       setGuardando(false);
       setErrorDisponibilidad(
@@ -245,8 +270,16 @@ export function NuevoTurnoModal({
       setPaso(2);
       return;
     }
+
+    const error = await onCreado(draft);
     setGuardando(false);
-    onCreado(nuevo);
+
+    if (error) {
+      // El wizard queda abierto en el Paso 3 con todo cargado: el mensaje viene
+      // del backend y puede ser justamente el de disponibilidad.
+      setErrorDisponibilidad(error);
+      setPaso(2);
+    }
   };
 
   const pasoComponentes = (

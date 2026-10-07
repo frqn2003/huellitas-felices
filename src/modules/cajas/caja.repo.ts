@@ -36,6 +36,10 @@ const SELECT_APERTURA = `
     u.nombre                          AS cajero_nombre,
     u.apellido                        AS cajero_apellido,
     ca.monto_inicial,
+    ca.monto_inicial + COALESCE((
+      SELECT SUM(CASE WHEN m.tipo = 'ingreso' THEN m.monto ELSE -m.monto END)
+      FROM movimiento_caja m WHERE m.caja_apertura_id = ca.id
+    ), 0)                             AS saldo_actual,
     to_char(ca.fecha_apertura, ${TS}) AS fecha_apertura,
     ca.estado,
     ca.monto_contado,

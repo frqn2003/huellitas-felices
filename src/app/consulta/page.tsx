@@ -6,7 +6,7 @@ import {
   Stethoscope,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Sidebar } from "@/components/layout/Sidebar";
 import {
@@ -18,15 +18,11 @@ import {
 import { TurnosTable, type TurnoRow } from "@/components/turnos/TurnosTable";
 import { construirFilaTurno } from "@/components/turnos/turnoRow";
 
-import {
-  turnosIniciales,
-  profesionalPorFranja,
-  profesionalIdPorFranja,
-  practicaPorId,
-} from "@/data/turnos";
-import { clientesIniciales, type Cliente } from "@/data/clientes";
-import { mascotasIniciales, type Mascota } from "@/data/mascotas";
-import { consultasIniciales } from "@/data/consultas";
+import { armarDirectorio, type Practica, type Profesional, type Turno } from "@/data/turnos";
+import type { Cliente } from "@/data/clientes";
+import type { Mascota } from "@/data/mascotas";
+import { apiGet, mensajeDeError } from "@/lib/api-client";
+import { useCatalogo } from "@/lib/use-catalogo";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -46,18 +42,52 @@ export default function ClinicaPage() {
   const router = useRouter();
   const [filtros, setFiltros] = useState<FiltrosConsultaValues>(FILTROS_CONSULTA_VACIOS);
 
+  // Todo sale de la base: turnos del día, clientes, mascotas y los catálogos de
+  // profesionales y prácticas (para resolver nombres desde las FK del turno).
+  const profesionales = useCatalogo<Profesional>("/api/profesionales");
+  const practicas = useCatalogo<Practica>("/api/practicas");
+  const clientes = useCatalogo<Cliente>("/api/clientes");
+  const mascotas = useCatalogo<Mascota>("/api/mascotas");
+  const directorio = useMemo(() => armarDirectorio(profesionales, practicas), [profesionales, practicas]);
+  const { profesionalPorFranja, profesionalIdPorFranja, practicaPorId } = directorio;
+
   const clientePorId = useMemo(
-    () => Object.fromEntries(clientesIniciales.map((c) => [c.id, c])) as Record<number, Cliente>,
-    [],
+    () => Object.fromEntries(clientes.map((c) => [c.id, c])) as Record<number, Cliente>,
+    [clientes],
   );
   const mascotaPorId = useMemo(
-    () => Object.fromEntries(mascotasIniciales.map((m) => [m.id, m])) as Record<number, Mascota>,
-    [],
+    () => Object.fromEntries(mascotas.map((m) => [m.id, m])) as Record<number, Mascota>,
+    [mascotas],
   );
 
-  // BACKEND: GET /api/turnos?fecha=hoy&rol=veterinario
+  // "Turnos del día": los de hoy, de todas las sucursales.
+  const [turnos, setTurnos] = useState<Turno[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [errorCarga, setErrorCarga] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelado = false;
+    const t = setTimeout(async () => {
+      const d = new Date();
+      const hoy = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      try {
+        const lista = await apiGet<Turno[]>(`/api/turnos?desde=${hoy}&hasta=${hoy}`);
+        if (cancelado) return;
+        setTurnos(lista);
+        setErrorCarga(null);
+      } catch (e) {
+        if (!cancelado) setErrorCarga(mensajeDeError(e));
+      } finally {
+        if (!cancelado) setCargando(false);
+      }
+    }, 0);
+    return () => {
+      cancelado = true;
+      clearTimeout(t);
+    };
+  }, []);
+
   const turnosFiltrados = useMemo(() => {
-    let list = [...turnosIniciales];
+    let list = [...turnos];
 
     // 1. Filtro de estado
     if (filtros.estadoId !== "") {
@@ -81,8 +111,8 @@ export default function ClinicaPage() {
     if (filtros.busqueda.trim() !== "") {
       const q = normalizar(filtros.busqueda.trim());
       list = list.filter((t) => {
-        const c = clientesIniciales.find((cl) => cl.id === t.clienteId);
-        const m = mascotasIniciales.find((ma) => ma.id === t.mascotaId);
+        const c = clientePorId[t.clienteId];
+        const m = mascotaPorId[t.mascotaId];
         const p = profesionalPorFranja[t.agendaProfesionalId];
         const pr = practicaPorId[t.practicaId];
 
@@ -115,13 +145,13 @@ export default function ClinicaPage() {
         return b.horaInicio.localeCompare(a.horaInicio);
       }
       if (filtros.orden === "paciente_asc") {
-        const mA = mascotasIniciales.find((m) => m.id === a.mascotaId)?.nombre ?? "";
-        const mB = mascotasIniciales.find((m) => m.id === b.mascotaId)?.nombre ?? "";
+        const mA = mascotaPorId[a.mascotaId]?.nombre ?? "";
+        const mB = mascotaPorId[b.mascotaId]?.nombre ?? "";
         return mA.localeCompare(mB);
       }
       if (filtros.orden === "cliente_asc") {
-        const cA = clientesIniciales.find((c) => c.id === a.clienteId)?.nombre ?? "";
-        const cB = clientesIniciales.find((c) => c.id === b.clienteId)?.nombre ?? "";
+        const cA = clientePorId[a.clienteId]?.nombre ?? "";
+        const cB = clientePorId[b.clienteId]?.nombre ?? "";
         return cA.localeCompare(cB);
       }
 
@@ -133,15 +163,15 @@ export default function ClinicaPage() {
     });
 
     return list;
-  }, [filtros]);
+  }, [filtros, turnos, clientePorId, mascotaPorId, profesionalPorFranja, profesionalIdPorFranja, practicaPorId]);
 
   const turnosRows: TurnoRow[] = useMemo(() => {
-    return turnosFiltrados.map((t) => construirFilaTurno(t, clientePorId, mascotaPorId));
-  }, [turnosFiltrados, clientePorId, mascotaPorId]);
+    return turnosFiltrados.map((t) => construirFilaTurno(t, clientePorId, mascotaPorId, directorio));
+  }, [turnosFiltrados, clientePorId, mascotaPorId, directorio]);
 
   // Contadores
-  const porAtenderCount = turnosIniciales.filter((t) => t.estadoId === 1 || t.estadoId === 2).length;
-  const atendidosCount = turnosIniciales.filter((t) => t.estadoId === 4).length;
+  const porAtenderCount = turnos.filter((t) => t.estadoId === 1 || t.estadoId === 2).length;
+  const atendidosCount = turnos.filter((t) => t.estadoId === 4).length;
 
   const hasActiveFilters =
     filtros.busqueda !== "" ||
@@ -154,8 +184,9 @@ export default function ClinicaPage() {
     setFiltros(FILTROS_CONSULTA_VACIOS);
   }
 
+  // Un turno 'atendido' siempre tiene su consulta (la crea la base al pasar a ese estado).
   function tieneConsulta(turnoId: number) {
-    return consultasIniciales.some((c) => c.turnoId === turnoId);
+    return turnos.some((t) => t.id === turnoId && t.estadoId === 4);
   }
 
   return (
@@ -209,7 +240,7 @@ export default function ClinicaPage() {
                 </div>
 
                 {/* Filtros y ordenación dropdown */}
-                <FiltrosConsulta filtros={filtros} onChange={setFiltros} />
+                <FiltrosConsulta filtros={filtros} onChange={setFiltros} catalogos={{ profesionales, practicas }} />
               </div>
 
               {/* Chips de filtros activos */}
@@ -218,6 +249,7 @@ export default function ClinicaPage() {
                   filtros={filtros}
                   onChange={setFiltros}
                   onClearAll={handleLimpiarTodo}
+                  catalogos={{ profesionales, practicas }}
                 />
               </div>
             </div>
@@ -226,7 +258,16 @@ export default function ClinicaPage() {
 
         {/* Contenido principal */}
         <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 py-6 sm:px-8">
+          {errorCarga && (
+            <p
+              role="alert"
+              className="rounded-md border border-destructive/40 bg-surface px-4 py-3 text-sm font-semibold text-destructive"
+            >
+              No se pudieron cargar los turnos del día: {errorCarga}
+            </p>
+          )}
           <TurnosTable
+            loading={cargando}
             turnos={turnosRows}
             hasActiveFilters={hasActiveFilters}
             onClearFilters={handleLimpiarTodo}

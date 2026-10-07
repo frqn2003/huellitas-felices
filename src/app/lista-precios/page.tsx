@@ -17,7 +17,8 @@ import {
 } from "@/components/articulos/FiltrosArticulos";
 import type { FormModo } from "@/components/articulos/ArticuloFormModal";
 import type { FilaListaPrecio } from "@/data/lista-precios";
-import { apiGet, apiSend, mensajeDeError } from "@/lib/api-client";
+import { apiGet, apiGetOpcional, apiSend, mensajeDeError } from "@/lib/api-client";
+import type { CatalogosArticulo } from "@/data/articulos";
 import { parseImporte } from "@/data/ordenes-compra";
 import { useAuth } from "@/context/AuthContext";
 
@@ -66,6 +67,8 @@ function ListaPreciosScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [filas, setFilas] = useState<FilaListaPrecio[]>([]);
+  // Categorías para el filtro: salen de la tabla `categoria`, no de una lista fija.
+  const [categorias, setCategorias] = useState<CatalogosArticulo["categorias"]>([]);
 
   const [busqueda, setBusqueda] = useState("");
   const [filtros, setFiltros] = useState<Filtros>({
@@ -95,9 +98,13 @@ function ListaPreciosScreen() {
       setLoading(true);
       try {
         // Todos los artículos, con o sin precio (LEFT JOIN en el back).
-        const data = await apiGet<FilaListaPrecio[]>("/api/lista-precios");
+        const [data, catalogos] = await Promise.all([
+          apiGet<FilaListaPrecio[]>("/api/lista-precios"),
+          apiGetOpcional<Partial<CatalogosArticulo>>("/api/articulos/catalogos", {}),
+        ]);
         if (cancelado) return;
         setFilas(data);
+        setCategorias(catalogos.categorias ?? []);
         setError(false);
       } catch {
         if (cancelado) return;
@@ -111,6 +118,12 @@ function ListaPreciosScreen() {
       clearTimeout(t);
     };
   }, [recargar]);
+
+  // Unidad y proveedor no aplican a precios (GRUPOS_FILTRO): quedan vacíos.
+  const catalogosFiltro = useMemo(
+    () => ({ categorias, unidadesMedida: [], proveedores: [] }),
+    [categorias],
+  );
 
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -272,13 +285,19 @@ function ListaPreciosScreen() {
                 <FiltrosArticulos
                   filtros={filtros}
                   onChange={handleFiltros}
+                  catalogos={catalogosFiltro}
                   disabled={loading || error}
                   hideChips
                   grupos={GRUPOS_FILTRO}
                 />
               </div>
               <div className="flex flex-wrap items-center">
-                <FiltrosChips filtros={filtros} onChange={handleFiltros} grupos={GRUPOS_FILTRO} />
+                <FiltrosChips
+                  filtros={filtros}
+                  onChange={handleFiltros}
+                  catalogos={catalogosFiltro}
+                  grupos={GRUPOS_FILTRO}
+                />
               </div>
             </div>
           </div>

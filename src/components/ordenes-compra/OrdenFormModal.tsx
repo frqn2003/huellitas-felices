@@ -209,11 +209,13 @@ function OrdenFormFields({
     field: K,
     value: OrdenDraft[K],
   ) => {
-    const next = { ...draft, [field]: value };
-    setDraft(next);
-    if (touched[field]) {
-      setErrors(validarDraft(next));
-    }
+    setDraft((prevDraft) => {
+      const next = { ...prevDraft, [field]: value };
+      if (touched[field]) {
+        setErrors(validarDraft(next));
+      }
+      return next;
+    });
   };
 
   const actualizarLinea = (key: string, patch: Partial<Omit<LineaDraft, "key">>) => {
@@ -237,17 +239,21 @@ function OrdenFormFields({
       cantidad: "",
       precio: "",
     };
-    const next = { ...draft, lineas: [...draft.lineas, nueva] };
-    setDraft(next);
-    setErrors(validarDraft(next));
+    setDraft((prevDraft) => {
+      const next = { ...prevDraft, lineas: [...prevDraft.lineas, nueva] };
+      setErrors(validarDraft(next));
+      return next;
+    });
   };
 
   const eliminarLinea = (key: string) => {
     // El botón se deshabilita cuando queda una sola línea, así que nunca
     // llega a cero filas (mismo comportamiento que movimientos).
-    const next = { ...draft, lineas: draft.lineas.filter((l) => l.key !== key) };
-    setDraft(next);
-    setErrors(validarDraft(next));
+    setDraft((prevDraft) => {
+      const next = { ...prevDraft, lineas: prevDraft.lineas.filter((l) => l.key !== key) };
+      setErrors(validarDraft(next));
+      return next;
+    });
   };
 
   /**

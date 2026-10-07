@@ -1,3 +1,5 @@
+import type { Row } from "@/lib/db/schema.types";
+
 /**
  * HU-STK-01 — tipos del módulo Artículos.
  */
@@ -10,29 +12,38 @@
  * muestra los nombres pero el formulario necesita los ids, así que la API
  * devuelve LOS DOS.
  */
-export type ArticuloRow = {
-  id: number;
-  codigo: string;
-  nombre: string;
-  descripcion: string | null;
-  categoria_id: number;
+export type ArticuloRow = Pick<
+  // Las columnas de la tabla `articulo`, DERIVADAS del esquema real
+  // (`npm run db:types`). Si alguien renombra una, esto no compila.
+  //
+  // `contenido_neto` sale tipado como STRING y no como number: es `numeric`, y
+  // el driver `pg` no lo convierte para no perder precisión. El mapper hace el
+  // `Number()`.
+  Row<"articulo">,
+  | "id"
+  | "codigo"
+  | "nombre"
+  | "descripcion"
+  | "categoria_id"
+  | "unidad_medida_id"
+  | "fabricante_id"
+  | "presentacion_id"
+  | "contenido_neto"
+  | "estado"
+  | "imagen_url"
+  | "created_at"
+  | "updated_at"
+> & {
+  // Lo que NO es columna de `articulo` y el generador no puede conocer:
+  // los nombres que traen los JOIN de catálogo...
   categoria_nombre: string;
-  unidad_medida_id: number;
   unidad_medida_nombre: string;
-  fabricante_id: number;
   fabricante_nombre: string;
-  presentacion_id: number;
   presentacion_nombre: string;
-  /** `numeric` -> llega como STRING desde `pg`. El mapper lo pasa a number. */
-  contenido_neto: string;
-  // DERIVADOS, no columnas: salen del LEFT JOIN LATERAL contra la última orden
-  // de compra no cancelada (decisión D2). Ver LATERAL_PROVEEDOR en el repo.
+  // ...y el proveedor preferido, que sale del LEFT JOIN LATERAL contra la
+  // última orden de compra no cancelada (decisión D2, ver LATERAL_PROVEEDOR).
   proveedor_preferido_id: number | null;
   proveedor_preferido_nombre: string | null;
-  estado: "activo" | "inactivo";
-  imagen_url: string | null;
-  created_at: Date;
-  updated_at: Date;
 };
 
 /** Filtros del listado. Salen de FiltrosArticulos.tsx. */

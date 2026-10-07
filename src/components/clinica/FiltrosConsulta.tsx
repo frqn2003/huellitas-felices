@@ -3,7 +3,13 @@
 import { SlidersHorizontal, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { practicas, profesionales } from "@/data/turnos";
+import type { Practica, Profesional } from "@/data/turnos";
+
+/** Catálogos de los selects: GET /api/profesionales y GET /api/practicas. */
+export interface CatalogosConsulta {
+  profesionales: Profesional[];
+  practicas: Practica[];
+}
 
 export type OrdenTurnos = "prioridad" | "hora_asc" | "hora_desc" | "paciente_asc" | "cliente_asc";
 
@@ -42,6 +48,7 @@ const estadoOpciones: { value: string; label: string }[] = [
 export function buildTagsConsulta(
   filtros: FiltrosConsultaValues,
   onChange: (filtros: FiltrosConsultaValues) => void,
+  { profesionales, practicas }: CatalogosConsulta,
 ) {
   const tags: { label: string; onRemove: () => void }[] = [];
 
@@ -84,12 +91,14 @@ export function FiltrosConsultaChips({
   filtros,
   onChange,
   onClearAll,
+  catalogos,
 }: {
   filtros: FiltrosConsultaValues;
   onChange: (filtros: FiltrosConsultaValues) => void;
   onClearAll?: () => void;
+  catalogos: CatalogosConsulta;
 }) {
-  const tags = buildTagsConsulta(filtros, onChange);
+  const tags = buildTagsConsulta(filtros, onChange, catalogos);
   if (tags.length === 0) return null;
 
   return (
@@ -123,9 +132,11 @@ interface FiltrosConsultaProps {
   filtros: FiltrosConsultaValues;
   onChange: (filtros: FiltrosConsultaValues) => void;
   disabled?: boolean;
+  catalogos: CatalogosConsulta;
 }
 
-export function FiltrosConsulta({ filtros, onChange, disabled = false }: FiltrosConsultaProps) {
+export function FiltrosConsulta({ filtros, onChange, disabled = false, catalogos }: FiltrosConsultaProps) {
+  const { profesionales, practicas } = catalogos;
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -140,7 +151,7 @@ export function FiltrosConsulta({ filtros, onChange, disabled = false }: Filtros
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [open]);
 
-  const tags = buildTagsConsulta(filtros, onChange);
+  const tags = buildTagsConsulta(filtros, onChange, catalogos);
 
   return (
     <div className="relative" ref={panelRef}>
@@ -216,7 +227,6 @@ export function FiltrosConsulta({ filtros, onChange, disabled = false }: Filtros
             {/* Profesional */}
             <label className="flex flex-col gap-1.5 text-xs font-bold text-text-primary">
               Profesional
-              {/* BACKEND: poblar desde GET /api/profesionales. */}
               <select
                 value={filtros.profesionalId}
                 onChange={(e) => onChange({ ...filtros, profesionalId: e.target.value })}
@@ -234,7 +244,6 @@ export function FiltrosConsulta({ filtros, onChange, disabled = false }: Filtros
             {/* Práctica */}
             <label className="flex flex-col gap-1.5 text-xs font-bold text-text-primary">
               Práctica / Motivo
-              {/* BACKEND: poblar desde GET /api/practicas. */}
               <select
                 value={filtros.practicaId}
                 onChange={(e) => onChange({ ...filtros, practicaId: e.target.value })}

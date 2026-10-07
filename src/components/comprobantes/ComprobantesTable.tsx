@@ -15,7 +15,8 @@ export interface ComprobanteRow {
   fecha: string;
   fecha_vencimiento?: string;
   monto: number;
-  estado: "Vigente" | "Anulado";
+  /** Los tres valores del enum de la base. `Pagado` lo pone un trigger. */
+  estado: "Vigente" | "Anulado" | "Pagado";
   comprobanteOriginal?: string;
   comprobanteAnulador?: string;
   /** id de la OC vinculada en el catálogo (para preseleccionar en edición). */
@@ -147,7 +148,20 @@ export function ComprobantesTable({
                         <Landmark className="h-5 w-5" aria-hidden="true" />
                       </button>
                     )}
-                    {f.estado === "Vigente" && (
+                    {/*
+                      Se puede anular un comprobante VIGENTE o PAGADO.
+                      Antes el gate era solo "Vigente", así que un comprobante
+                      pagado no se podía anular desde la pantalla — y en la base
+                      están casi todos en ese estado.
+
+                      La base lo permite explícitamente: fn_bloquea_update_
+                      comprobante_proveedor admite vigente->anulado y
+                      pagado->anulado. Anular uno ya pagado es el caso de "lo
+                      cargué mal y encima le pagué": las imputaciones quedan en
+                      pago_imputacion como historial, y la cuenta corriente deja
+                      de considerar el comprobante.
+                    */}
+                    {f.estado !== "Anulado" && (
                       <button
                         type="button"
                         onClick={() => onAnular(f.id)}

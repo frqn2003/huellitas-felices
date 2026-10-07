@@ -7,6 +7,16 @@ import { Select } from "@/components/ui/Select";
 
 export interface LineaComprobante {
   id: number;
+  /**
+   * FK a `articulo`. Es lo que la API necesita para guardar la línea.
+   *
+   * Antes solo existía `articuloCodigo`, un texto libre: el usuario tecleaba
+   * "VAC-001" y nadie verificaba que ese artículo existiera. El PO pidió
+   * justamente esto — "el usuario debe poder buscar y cargar manualmente los
+   * ítems en base al código de producto interno del sistema" —, así que el
+   * campo pasó a ser un select del catálogo real.
+   */
+  articuloId?: number;
   articuloCodigo: string;
   descripcion: string;
   cantidad: number;
@@ -18,11 +28,35 @@ export interface LineaComprobante {
 interface DetalleLineasTableProps {
   lineas: LineaComprobante[];
   onChange: (lineas: LineaComprobante[]) => void;
+  /** Catálogo real, de GET /api/articulos?estado=activo. */
+  articulos: { id: number; codigo: string; nombre: string }[];
 }
 
 const ALICUOTAS = ["0", "10.5", "21", "27"];
 
-export function DetalleLineasTable({ lineas, onChange }: DetalleLineasTableProps) {
+export function DetalleLineasTable({ lineas, onChange, articulos }: DetalleLineasTableProps) {
+  /**
+   * Elegir el artículo llena también código y descripción.
+   *
+   * Son datos del catálogo, no del comprobante: dejarlos editables permitiría
+   * facturar "VAC-001" con la descripción de otra cosa.
+   */
+  const elegirArticulo = (lineaId: number, articuloId: string) => {
+    const art = articulos.find((a) => a.id === Number(articuloId));
+    onChange(
+      lineas.map((l) =>
+        l.id === lineaId
+          ? {
+              ...l,
+              articuloId: art?.id,
+              articuloCodigo: art?.codigo ?? "",
+              descripcion: art?.nombre ?? "",
+            }
+          : l,
+      ),
+    );
+  };
+
   const updateLinea = (id: number, field: keyof LineaComprobante, value: string | number | null) => {
     onChange(
       lineas.map((l) => {
@@ -61,22 +95,30 @@ export function DetalleLineasTable({ lineas, onChange }: DetalleLineasTableProps
             {lineas.map((linea) => (
               <tr key={linea.id} className="border-b border-border last:border-0 hover:bg-background/60">
                 <td className="px-3 py-2">
-                  <Input
-                    value={linea.articuloCodigo}
-                    onChange={(e) => updateLinea(linea.id, "articuloCodigo", e.target.value)}
-                    className="h-9 min-h-9 w-24 text-sm"
-                    aria-label="Código de artículo"
-                    placeholder="Código"
-                  />
+                  {/*
+                    Era un <Input> de texto libre. El usuario tecleaba un código
+                    y nadie verificaba que el artículo existiera — y la API
+                    necesita el `articuloId`, no un string.
+                  */}
+                  <select
+                    value={linea.articuloId ?? ""}
+                    onChange={(e) => elegirArticulo(linea.id, e.target.value)}
+                    aria-label="Artículo"
+                    className="h-9 min-w-[200px] cursor-pointer rounded-sm border border-border bg-surface px-2 text-sm text-text-primary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
+                  >
+                    <option value="">Elegí el artículo…</option>
+                    {articulos.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.codigo} — {a.nombre}
+                      </option>
+                    ))}
+                  </select>
                 </td>
                 <td className="px-3 py-2">
-                  <Input
-                    value={linea.descripcion}
-                    onChange={(e) => updateLinea(linea.id, "descripcion", e.target.value)}
-                    className="h-9 min-h-9 min-w-[140px] text-sm"
-                    aria-label="Descripción"
-                    placeholder="Descripción"
-                  />
+                  {/* Solo lectura: sale del catálogo, no se factura con otro nombre. */}
+                  <span className="block min-w-[140px] text-sm text-text-secondary">
+                    {linea.descripcion || "—"}
+                  </span>
                 </td>
                 <td className="px-3 py-2">
                   <Input

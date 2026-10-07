@@ -86,7 +86,11 @@ INSERT INTO forma_pago (nombre) VALUES
   ('Cta. cte. 30 días'),
   ('Cta. cte. 60 días'),
   ('Transferencia'),
-  ('Cheque a 30 días')
+  ('Cheque a 30 días'),
+  -- Medios de cobro de ventas (HU-VTA-02). El trigger de caja detecta el efectivo por nombre.
+  ('Efectivo'),
+  ('Tarjeta'),
+  ('Billetera virtual')
 ON CONFLICT (nombre) DO NOTHING;
 
 

@@ -206,6 +206,9 @@ export function traducirErrorPostgres(e: unknown): AppError | null {
         "numero_comprobante",
       );
     }
+    if (constraint.includes("uq_venta_consulta") || constraint.includes("uq_venta_detalle_consulta_insumo")) {
+      return new ConflictError("CONSULTA_YA_COBRADA", "Esta atención médica ya fue cobrada.", "consultaId");
+    }
     if (constraint.includes("deposito_nombre")) {
       return new ConflictError("DEPOSITO_DUPLICADO", "Ya existe un depósito con ese nombre.", "nombre");
     }
@@ -220,6 +223,20 @@ export function traducirErrorPostgres(e: unknown): AppError | null {
         "La operación dejaría el stock en negativo.",
       );
     }
+    if (constraint.includes("turno_check")) {
+      return new ValidationError(
+        "HORARIO_INVALIDO",
+        "La hora de fin del turno tiene que ser posterior a la de inicio.",
+        "horaFin",
+      );
+    }
+    if (constraint.includes("mascota_peso_check")) {
+      return new ValidationError(
+        "PESO_INVALIDO",
+        "El peso de la mascota debe ser mayor a 0.",
+        "peso",
+      );
+    }
     if (constraint.includes("critico_menor")) {
       return new ValidationError(
         "UMBRAL_INVALIDO",
@@ -227,6 +244,16 @@ export function traducirErrorPostgres(e: unknown): AppError | null {
         "stockCritico",
       );
     }
+    // ⚠️ Un `RAISE EXCEPTION ... USING ERRCODE = 'check_violation'` desde un
+    //    trigger cae acá SIN nombre de constraint, así que no se puede
+    //    distinguir de qué regla se trata y sale este mensaje genérico.
+    //
+    //    Hoy le pasa a `fn_mascota_validar_fecha_nacimiento` (fecha de
+    //    nacimiento futura). No se nota porque el schema de zod ya la rechaza
+    //    antes con un mensaje que señala el campo — la base es solo la red de
+    //    seguridad. Si algún día ese camino importa, el arreglo es darle al
+    //    trigger un SQLSTATE propio (HF0xx) y mapearlo abajo, como se hizo con
+    //    los de stock e imputaciones.
     return new ValidationError("DATO_INVALIDO", "Algún valor no cumple las reglas de la base.");
   }
 
@@ -311,6 +338,24 @@ export function traducirErrorPostgres(e: unknown): AppError | null {
       "La consulta todavía no está cerrada: no se puede cobrar una atención en curso.",
     );
   }
+  // HU-VTA-01 · venta (red de seguridad de los triggers; el service valida antes
+  // con mensajes más precisos, pero estos son los que ven los choques concurrentes)
+  if (codigo === "HF049") {
+    return new BusinessRuleError("SIN_FICHA_STOCK", "Un artículo de la venta no tiene ficha de stock en el depósito: cargala antes de venderlo.");
+  }
+  if (codigo === "HF050") {
+    return new ValidationError("VENTA_SIN_LINEAS", "La venta no tiene ninguna línea de detalle.", "lineas");
+  }
+  if (codigo === "HF051") {
+    return new ValidationError("MEDIOS_PAGO_NO_COINCIDEN", "Los medios de pago no suman el total de la venta.", "mediosPago");
+  }
+  if (codigo === "HF053" || codigo === "HF054" || codigo === "HF055" || codigo === "HF059") {
+    return new BusinessRuleError("INSUMO_INCONSISTENTE", "Un ítem de la venta no coincide con los insumos indicados en la atención médica.");
+  }
+  if (codigo === "HF056" || codigo === "HF057") {
+    return new BusinessRuleError("VENTA_INMUTABLE", "La venta ya está pagada o anulada y no admite modificaciones.");
+  }
+
   // HU-VTA-03 · caja diaria (red de seguridad de los triggers de la base)
   if (codigo === "HF042") {
     return new ValidationError("MONTO_CONTADO_OBLIGATORIO", "Informá el monto contado para cerrar la caja.", "montoContado");
@@ -386,6 +431,37 @@ export function traducirErrorPostgres(e: unknown): AppError | null {
     return new ValidationError(
       "CAMPO_OBLIGATORIO",
       "Falta un dato obligatorio del formulario. Revisá que estén completos todos los campos marcados con *.",
+    );
+  }
+
+  // 23P01 = exclusion_violation
+  //
+  // Lo levanta un constraint EXCLUDE. Hoy hay uno solo en el proyecto y es el
+  // que hace cumplir el criterio de HU-TUR-01 "rechaza la superposición":
+  //
+  //   turno_sin_superposicion_excl
+  //     EXCLUDE USING gist (agenda_profesional_id WITH =, fecha WITH =,
+  //                         tsrange(fecha + hora_inicio, fecha + hora_fin) WITH &&)
+  //     WHERE (estado_id <> 3)
+  //
+  // ⚠️ SIN ESTA RAMA, DOS TURNOS SUPERPUESTOS DEVOLVÍAN UN 500. El service
+  //    chequea la disponibilidad antes y da un mensaje con el horario ocupado,
+  //    pero bajo concurrencia —dos recepcionistas reservando el mismo hueco al
+  //    mismo tiempo— los dos pasan ese chequeo y uno choca contra el índice.
+  //    Ese choque es el único que garantiza que no se duplique el turno, así
+  //    que tiene que llegar al usuario como un 409 entendible y no como
+  //    "Ocurrió un error inesperado".
+  if (codigo === "23P01") {
+    if (constraint.includes("turno_sin_superposicion")) {
+      return new BusinessRuleError(
+        "TURNO_SUPERPUESTO",
+        "Ese horario se acaba de ocupar. Elegí otro y volvé a intentar.",
+        "horaInicio",
+      );
+    }
+    return new BusinessRuleError(
+      "RANGO_SUPERPUESTO",
+      "La operación se superpone con un registro existente.",
     );
   }
 

@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -8,7 +11,8 @@ import {
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { type CajaApertura, type MovimientoCaja, esperadoPreview } from "@/data/cajas";
-import { cobradoFueraDeCaja } from "@/data/venta-medios-pago";
+import type { Venta } from "@/data/ventas";
+import { apiGetOpcional } from "@/lib/api-client";
 
 interface ResumenCajaProps {
   apertura: CajaApertura;
@@ -46,13 +50,36 @@ export function ResumenCaja({ apertura, movimientos, className }: ResumenCajaPro
     ? apertura.montoContado - apertura.montoEsperado
     : null;
 
-  // Ventana determinista de la apertura (sin hora actual en el render: evitaría
-  // hydration mismatch). Caja todavía sin cierre → ventana de 24 h desde apertura.
-  const desde = apertura.fechaApertura;
-  const hasta =
-    apertura.fechaCierre ??
-    new Date(new Date(apertura.fechaApertura).getTime() + 24 * 60 * 60 * 1000).toISOString();
-  const fueraDeCaja = cobradoFueraDeCaja(apertura.sucursalId, desde, hasta);
+  // Cobrado por otros medios (transferencia, etc.) durante la jornada de esta
+  // apertura. El efectivo se EXCLUYE: ya impacta en los movimientos de la caja
+  // (trg_venta_medio_pago_ingreso_caja); contarlo acá lo duplicaría.
+  const [fueraDeCaja, setFueraDeCaja] = useState(0);
+  const { id: aperturaId, sucursalId, fechaApertura, fechaCierre } = apertura;
+  useEffect(() => {
+    let cancelado = false;
+    const t = setTimeout(async () => {
+      const desdeDia = fechaApertura.slice(0, 10);
+      const hastaDia = fechaCierre ? `&hasta=${fechaCierre.slice(0, 10)}` : "";
+      const ventas = await apiGetOpcional<Venta[]>(
+        `/api/ventas?sucursalId=${sucursalId}&desde=${desdeDia}${hastaDia}`,
+        [],
+      );
+      if (cancelado) return;
+      // "2026-09-25T08:00:00" y "2026-09-25 08:00" se comparan como texto, minuto a minuto.
+      const ini = fechaApertura.replace("T", " ").slice(0, 16);
+      const fin = fechaCierre ? fechaCierre.replace("T", " ").slice(0, 16) : null;
+      const total = ventas
+        .filter((v) => v.estado === "vigente" && v.fecha >= ini && (fin === null || v.fecha <= fin))
+        .flatMap((v) => v.mediosPago ?? [])
+        .filter((m) => m.medio !== "efectivo")
+        .reduce((acc, m) => acc + m.monto, 0);
+      setFueraDeCaja(total);
+    }, 0);
+    return () => {
+      cancelado = true;
+      clearTimeout(t);
+    };
+  }, [aperturaId, sucursalId, fechaApertura, fechaCierre]);
 
   const stats: StatItem[] = [
     {

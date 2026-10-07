@@ -2,14 +2,8 @@
 
 import { CalendarDays, CircleDollarSign, Eye, FileCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { formatearFecha } from "@/data/turnos";
-import {
-  esTurnoPagado,
-  obtenerComprobanteTurno,
-  type ComprobanteTurno,
-} from "@/data/pagos";
-import { ComprobanteTurnoModal } from "./ComprobanteTurnoModal";
 import { EstadoTurnoBadge } from "./EstadoTurnoBadge";
 
 // Fila de la tabla con los campos de display ya resueltos (el front los junta
@@ -27,6 +21,8 @@ export interface TurnoRow {
   profesionalNombre: string;
   practicaNombre: string;
   estadoId: number;
+  /** dict: turno.pagado — la atención ya fue cobrada. */
+  pagado: boolean;
   /** dict: turno.notas (nullable) — para el detalle. */
   notas: string | null;
   /** dict: turno.fecha_creacion formateado ("20/09/2026 · 14:35") — para el detalle. */
@@ -68,13 +64,11 @@ export function TurnosTable({
   renderActions,
 }: TurnosTableProps) {
   const router = useRouter();
-  const [comprobanteActivo, setComprobanteActivo] = useState<ComprobanteTurno | null>(null);
-
   const pagadosMap = useMemo(() => {
-    // BACKEND: se resolverá desde la API de turnos (JOIN con cobro / estado_facturacion)
+    // `turno.pagado` lo marca la base cuando la venta queda saldada.
     const map: Record<number, boolean> = {};
     for (const t of turnos) {
-      if (t.estadoId === 4 && esTurnoPagado(t.id)) {
+      if (t.estadoId === 4 && t.pagado) {
         map[t.id] = true;
       }
     }
@@ -224,14 +218,8 @@ export function TurnosTable({
                         <button
                           type="button"
                           onClick={() => {
-                            if (pagadosMap[t.id]) {
-                              const comp = obtenerComprobanteTurno(t.id);
-                              if (comp) {
-                                setComprobanteActivo(comp);
-                                return;
-                              }
-                            }
-                            if (onPagar) {
+                            // Ya cobrado: la pantalla de cobro muestra el comprobante.
+                            if (!pagadosMap[t.id] && onPagar) {
                               onPagar(t);
                             } else {
                               router.push(`/turnos/${t.id}/pago`);
@@ -268,14 +256,6 @@ export function TurnosTable({
           </tbody>
         </table>
       </div>
-
-      {comprobanteActivo && (
-        <ComprobanteTurnoModal
-          open={Boolean(comprobanteActivo)}
-          onClose={() => setComprobanteActivo(null)}
-          comprobante={comprobanteActivo}
-        />
-      )}
     </div>
   );
 }
