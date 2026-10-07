@@ -17,7 +17,7 @@ import {
 } from "@/components/articulos/FiltrosArticulos";
 import type { FormModo } from "@/components/articulos/ArticuloFormModal";
 import type { FilaListaPrecio } from "@/data/lista-precios";
-import { guardarPrecio, listarListaPrecios, SIMULAR_ERROR, SIMULAR_VACIO } from "@/data/lista-precios";
+import { apiGet, apiSend, mensajeDeError } from "@/lib/api-client";
 import { parseImporte } from "@/data/ordenes-compra";
 import { useAuth } from "@/context/AuthContext";
 
@@ -88,20 +88,24 @@ function ListaPreciosScreen() {
 
   useEffect(() => {
     let cancelado = false;
-    const t = setTimeout(() => {
+    // `setLoading` va dentro del timeout: un setState síncrono en el cuerpo del
+    // efecto encadena renders (regla del log de errores).
+    const t = setTimeout(async () => {
       if (cancelado) return;
-      // BACKEND: GET /api/lista-precios → tabla lista_precio LEFT JOIN articulo
-      //          (+ categoria, unidad_medida, fabricante). Hoy se sirve el
-      //          dataset hardcodeado de src/data/lista-precios.ts.
-      if (SIMULAR_ERROR) {
+      setLoading(true);
+      try {
+        // Todos los artículos, con o sin precio (LEFT JOIN en el back).
+        const data = await apiGet<FilaListaPrecio[]>("/api/lista-precios");
+        if (cancelado) return;
+        setFilas(data);
+        setError(false);
+      } catch {
+        if (cancelado) return;
         setError(true);
-        setLoading(false);
-        return;
+      } finally {
+        if (!cancelado) setLoading(false);
       }
-      setFilas(SIMULAR_VACIO ? [] : listarListaPrecios());
-      setError(false);
-      setLoading(false);
-    }, 700);
+    }, 0);
     return () => {
       cancelado = true;
       clearTimeout(t);
@@ -176,15 +180,19 @@ function ListaPreciosScreen() {
       return;
     }
     try {
-      // BACKEND: INSERCIÓN → POST /api/lista-precios; EDICIÓN → PATCH /api/lista-precios/:id.
-      //          Ambos delegan en fn_abm_lista_precio(modo, id, articulo_id, precio, usuario_id).
-      //          Sin campo `motivo`: el esquema no define tal columna.
-      const actualizadas = guardarPrecio({
-        articuloId: Number(draft.articuloId),
-        precio: parseImporte(draft.precio),
-        usuario: { id: usuario.id, nombre: `${usuario.nombre} ${usuario.apellido}` },
-      });
-      setFilas([...actualizadas]);
+      const precio = parseImporte(draft.precio);
+      // El usuario responsable lo toma el back de la sesión: no viaja en el body.
+      if (formModo === "INSERCION") {
+        await apiSend("POST", "/api/lista-precios", {
+          articuloId: Number(draft.articuloId),
+          precio,
+        });
+      } else {
+        const precioId = formFila?.precioId;
+        if (!precioId) throw new Error("El artículo todavía no tiene precio: usá Nuevo precio.");
+        await apiSend("PATCH", `/api/lista-precios/${precioId}`, { precio });
+      }
+      setRecargar((n) => n + 1);
       setFormOpen(false);
       showToast(
         "success",
@@ -192,9 +200,9 @@ function ListaPreciosScreen() {
           ? "Precio guardado correctamente"
           : "Precio actualizado correctamente",
       );
-    } catch {
+    } catch (e) {
       // El modal queda abierto con los datos cargados: se corrige y se reintenta.
-      showToast("error", "Error al guardar el precio. Intentá de nuevo.");
+      showToast("error", mensajeDeError(e));
     }
   };
 

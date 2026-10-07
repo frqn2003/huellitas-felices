@@ -298,6 +298,44 @@ export function traducirErrorPostgres(e: unknown): AppError | null {
     );
   }
 
+  // HU-CLIN-01 · consulta médica (red de seguridad de los triggers de la base)
+  if (codigo === "HF041" || codigo === "HF058") {
+    return new BusinessRuleError(
+      "CONSULTA_CERRADA",
+      "La consulta ya está cerrada y no puede modificarse: agregá una nota aclaratoria.",
+    );
+  }
+  if (codigo === "HF060") {
+    return new BusinessRuleError(
+      "CONSULTA_ABIERTA",
+      "La consulta todavía no está cerrada: no se puede cobrar una atención en curso.",
+    );
+  }
+  // HU-VTA-03 · caja diaria (red de seguridad de los triggers de la base)
+  if (codigo === "HF042") {
+    return new ValidationError("MONTO_CONTADO_OBLIGATORIO", "Informá el monto contado para cerrar la caja.", "montoContado");
+  }
+  if (codigo === "HF043") {
+    return new BusinessRuleError("CAJA_CERRADA", "La caja ya está cerrada y no puede reabrirse.");
+  }
+  if (codigo === "HF044") {
+    return new BusinessRuleError("CAJA_CERRADA", "La caja está cerrada: no se pueden registrar movimientos.");
+  }
+  if (codigo === "HF045") {
+    return new ConflictError("CAJA_YA_ABIERTA", "Ya hay una caja abierta en esa sucursal. Cerrala antes de abrir otra.", "cajaId");
+  }
+  if (codigo === "HF052") {
+    return new BusinessRuleError("SIN_CAJA_ABIERTA", "No hay una caja abierta en la sucursal para registrar el cobro en efectivo.");
+  }
+
+  // HU-STK-03 · la venta de un artículo/práctica sin precio cargado en la lista.
+  if (codigo === "HF047") {
+    return new BusinessRuleError(
+      "SIN_PRECIO",
+      "El artículo o la práctica no tiene precio de venta cargado en la lista de precios.",
+    );
+  }
+
   if (codigo === "HF003") {
     return new BusinessRuleError(
       "MOVIMIENTO_INMUTABLE",

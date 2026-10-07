@@ -8,11 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
 import { HistorialPreciosContent } from "@/components/precios/HistorialPreciosContent";
 import type { FilaListaPrecio, HistorialPrecio } from "@/data/lista-precios";
-import {
-  historialDe,
-  listarListaPrecios,
-  SIMULAR_ERROR,
-} from "@/data/lista-precios";
+import { apiGet } from "@/lib/api-client";
 
 function exportarCSV(rows: HistorialPrecio[], codigo: string) {
   const cabeceras = ["VigenciaDesde", "Precio", "VigenciaHasta", "Usuario", "Estado"];
@@ -51,24 +47,31 @@ function HistorialScreen() {
 
   useEffect(() => {
     let cancelado = false;
-    const t = setTimeout(() => {
+    const t = setTimeout(async () => {
       if (cancelado) return;
-      // BACKEND: GET /api/lista-precios/historial?articuloId= → tabla
-      //          historial_precios (solo lectura, la escribe el trigger
-      //          fn_historial_precios) + datos del artículo para el encabezado.
-      if (SIMULAR_ERROR) {
-        setError(true);
-        setLoading(false);
-        return;
+      setLoading(true);
+      try {
+        if (!articuloId) {
+          setFila(null);
+          setRows([]);
+          setError(false);
+          return;
+        }
+        // Encabezado (artículo) + historial ordenado por fecha, más nuevo primero.
+        const [lista, historial] = await Promise.all([
+          apiGet<FilaListaPrecio[]>("/api/lista-precios"),
+          apiGet<HistorialPrecio[]>(`/api/lista-precios/historial?articuloId=${articuloId}`),
+        ]);
+        if (cancelado) return;
+        setFila(lista.find((f) => f.articuloId === articuloId) ?? null);
+        setRows(historial);
+        setError(false);
+      } catch {
+        if (!cancelado) setError(true);
+      } finally {
+        if (!cancelado) setLoading(false);
       }
-      const encontrada = articuloId
-        ? listarListaPrecios().find((f) => f.articuloId === articuloId) ?? null
-        : null;
-      setFila(encontrada);
-      setRows(encontrada ? historialDe(encontrada.articuloId) : []);
-      setError(false);
-      setLoading(false);
-    }, 500);
+    }, 0);
     return () => {
       cancelado = true;
       clearTimeout(t);

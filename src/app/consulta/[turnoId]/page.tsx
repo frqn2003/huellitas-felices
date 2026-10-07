@@ -15,7 +15,7 @@ import {
   Thermometer,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { Suspense, use, useMemo, useState } from "react";
+import { Suspense, use, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 
 import { Sidebar } from "@/components/layout/Sidebar";
@@ -29,13 +29,12 @@ import { EstadoTurnoBadge } from "@/components/turnos/EstadoTurnoBadge";
 import { InsumoRow } from "@/components/clinica/InsumoRow";
 import { NotaConsultaModal } from "@/components/clinica/NotaConsultaModal";
 import { descargarPdfConsulta } from "@/lib/generarPdfConsulta";
+import { ApiError, apiGet, apiSend, mensajeDeError } from "@/lib/api-client";
+import type { Articulo } from "@/data/articulos";
 
 import {
-  articulosActivos,
   guardarConsulta,
-  obtenerConsultaPorTurno,
   CONSULTA_DRAFT_VACIO,
-  SIMULAR_ERROR,
   type Consulta,
   type ConsultaDraft,
   type ConsultaInsumo,
@@ -142,9 +141,11 @@ function ConsultaPageContent({ turnoId }: { turnoId: number }) {
   }, [turno]);
 
   // ── Resolver consulta existente ───────────────────────────────────────────
-  const [consulta, setConsulta] = useState<Consulta | null>(() =>
-    obtenerConsultaPorTurno(turnoId),
-  );
+  // La consulta vive en la base: se pide al montar (ver el efecto más abajo).
+  // `null` = el turno todavía no tiene consulta; se crea al finalizar.
+  const [consulta, setConsulta] = useState<Consulta | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [errorCarga, setErrorCarga] = useState(false);
 
   // Si consulta existe y está cerrada: modo lectura.
   const esCerrada = consulta?.estado === "cerrada";
@@ -165,7 +166,12 @@ function ConsultaPageContent({ turnoId }: { turnoId: number }) {
     pesoMomento: consulta?.pesoMomento != null ? String(consulta.pesoMomento) : "",
   });
   const [touched, setTouched] = useState<Partial<Record<keyof ConsultaDraft, boolean>>>({});
-  const [insumos, setInsumos] = useState<ConsultaInsumo[]>(consulta?.insumos ?? []);
+  const [insumos, setInsumos] = useState<ConsultaInsumo[]>([]);
+
+  // Catálogo de artículos activos para el Combobox de insumos (HU-STK-01).
+  const [articulosActivos, setArticulosActivos] = useState<
+    { id: number; codigo: string; nombre: string; unidadMedida: string }[]
+  >([]);
 
   // ── Estado de añadir insumo ───────────────────────────────────────────────
   const [insumoSeleccionado, setInsumoSeleccionado] = useState("");
@@ -175,7 +181,7 @@ function ConsultaPageContent({ turnoId }: { turnoId: number }) {
   // ── Artículos disponibles (excluye ya agregados) ──────────────────────────
   const articulosDisponibles = useMemo(
     () => articulosActivos.filter((a) => !insumos.some((i) => i.articuloId === a.id)),
-    [insumos],
+    [articulosActivos, insumos],
   );
 
   const articuloOptions: ComboboxOption[] = articulosDisponibles.map((a) => ({
@@ -191,8 +197,9 @@ function ConsultaPageContent({ turnoId }: { turnoId: number }) {
       setInsumoError("Seleccioná un artículo.");
       return;
     }
-    if (isNaN(cant) || cant <= 0) {
-      setInsumoError("La cantidad debe ser mayor a 0.");
+    // consulta_medica_insumo.cantidad es entero (CHECK > 0).
+    if (isNaN(cant) || cant <= 0 || !Number.isInteger(cant)) {
+      setInsumoError("La cantidad debe ser un número entero mayor a 0.");
       return;
     }
     if (insumos.some((i) => i.articuloId === id)) {
@@ -282,77 +289,118 @@ function ConsultaPageContent({ turnoId }: { turnoId: number }) {
     setConfirmOpen(true);
   }
 
-  function handleConfirmarFinalizar() {
+  async function handleConfirmarFinalizar() {
     setFinalizando(true);
-    // BACKEND: PATCH /api/consultas/:id/cerrar + PATCH /api/mascotas/:id { peso } si aplica
-    setTimeout(() => {
-      const ahora = new Date().toISOString();
-      const nueva: Consulta = {
-        id: consulta?.id ?? Date.now(),
-        turnoId,
-        profesionalId: 3,
-        turnoFecha: turno?.fecha ?? "",
-        turnoHoraInicio: turno?.horaInicio ?? "",
-        turnoHoraFin: turno?.horaFin ?? "",
-        clienteId: cliente?.id ?? 0,
-        clienteNombre: `${cliente?.nombre ?? ""} ${cliente?.apellido ?? ""}`.trim(),
-        clienteDni: cliente?.documento ?? "",
-        mascotaId: mascota?.id ?? 0,
-        mascotaNombre: mascota?.nombre ?? "",
-        mascotaEspecie: mascota?.especie ?? "",
-        mascotaRaza: mascota?.raza ?? null,
-        mascotaSexo: mascota?.sexo ?? "",
-        mascotaPesoAnterior: mascota?.peso ?? null,
-        profesionalNombre: profesionalDisplay,
-        practicaNombre: practicaDisplay,
+    try {
+      // Si el turno todavía no tiene consulta, se abre primero (idempotente).
+      let consultaId = consulta?.id;
+      if (!consultaId) {
+        const abierta = await apiSend<Consulta>("POST", "/api/consultas", { turnoId });
+        consultaId = abierta.id;
+      }
+
+      // Guarda datos clínicos + insumos y cierra, en una transacción. El
+      // profesional actuante es el de la sesión y queda en la auditoría.
+      const cerrada = await apiSend<Consulta>("PATCH", `/api/consultas/${consultaId}/cerrar`, {
         motivoConsulta: draft.motivoConsulta.trim(),
         diagnostico: draft.diagnostico.trim(),
         tratamiento: draft.tratamiento.trim() || null,
         estadoFisicoGeneral: draft.estadoFisicoGeneral.trim() || null,
         temperatura: draft.temperatura ? parseFloat(draft.temperatura) : null,
-        frecuenciaCardiaca: draft.frecuenciaCardiaca
-          ? parseInt(draft.frecuenciaCardiaca)
-          : null,
+        frecuenciaCardiaca: draft.frecuenciaCardiaca ? parseInt(draft.frecuenciaCardiaca) : null,
         pesoMomento: draft.pesoMomento ? parseFloat(draft.pesoMomento) : null,
-        estado: "cerrada",
-        fechaHoraApertura: ahora,
-        fechaHoraCierre: ahora,
-        insumos,
-        notas: [],
-      };
-      setConsulta(nueva);
-      guardarConsulta(nueva);
+        insumos: insumos.map((i) => ({ articuloId: i.articuloId, cantidad: i.cantidad })),
+      });
+
+      setConsulta(cerrada);
+      setInsumos(cerrada.insumos);
+      setNotas(cerrada.notas);
+      // Cache local: la pantalla de cobro del turno todavía lee de acá.
+      guardarConsulta(cerrada);
       setConfirmOpen(false);
-      setFinalizando(false);
       showToast("success", "Consulta registrada. Paciente derivado a mostrador.");
       // Abrir modal preguntando por el PDF
       setPdfModalOpen(true);
-    }, 600);
+    } catch (e) {
+      // El diálogo queda abierto con los datos cargados: se corrige y se reintenta.
+      setConfirmOpen(false);
+      showToast("error", mensajeDeError(e));
+    } finally {
+      setFinalizando(false);
+    }
   }
 
   // ── Notas aclaratorias ────────────────────────────────────────────────────
   const [notaOpen, setNotaOpen] = useState(false);
-  const [notas, setNotas] = useState<NotaConsulta[]>(consulta?.notas ?? []);
+  const [notas, setNotas] = useState<NotaConsulta[]>([]);
 
-  function handleGuardarNota(texto: string) {
-    // BACKEND: POST /api/consultas/:id/notas { nota, profesional_id }
-    const nueva: NotaConsulta = {
-      id: Date.now(),
-      consultaId: consulta?.id ?? 0,
-      profesionalId: 3,
-      profesional: profesionalDisplay,
-      nota: texto,
-      fechaHora: new Date().toISOString(),
+  // ── Carga inicial: consulta del turno + catálogo de insumos ───────────────
+  useEffect(() => {
+    let cancelado = false;
+    const t = setTimeout(async () => {
+      try {
+        const [existente, articulos] = await Promise.all([
+          apiGet<Consulta>(`/api/consultas?turnoId=${turnoId}`).catch((e) => {
+            // 404 = el turno todavía no tiene consulta: es el caso normal de "atender".
+            if (e instanceof ApiError && e.status === 404) return null;
+            throw e;
+          }),
+          apiGet<Articulo[]>("/api/articulos?estado=activo").catch(() => [] as Articulo[]),
+        ]);
+        if (cancelado) return;
+        setArticulosActivos(
+          articulos.map((a) => ({
+            id: a.id,
+            codigo: a.codigo,
+            nombre: a.nombre,
+            unidadMedida: a.unidadMedida,
+          })),
+        );
+        if (existente) {
+          setConsulta(existente);
+          setDraft({
+            ...CONSULTA_DRAFT_VACIO,
+            motivoConsulta: existente.motivoConsulta,
+            diagnostico: existente.diagnostico,
+            tratamiento: existente.tratamiento ?? "",
+            estadoFisicoGeneral: existente.estadoFisicoGeneral ?? "",
+            temperatura: existente.temperatura != null ? String(existente.temperatura) : "",
+            frecuenciaCardiaca:
+              existente.frecuenciaCardiaca != null ? String(existente.frecuenciaCardiaca) : "",
+            pesoMomento: existente.pesoMomento != null ? String(existente.pesoMomento) : "",
+          });
+          setInsumos(existente.insumos);
+          setNotas(existente.notas);
+        }
+      } catch {
+        if (!cancelado) setErrorCarga(true);
+      } finally {
+        if (!cancelado) setCargando(false);
+      }
+    }, 0);
+    return () => {
+      cancelado = true;
+      clearTimeout(t);
     };
-    const listaActualizada = [...notas, nueva];
-    setNotas(listaActualizada);
-    if (consulta) {
+  }, [turnoId]);
+
+  async function handleGuardarNota(texto: string) {
+    if (!consulta) return;
+    try {
+      // El profesional es el de la sesión: no viaja en el body.
+      const nueva = await apiSend<NotaConsulta>("POST", `/api/consultas/${consulta.id}/notas`, {
+        nota: texto,
+      });
+      const listaActualizada = [...notas, nueva];
+      setNotas(listaActualizada);
       const conNotas: Consulta = { ...consulta, notas: listaActualizada };
       setConsulta(conNotas);
       guardarConsulta(conNotas);
+      setNotaOpen(false);
+      showToast("success", "Nota agregada correctamente.");
+    } catch (e) {
+      showToast("error", mensajeDeError(e));
     }
-    setNotaOpen(false);
-    showToast("success", "Nota agregada correctamente.");
   }
 
   // Generación nativa de Historia Clínica en PDF (Pet Bliss Style)
@@ -414,7 +462,17 @@ function ConsultaPageContent({ turnoId }: { turnoId: number }) {
   }
 
   // ── Estados de pantalla ───────────────────────────────────────────────────
-  if (SIMULAR_ERROR) {
+  if (cargando) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-cream-50">
+        <p className="text-sm font-semibold text-text-secondary" role="status">
+          Cargando consulta…
+        </p>
+      </div>
+    );
+  }
+
+  if (errorCarga) {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-cream-50">
         <div className="rounded-md border border-border bg-surface p-8 text-center shadow-card">
