@@ -54,6 +54,8 @@ export interface Practica {
   nombre: string;
   /** dict: practica.duracion_estimada_minutos int NOT NULL. */
   duracionMinutos: number;
+  /** Precio vigente en lista_precio_practica. */
+  precio?: number | null;
 }
 
 // ─── Profesionales (usuario con rol Veterinario) ─────────────────────────────
@@ -132,6 +134,8 @@ export interface Turno {
   fechaCreacion: string;
   /** dict: turno.pagado — true cuando la atención ya fue cobrada (HU-VTA-01). */
   pagado: boolean;
+  /** Precio vigente de la práctica asociada (desde lista_precio_practica). */
+  practicaPrecio?: number | null;
 }
 
 /** Lo que POST /turnos manda; sucursal_id, estado_id y fecha_creacion las completa el backend. */

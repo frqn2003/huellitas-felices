@@ -79,6 +79,7 @@ export async function catalogoPracticas(): Promise<Practica[]> {
     // 30 minutos es la duración de "consulta", la práctica más común: es un
     // default razonable para una fila mal cargada, y mejor que un NaN.
     duracionMinutos: p.duracion_estimada_minutos ?? 30,
+    precio: p.precio !== null && p.precio !== undefined ? Number(p.precio) : null,
   }));
 }
 

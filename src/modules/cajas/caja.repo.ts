@@ -95,13 +95,13 @@ export async function findCaja(
   return filas[0] ?? null;
 }
 
-/** Usuarios con rol Cajero, activos; opcionalmente los de una sucursal. */
+/** Usuarios con rol Recepcionista, Administrador o Cajero, activos; opcionalmente los de una sucursal. */
 export async function findCajeros(sucursalId?: number): Promise<CajeroRow[]> {
   return query<CajeroRow>(
     `SELECT u.id, u.nombre, u.apellido, u.sucursal_id, u.estado, r.nombre AS rol
      FROM usuario u
      JOIN rol r ON r.id = u.rol_id
-     WHERE r.nombre = 'Cajero'
+     WHERE r.nombre IN ('Recepcionista', 'Administrador', 'Cajero')
        AND u.estado = 'activo'
        AND ($1::int IS NULL OR u.sucursal_id = $1 OR u.sucursal_id IS NULL)
      ORDER BY u.apellido, u.nombre`,
@@ -239,9 +239,9 @@ export async function insertMovimiento(
  * Cierra la caja con el conteo final.
  *
  * El trigger fn_caja_calcular_cierre completa `monto_esperado` (inicial +
- * ingresos − egresos) y `fecha_cierre`, pero NO la `diferencia`: se calcula acá
- * en el mismo UPDATE con la misma fórmula (positivo = sobrante, negativo =
- * faltante). Es consistente porque la apertura está bloqueada FOR UPDATE.
+ * ingresos − egresos) y `fecha_cierre`. `diferencia` es una columna GENERATED
+ * ALWAYS AS (monto_contado - monto_esperado), por lo que Postgres la calcula
+ * automáticamente al actualizar `monto_contado`.
  */
 export async function cerrarApertura(
   id: number,
@@ -250,15 +250,8 @@ export async function cerrarApertura(
 ): Promise<void> {
   await client.query(
     `UPDATE caja_apertura
-     SET estado         = false,
-         monto_contado  = $2,
-         diferencia     = $2 - (
-           monto_inicial + COALESCE((
-             SELECT SUM(CASE WHEN m.tipo = 'ingreso' THEN m.monto ELSE -m.monto END)
-             FROM movimiento_caja m
-             WHERE m.caja_apertura_id = caja_apertura.id
-           ), 0)
-         )
+     SET estado        = false,
+         monto_contado = $2
      WHERE id = $1`,
     [id, montoContado],
   );

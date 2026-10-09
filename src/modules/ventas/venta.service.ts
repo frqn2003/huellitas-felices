@@ -336,6 +336,10 @@ export async function crear(input: CrearVentaInput, usuarioId: number): Promise<
       await repo.insertMedioPago(ventaId, m.formaPagoId, m.monto, client);
     }
 
+    if (input.turnoId) {
+      await client.query("UPDATE turno SET pagado = true WHERE id = $1", [input.turnoId]);
+    }
+
     const row = await repo.findVentaById(ventaId, client);
     if (!row) throw new NotFoundError("la venta", ventaId);
     return (await armar([row], client))[0];

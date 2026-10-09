@@ -42,10 +42,11 @@ const lineas = z.array(lineaSchema).default([]);
 export const calcularVentaSchema = z
   .object({
     consultaId: idPositivo("Indicá la atención médica.").optional(),
+    turnoId: idPositivo("Indicá el turno.").optional(),
     lineas,
   })
-  .refine((d) => d.consultaId !== undefined || d.lineas.length > 0, {
-    message: "Agregá al menos un ítem o indicá una atención médica.",
+  .refine((d) => d.consultaId !== undefined || d.turnoId !== undefined || d.lineas.length > 0, {
+    message: "Agregá al menos un ítem o indicá una atención médica o turno.",
     path: ["lineas"],
   });
 
@@ -56,6 +57,8 @@ export const crearVentaSchema = z
     depositoId: idPositivo("Seleccioná un depósito.").optional(),
     /** Cobro de una atención finalizada: precarga la consulta y sus insumos. */
     consultaId: idPositivo("Indicá la atención médica.").optional(),
+    /** Turno directo a cobrar en mostrador. */
+    turnoId: idPositivo("Indicá el turno.").optional(),
     /** Con consulta: ítems ADICIONALES. Sin consulta: el detalle completo. */
     lineas,
     mediosPago: z
@@ -70,8 +73,8 @@ export const crearVentaSchema = z
       )
       .min(1, "Indicá al menos un medio de pago."),
   })
-  .refine((d) => d.consultaId !== undefined || d.lineas.length > 0, {
-    message: "Agregá al menos un ítem o indicá una atención médica.",
+  .refine((d) => d.consultaId !== undefined || d.turnoId !== undefined || d.lineas.length > 0, {
+    message: "Agregá al menos un ítem o indicá una atención médica o turno.",
     path: ["lineas"],
   });
 

@@ -407,6 +407,9 @@ export function NuevoTurnoModal({
             {practicasDisponibles.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.nombre} ({p.duracionMinutos} min)
+                {p.precio !== null && p.precio !== undefined
+                  ? ` — $${Number(p.precio).toLocaleString("es-AR")}`
+                  : ""}
               </option>
             ))}
           </Select>
@@ -577,7 +580,7 @@ export function NuevoTurnoModal({
                 </span>
                 <span className="text-xs text-text-secondary">
                   {hora && practica
-                    ? `${hora} – ${sumarMinutos(hora, practica.duracionMinutos)} · ${practica.nombre} (${practica.duracionMinutos} min)`
+                    ? `${hora} – ${sumarMinutos(hora, practica.duracionMinutos)} · ${practica.nombre} (${practica.duracionMinutos} min)${practica.precio !== null && practica.precio !== undefined ? ` · $${Number(practica.precio).toLocaleString("es-AR")}` : ""}`
                     : ""}
                 </span>
               </div>

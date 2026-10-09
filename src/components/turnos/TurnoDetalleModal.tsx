@@ -160,7 +160,11 @@ export function TurnoDetalleModal({
             <DatoDetalle label="Profesional" valor={turno.profesionalNombre} />
             <DatoDetalle
               label="Práctica"
-              valor={turno.practicaNombre}
+              valor={
+                turno.practicaPrecio !== null && turno.practicaPrecio !== undefined
+                  ? `${turno.practicaNombre} · $${Number(turno.practicaPrecio).toLocaleString("es-AR")}`
+                  : turno.practicaNombre
+              }
             />
             <DatoEstado estadoId={turno.estadoId} />
           </div>

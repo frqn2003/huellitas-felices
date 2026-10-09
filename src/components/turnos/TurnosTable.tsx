@@ -20,6 +20,7 @@ export interface TurnoRow {
   especie: string;
   profesionalNombre: string;
   practicaNombre: string;
+  practicaPrecio?: number | null;
   estadoId: number;
   /** dict: turno.pagado — la atención ya fue cobrada. */
   pagado: boolean;
@@ -192,7 +193,14 @@ export function TurnosTable({
                 <td className="px-4 py-3 text-sm text-text-primary">
                   {t.profesionalNombre}
                 </td>
-                <td className="px-4 py-3 text-sm text-text-primary">{t.practicaNombre}</td>
+                <td className="px-4 py-3 text-sm text-text-primary">
+                  <span>{t.practicaNombre}</span>
+                  {t.practicaPrecio !== null && t.practicaPrecio !== undefined && (
+                    <span className="block text-xs font-semibold text-text-secondary">
+                      ${Number(t.practicaPrecio).toLocaleString("es-AR")}
+                    </span>
+                  )}
+                </td>
                 <td className="px-4 py-3">
                   <EstadoTurnoBadge estadoId={t.estadoId} />
                 </td>

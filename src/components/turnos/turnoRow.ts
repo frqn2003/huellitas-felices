@@ -28,6 +28,7 @@ export function construirFilaTurno(
     especie: mas?.especie ?? "",
     profesionalNombre: pro ? `${pro.nombre} ${pro.apellido}` : `Profesional #${t.agendaProfesionalId}`,
     practicaNombre: pra?.nombre ?? `Práctica #${t.practicaId}`,
+    practicaPrecio: t.practicaPrecio ?? pra?.precio ?? null,
     estadoId: t.estadoId,
     pagado: t.pagado,
     notas: t.notas,

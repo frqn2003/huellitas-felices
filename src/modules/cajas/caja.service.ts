@@ -74,10 +74,11 @@ export async function abrir(
     const cajeroId = input.cajeroId ?? usuarioId;
     const cajero = await repo.findCajero(cajeroId, client);
     if (!cajero) throw new NotFoundError("el cajero", cajeroId);
-    if (cajero.rol !== "Cajero" || cajero.estado !== "activo") {
+    const rolesPermitidos = ["Recepcionista", "Administrador", "Cajero"];
+    if (!rolesPermitidos.includes(cajero.rol) || cajero.estado !== "activo") {
       throw new BusinessRuleError(
         "CAJERO_INVALIDO",
-        "El responsable de la apertura debe ser un usuario activo con rol Cajero.",
+        "El responsable de la apertura debe ser un usuario activo (Recepcionista, Administrador o Cajero).",
         "cajeroId",
       );
     }

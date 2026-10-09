@@ -52,6 +52,10 @@ export function toApi(row: TurnoRow): Turno {
     usuarioId: row.usuario_id,
     fechaCreacion: row.fecha_creacion.toISOString(),
     pagado: row.pagado,
+    practicaPrecio:
+      row.practica_precio !== null && row.practica_precio !== undefined
+        ? Number(row.practica_precio)
+        : null,
   };
 
   // NOTA: los nombres de cliente, mascota, profesional, práctica y sucursal

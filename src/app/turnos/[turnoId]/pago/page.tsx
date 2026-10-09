@@ -152,56 +152,56 @@ function PagoTurnoContent({ turnoId }: { turnoId: number }) {
           throw e;
         });
         if (cancelado) return;
-        if (!c || c.estado !== "cerrada") {
-          setErrorCobro(
-            "La atención de este turno todavía no fue finalizada: no se puede cobrar una consulta en curso.",
+        if (c && c.estado === "cerrada") {
+          setConsulta(c);
+
+          // ¿Ya está cobrada? Entonces se muestra su comprobante en vez de cobrar de nuevo.
+          const ventas = await apiGet<Venta[]>(`/api/ventas?consultaId=${c.id}`);
+          if (cancelado) return;
+          if (ventas.length > 0) {
+            setVentaExistente(ventas[0]);
+            setErrorCobro("Esta atención ya fue cobrada.");
+            return;
+          }
+
+          const calculo = await apiSend<{
+            lineas: {
+              tipo: "articulo" | "practica";
+              articuloId: number | null;
+              codigo: string;
+              nombre: string;
+              categoria: string;
+              unidad: string;
+              cantidad: number;
+              precioUnitario: number;
+              subtotal: number;
+            }[];
+          }>("POST", "/api/ventas/calcular", { consultaId: c.id });
+          if (cancelado) return;
+
+          // El servicio de la atención es el arancel; los insumos, ítems bloqueados.
+          setArancelBase(
+            calculo.lineas.filter((l) => l.tipo === "practica").reduce((acc, l) => acc + l.subtotal, 0),
           );
-          return;
+          setProductos(
+            calculo.lineas
+              .filter((l) => l.tipo === "articulo")
+              .map((l) => ({
+                id: l.articuloId as number,
+                codigo: l.codigo,
+                nombre: l.nombre,
+                categoria: l.categoria,
+                unidad: l.unidad,
+                cantidad: l.cantidad,
+                precioUnitario: l.precioUnitario,
+                bloqueado: true,
+              })),
+          );
+        } else {
+          // Cobro directo en mostrador sin consulta cerrada previa:
+          // el arancel base se calcula directamente desde la práctica del turno.
+          setConsulta(c ?? null);
         }
-        setConsulta(c);
-
-        // ¿Ya está cobrada? Entonces se muestra su comprobante en vez de cobrar de nuevo.
-        const ventas = await apiGet<Venta[]>(`/api/ventas?consultaId=${c.id}`);
-        if (cancelado) return;
-        if (ventas.length > 0) {
-          setVentaExistente(ventas[0]);
-          setErrorCobro("Esta atención ya fue cobrada.");
-          return;
-        }
-
-        const calculo = await apiSend<{
-          lineas: {
-            tipo: "articulo" | "practica";
-            articuloId: number | null;
-            codigo: string;
-            nombre: string;
-            categoria: string;
-            unidad: string;
-            cantidad: number;
-            precioUnitario: number;
-            subtotal: number;
-          }[];
-        }>("POST", "/api/ventas/calcular", { consultaId: c.id });
-        if (cancelado) return;
-
-        // El servicio de la atención es el arancel; los insumos, ítems bloqueados.
-        setArancelBase(
-          calculo.lineas.filter((l) => l.tipo === "practica").reduce((acc, l) => acc + l.subtotal, 0),
-        );
-        setProductos(
-          calculo.lineas
-            .filter((l) => l.tipo === "articulo")
-            .map((l) => ({
-              id: l.articuloId as number,
-              codigo: l.codigo,
-              nombre: l.nombre,
-              categoria: l.categoria,
-              unidad: l.unidad,
-              cantidad: l.cantidad,
-              precioUnitario: l.precioUnitario,
-              bloqueado: true,
-            })),
-        );
         setErrorCobro(null);
       } catch (e) {
         // 409 CONSULTA_YA_COBRADA, SIN_PRECIO, etc.: el mensaje ya viene redactado.
@@ -215,6 +215,8 @@ function PagoTurnoContent({ turnoId }: { turnoId: number }) {
       clearTimeout(t);
     };
   }, [turnoId]);
+
+  const errorCobroEfectivo = turno?.pagado ? "Este turno ya fue cobrado." : errorCobro;
 
   const comprobanteExistente = useMemo<ComprobanteTurno | null>(() => {
     if (!ventaExistente || !turno) return null;
@@ -251,13 +253,14 @@ function PagoTurnoContent({ turnoId }: { turnoId: number }) {
   const comprobanteModalOpen = comprobanteVisible ?? comprobanteActual !== null;
 
   // Cálculos de liquidación (HU-VTA-01). Los precios son los de la lista vigente.
-  const puedeCobrar = !cargandoCobro && errorCobro === null && consulta !== null;
+  const puedeCobrar = !cargandoCobro && errorCobroEfectivo === null && (turno !== null || consulta !== null);
 
   const totalProductos = useMemo(() => {
     return productos.reduce((acc, item) => acc + item.cantidad * item.precioUnitario, 0);
   }, [productos]);
 
-  const totalCobrar = arancelBase + totalProductos;
+  const arancelEfectivo = arancelBase > 0 ? arancelBase : (practica?.precio ?? 0);
+  const totalCobrar = arancelEfectivo + totalProductos;
 
   // Medios de pago (HU-VTA-02): uno o varios, la suma debe dar el total.
   const {
@@ -324,7 +327,7 @@ function PagoTurnoContent({ turnoId }: { turnoId: number }) {
   }
 
   async function handleConfirmarCobro() {
-    if (!esMontoValido || !consulta) return;
+    if (!esMontoValido || (!consulta && !turno)) return;
 
     // Medios elegidos, con su tipo (para el comprobante) y su monto.
     const medios = pagos.map((p) => ({
@@ -347,19 +350,28 @@ function PagoTurnoContent({ turnoId }: { turnoId: number }) {
 
     setProcesando(true);
     try {
-      // El body NO lleva precios ni totales: con `consultaId` la base cobra el
-      // servicio de la atención y sus insumos a la Lista de Precios vigente;
-      // `lineas` son solo los ítems ADICIONALES agregados en el mostrador. El
-      // cliente sale de la consulta y el usuario de la sesión. La venta
-      // descuenta stock, asienta el efectivo en caja, marca el turno como
-      // pagado y queda en la bitácora de auditoría, todo en una transacción.
-      const venta = await apiSend<Venta>("POST", "/api/ventas", {
-        consultaId: consulta.id,
-        lineas: productos
-          .filter((p) => !p.bloqueado)
-          .map((p) => ({ articuloId: p.id, cantidad: p.cantidad })),
-        mediosPago: medios.map((m) => ({ formaPagoId: m.formaPagoId, monto: m.monto })),
-      });
+      let venta: Venta;
+      if (consulta && consulta.estado === "cerrada") {
+        venta = await apiSend<Venta>("POST", "/api/ventas", {
+          consultaId: consulta.id,
+          lineas: productos
+            .filter((p) => !p.bloqueado)
+            .map((p) => ({ articuloId: p.id, cantidad: p.cantidad })),
+          mediosPago: medios.map((m) => ({ formaPagoId: m.formaPagoId, monto: m.monto })),
+        });
+      } else {
+        venta = await apiSend<Venta>("POST", "/api/ventas", {
+          turnoId,
+          sucursalId: turno?.sucursalId,
+          lineas: [
+            ...(turno?.practicaId ? [{ practicaId: turno.practicaId, cantidad: 1 }] : []),
+            ...productos
+              .filter((p) => !p.bloqueado)
+              .map((p) => ({ articuloId: p.id, cantidad: p.cantidad })),
+          ],
+          mediosPago: medios.map((m) => ({ formaPagoId: m.formaPagoId, monto: m.monto })),
+        });
+      }
 
       const nuevoComp: ComprobanteTurno = {
         numero: venta.numeroComprobante,
@@ -368,12 +380,12 @@ function PagoTurnoContent({ turnoId }: { turnoId: number }) {
         clienteNombre: cliente ? `${cliente.nombre} ${cliente.apellido}` : venta.clienteNombre,
         clienteDoc: cliente?.documento ?? venta.clienteDoc,
         clienteTel: cliente?.telefono,
-        mascotaNombre: mascota?.nombre || consulta.mascotaNombre || "—",
-        mascotaEspecie: mascota?.especie || consulta.mascotaEspecie || "—",
-        mascotaRaza: mascota?.raza ?? consulta.mascotaRaza ?? undefined,
-        profesional: profesionalDisplay !== "—" ? profesionalDisplay : consulta.profesionalNombre,
-        practicaNombre: venta.conceptoServicio,
-        arancel: venta.arancelServicio,
+        mascotaNombre: mascota?.nombre || consulta?.mascotaNombre || "—",
+        mascotaEspecie: mascota?.especie || consulta?.mascotaEspecie || "—",
+        mascotaRaza: mascota?.raza ?? consulta?.mascotaRaza ?? undefined,
+        profesional: profesionalDisplay !== "—" ? profesionalDisplay : (consulta?.profesionalNombre || "—"),
+        practicaNombre: venta.conceptoServicio || practica?.nombre || "Consulta",
+        arancel: venta.arancelServicio || arancelEfectivo,
         productos: venta.items.map((it) => ({
           id: it.id,
           codigo: it.codigo,
@@ -696,7 +708,7 @@ function PagoTurnoContent({ turnoId }: { turnoId: number }) {
                             {practica?.nombre ?? "Servicio Veterinario"} (Arancel base)
                           </span>
                           <span className="font-bold text-text-primary">
-                            ${arancelBase.toLocaleString("es-AR")}
+                            ${arancelEfectivo.toLocaleString("es-AR")}
                           </span>
                         </div>
 
@@ -771,9 +783,9 @@ function PagoTurnoContent({ turnoId }: { turnoId: number }) {
                         {procesando ? "Procesando cobro..." : "Confirmar"}
                       </Button>
 
-                      {errorCobro !== null && (
+                      {errorCobroEfectivo !== null && (
                         <p role="alert" className="text-center text-[11px] font-semibold text-destructive">
-                          {errorCobro}
+                          {errorCobroEfectivo}
                         </p>
                       )}
 

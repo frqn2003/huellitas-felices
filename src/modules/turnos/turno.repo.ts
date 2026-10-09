@@ -22,6 +22,7 @@ const FROM = `
   JOIN cliente             cli ON cli.id = t.cliente_id
   JOIN mascota             mas ON mas.id = t.mascota_id
   JOIN practica            pra ON pra.id = t.practica_id
+  LEFT JOIN lista_precio_practica lpp ON lpp.practica_id = pra.id
   JOIN estado_turno        est ON est.id = t.estado_id
   JOIN agenda_profesional  ap  ON ap.id  = t.agenda_profesional_id
   JOIN usuario             pro ON pro.id = ap.usuario_id
@@ -38,6 +39,7 @@ const COLUMNAS = `
   mas.nombre    AS mascota_nombre,
   mas.especie   AS mascota_especie,
   pra.nombre    AS practica_nombre,
+  lpp.precio    AS practica_precio,
   est.nombre    AS estado_nombre,
   est.es_final  AS estado_es_final,
   pro.id        AS profesional_id,
@@ -209,11 +211,13 @@ export async function findFranja(id: number): Promise<FranjaRow | null> {
 }
 
 export async function listarPracticas(): Promise<
-  { id: number; nombre: string; duracion_estimada_minutos: number | null }[]
+  { id: number; nombre: string; duracion_estimada_minutos: number | null; precio: number | null }[]
 > {
   return query(
-    `SELECT id, nombre, duracion_estimada_minutos
-     FROM practica WHERE estado = 'activo' ORDER BY nombre`,
+    `SELECT p.id, p.nombre, p.duracion_estimada_minutos, lpp.precio
+     FROM practica p
+     LEFT JOIN lista_precio_practica lpp ON lpp.practica_id = p.id
+     WHERE p.estado = 'activo' ORDER BY p.nombre`,
   );
 }
 

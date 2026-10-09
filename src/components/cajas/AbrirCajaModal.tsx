@@ -35,7 +35,7 @@ export function AbrirCajaModal({
     e.preventDefault();
     const newErrors: Record<string, string> = {};
     if (!sucursalId) newErrors.sucursalId = "Seleccione una sucursal";
-    if (!cajeroId) newErrors.cajeroId = "Seleccione un cajero responsable";
+    if (!cajeroId) newErrors.cajeroId = "Seleccione un responsable";
     // Esquema y brief HU-VTA-03: monto_inicial >= 0 (el 0 está permitido).
     const montoNum = Number(montoInicial);
     if (montoInicial.trim() === "" || Number.isNaN(montoNum))
@@ -90,7 +90,7 @@ export function AbrirCajaModal({
         </Select>
 
         <Select
-          label="Cajero responsable"
+          label="Responsable"
           requiredMark
           value={cajeroId}
           onChange={(e: ChangeEvent<HTMLSelectElement>) => {

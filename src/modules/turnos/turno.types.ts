@@ -41,6 +41,7 @@ export type TurnoRow = Pick<
   mascota_nombre: string;
   mascota_especie: string;
   practica_nombre: string;
+  practica_precio: number | null;
   estado_nombre: string;
   estado_es_final: boolean;
   profesional_id: number;
