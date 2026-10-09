@@ -2,6 +2,7 @@
 
 import {
   ArrowLeft,
+  Building2,
   CheckCircle2,
   CircleDollarSign,
   Download,
@@ -67,6 +68,18 @@ function SectionCard({ title, icon, badge, children }: SectionCardProps) {
 function NuevaVentaScreen() {
   const router = useRouter();
   const { showToast } = useToast();
+
+  // 0. Sucursal
+  const sucursales = useCatalogo<{ id: number; nombre: string }>("/api/sucursales");
+  const [sucursalSeleccionada, setSucursalSeleccionada] = useState<string>("");
+
+  const defaultSucursalId = useMemo(() => {
+    if (sucursales.length === 0) return "";
+    const def = sucursales.find((s) => s.id === 1) ?? sucursales[0];
+    return String(def.id);
+  }, [sucursales]);
+
+  const sucursalId = sucursalSeleccionada || defaultSucursalId;
 
   // 1. Cliente
   // Clientes activos de la base + los que se dan de alta desde esta pantalla.
@@ -216,9 +229,15 @@ function NuevaVentaScreen() {
 
     setProcesando(true);
     try {
+      if (!sucursalId) {
+        showToast("error", "Indicá la sucursal de la venta.");
+        return;
+      }
+
       // El body NO lleva precios: la base los toma de la Lista de Precios
       // vigente. Descuenta stock, asienta el efectivo en caja y audita.
       const venta = await apiSend<Venta>("POST", "/api/ventas", {
+        sucursalId: Number(sucursalId),
         lineas: items.map((it) => ({ articuloId: it.id, cantidad: it.cantidad })),
         mediosPago: medios.map((m) => ({ formaPagoId: m.formaPagoId, monto: m.monto })),
       });
@@ -497,6 +516,30 @@ function NuevaVentaScreen() {
                       </div>
                     )}
                   </div>
+
+                  {/* Selector de Sucursal */}
+                  <div className="flex items-center gap-2 border-t border-border pt-3 sm:border-t-0 sm:pt-0">
+                    <Building2 className="h-4 w-4 text-brand-900 shrink-0" aria-hidden="true" />
+                    <label htmlFor="select-sucursal-venta" className="text-xs font-bold uppercase tracking-wider text-text-secondary whitespace-nowrap">
+                      Sucursal:
+                    </label>
+                    <select
+                      id="select-sucursal-venta"
+                      value={sucursalId}
+                      onChange={(e) => setSucursalSeleccionada(e.target.value)}
+                      className="h-8 cursor-pointer rounded-sm border border-border bg-surface px-3 py-1 text-xs font-bold text-text-primary transition-colors focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900"
+                    >
+                      {sucursales.length === 0 ? (
+                        <option value="">Cargando sucursales...</option>
+                      ) : (
+                        sucursales.map((s) => (
+                          <option key={s.id} value={String(s.id)}>
+                            {s.nombre}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
                 </div>
               </div>
 
@@ -710,7 +753,9 @@ function NuevaVentaScreen() {
         onClose={() => setConfirmarOpen(false)}
         onConfirm={handleRegistrarCobro}
         title="¿Confirmar y Emitir Cobro de Venta?"
-        description={`Se registrará la venta por $${total.toLocaleString("es-AR")} (${
+        description={`Se registrará la venta en ${
+          sucursales.find((s) => String(s.id) === sucursalId)?.nombre ?? "la sucursal seleccionada"
+        } por $${total.toLocaleString("es-AR")} (${
           items.length
         } ítems) a nombre de ${
           esConsumidorFinal
