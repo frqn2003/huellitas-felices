@@ -255,9 +255,7 @@ function CuentasCorrientesScreen() {
 
   return (
     <div className="flex min-h-screen bg-cream-50">
-      <div className="print:hidden">
-        <Sidebar />
-      </div>
+      <Sidebar />
 
       <main className="flex min-w-0 flex-1 flex-col">
         <div className="border-b border-border bg-cream-50 px-4 py-6 sm:px-8 print:hidden">

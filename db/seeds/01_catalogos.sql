@@ -106,7 +106,8 @@ INSERT INTO categoria (nombre, prefijo) VALUES
   ('Medicamentos', 'MED'),
   ('Insumos',      'INS'),
   ('Alimentos',    'ALI'),
-  ('Accesorios',   'ACC')
+  ('Accesorios',   'ACC'),
+  ('Servicios',    'SER')
 ON CONFLICT (nombre) DO NOTHING;
 
 

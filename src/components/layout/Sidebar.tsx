@@ -3,13 +3,13 @@
 import {
   BadgeDollarSign,
   Landmark,
+  LayoutDashboard,
   LogOut,
   Menu,
   Package,
   PawPrint,
   Pin,
   Settings,
-  ShieldCheck,
   ShoppingCart,
   Stethoscope,
   Truck,
@@ -60,7 +60,9 @@ const SECCIONES: SidebarSection[] = [
   },
   {
     titulo: "Administración",
-    items: [{ label: "Auditoría", href: "#auditoria", icon: ShieldCheck }],
+    items: [
+      { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+    ],
   },
 ];
 
@@ -91,7 +93,7 @@ function NavItem({
   const active = useItemActivo(item.href);
   const Icon = item.icon;
   const base =
-    "group flex h-11 items-center gap-3 rounded-md text-sm font-bold transition-colors duration-fast ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cream-50";
+    "group flex h-10 items-center gap-3 rounded-md text-sm font-bold transition-colors duration-fast ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cream-50";
   const estado = active
     ? "bg-cream-50/15 text-cream-50"
     : "text-cream-50/75 hover:bg-cream-50/10 hover:text-cream-50";
@@ -135,9 +137,9 @@ function NavBody({
 
   return (
     <>
-      <nav className="flex flex-1 flex-col gap-3 px-3 py-4" aria-label="Menú principal">
+      <nav className="flex flex-1 flex-col gap-2 px-2.5 py-2" aria-label="Menú principal">
         {SECCIONES.map((seccion) => (
-          <div key={seccion.titulo} className="flex flex-col gap-1">
+          <div key={seccion.titulo} className="flex flex-col gap-0.5">
             {!collapsed && (
               <p className="mb-0.5 px-3 text-[10px] font-extrabold uppercase tracking-widest text-cream-50/40">
                 {seccion.titulo}
@@ -149,10 +151,10 @@ function NavBody({
           </div>
         ))}
       </nav>
-      <div className="flex flex-col gap-1 border-t border-cream-50/15 p-3">
-        <div className={`flex items-center gap-3 ${collapsed ? "justify-center" : ""}`}>
+      <div className="mt-auto shrink-0 flex flex-col gap-1 border-t border-cream-50/15 p-2.5">
+        <div className={`flex items-center gap-2.5 ${collapsed ? "justify-center" : ""}`}>
           <span
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-accent-500 font-display text-sm font-extrabold text-brand-900"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent-500 font-display text-sm font-extrabold text-brand-900"
             role="img"
             aria-label={`Avatar de ${usuarioNombre}`}
           >
@@ -252,10 +254,10 @@ export function Sidebar() {
         onMouseLeave={() => setHovering(false)}
         onPointerEnter={() => setHovering(true)}
         onPointerLeave={() => setHovering(false)}
-        className={`sticky top-0 z-30 hidden h-screen shrink-0 flex-col bg-brand-900 transition-all duration-normal ease-out lg:flex print:hidden ${expanded ? "w-[264px]" : "w-[72px]"}`}
+        className={`sticky top-0 z-30 hidden h-screen max-h-screen shrink-0 flex-col overflow-hidden bg-brand-900 transition-all duration-normal ease-out lg:flex print:hidden ${expanded ? "w-[264px]" : "w-[72px]"}`}
       >
         <div
-          className={`flex items-center justify-between gap-2 border-b border-cream-50/15 px-4 py-4 ${expanded ? "" : "justify-center"}`}
+          className={`flex items-center justify-between gap-2 border-b border-cream-50/15 px-3 py-3 ${expanded ? "" : "justify-center"}`}
         >
           <button
             type="button"

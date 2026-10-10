@@ -5,6 +5,8 @@ import type { FilaListaPrecio } from "@/data/lista-precios";
 import type { TipoMedioPago } from "@/data/pagos";
 import { useCatalogo } from "@/lib/use-catalogo";
 
+import type { FichaStock } from "@/data/stock";
+
 /**
  * Datos de apoyo de las pantallas de cobro (HU-VTA-01 y HU-VTA-02): catálogo de
  * artículos con su precio vigente y los medios de pago. Salen de la base.
@@ -20,13 +22,23 @@ export interface ArticuloVendible {
   unidad: string;
   /** Solo para mostrar: el precio real lo toma la base al confirmar. */
   precioUnitario: number;
+  stockActual?: number;
+  tienePrecio: boolean;
 }
 
-export function useArticulosVendibles(): ArticuloVendible[] {
-  const filas = useCatalogo<FilaListaPrecio>("/api/lista-precios?conPrecio=true&estado=activo");
-  return useMemo(
-    () =>
-      filas
+export function useArticulosVendibles(sucursalId?: number | string): ArticuloVendible[] {
+  const filas = useCatalogo<FilaListaPrecio>("/api/lista-precios?estado=activo");
+  const urlFichas = sucursalId ? `/api/fichas-stock?sucursalId=${sucursalId}&incluirInactivos=false` : null;
+  const fichas = useCatalogo<FichaStock>(urlFichas);
+
+  return useMemo(() => {
+    const mapaFilas = new Map<number, FilaListaPrecio>();
+    for (const f of filas) {
+      mapaFilas.set(f.articuloId, f);
+    }
+
+    if (!sucursalId) {
+      return filas
         .filter((f) => f.precio !== null)
         .map((f) => ({
           id: f.articuloId,
@@ -35,9 +47,26 @@ export function useArticulosVendibles(): ArticuloVendible[] {
           categoria: f.categoria,
           unidad: f.unidadMedida,
           precioUnitario: f.precio as number,
-        })),
-    [filas],
-  );
+          tienePrecio: true,
+        }));
+    }
+
+    // Cuando se filtra por sucursal, la fuente de verdad son las fichas de stock de esa sucursal
+    return fichas.map((ficha) => {
+      const fila = mapaFilas.get(ficha.articuloId);
+      const tienePrecio = fila?.precio !== null && fila?.precio !== undefined;
+      return {
+        id: ficha.articuloId,
+        codigo: fila?.codigo ?? ficha.articulo.codigo,
+        nombre: fila?.nombre ?? ficha.articulo.nombre,
+        categoria: fila?.categoria ?? "",
+        unidad: fila?.unidadMedida ?? ficha.articulo.unidadMedida,
+        precioUnitario: tienePrecio ? Number(fila!.precio) : 0,
+        stockActual: ficha.stockActual,
+        tienePrecio,
+      };
+    });
+  }, [filas, fichas, sucursalId]);
 }
 
 // ---------------------------------------------------------------------------

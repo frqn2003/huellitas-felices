@@ -122,14 +122,20 @@ function NuevaVentaScreen() {
   const [cantidadInput, setCantidadInput] = useState<number>(1);
   const [observaciones, setObservaciones] = useState<string>("");
 
-  // Catálogo de la base: artículos activos con precio cargado en la Lista de Precios.
-  const catalogoArticulos = useArticulosVendibles();
+  // Catálogo de la base: artículos activos con precio en Lista de Precios y ficha de stock en la sucursal elegida.
+  const catalogoArticulos = useArticulosVendibles(sucursalId);
   const mediosCobro = useMediosCobro();
+
+  const articuloSeleccionadoObj = useMemo(() => {
+    return catalogoArticulos.find((a) => a.codigo === articuloCodigo) ?? null;
+  }, [catalogoArticulos, articuloCodigo]);
 
   const opcionesArticulos: ComboboxOption[] = useMemo(() => {
     return catalogoArticulos.map((art) => ({
       value: art.codigo,
-      label: `[${art.categoria}] ${art.nombre} (${art.codigo}) — $${art.precioUnitario.toLocaleString("es-AR")} / ${art.unidad}`,
+      label: art.tienePrecio
+        ? `[${art.categoria || "General"}] ${art.nombre} (${art.codigo}) — $${art.precioUnitario.toLocaleString("es-AR")} / ${art.unidad}${art.stockActual !== undefined ? ` · Stock: ${art.stockActual}` : ""}`
+        : `[${art.categoria || "General"}] ${art.nombre} (${art.codigo}) — [Sin precio cargado en Lista]${art.stockActual !== undefined ? ` · Stock: ${art.stockActual}` : ""}`,
     }));
   }, [catalogoArticulos]);
 
@@ -156,6 +162,13 @@ function NuevaVentaScreen() {
     if (!articuloCodigo) return;
     const prod = catalogoArticulos.find((p) => p.codigo === articuloCodigo);
     if (!prod) return;
+    if (!prod.tienePrecio) {
+      showToast(
+        "error",
+        `El artículo "${prod.nombre}" tiene stock pero no tiene precio cargado en la Lista de Precios.`,
+      );
+      return;
+    }
 
     const cant = Math.max(1, cantidadInput);
     const index = items.findIndex((it) => it.codigo === prod.codigo);
@@ -526,7 +539,11 @@ function NuevaVentaScreen() {
                     <select
                       id="select-sucursal-venta"
                       value={sucursalId}
-                      onChange={(e) => setSucursalSeleccionada(e.target.value)}
+                      onChange={(e) => {
+                        setSucursalSeleccionada(e.target.value);
+                        setArticuloCodigo("");
+                        setItems([]);
+                      }}
                       className="h-8 cursor-pointer rounded-sm border border-border bg-surface px-3 py-1 text-xs font-bold text-text-primary transition-colors focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900"
                     >
                       {sucursales.length === 0 ? (
@@ -572,8 +589,18 @@ function NuevaVentaScreen() {
                           options={opcionesArticulos}
                           value={articuloCodigo}
                           onChange={setArticuloCodigo}
-                          placeholder="Buscar por código, nombre o categoría..."
+                          placeholder={
+                            opcionesArticulos.length === 0
+                              ? "Sin artículos con ficha de stock en esta sucursal"
+                              : "Buscar por código, nombre o categoría..."
+                          }
+                          noResultsText="No se encontraron artículos con ficha de stock en esta sucursal"
                         />
+                        {articuloSeleccionadoObj && !articuloSeleccionadoObj.tienePrecio && (
+                          <p className="mt-1 text-xs font-semibold text-amber-700">
+                            ⚠️ Este artículo tiene ficha de stock ({articuloSeleccionadoObj.stockActual ?? 0} {articuloSeleccionadoObj.unidad}) pero aún no tiene precio de venta en la Lista de Precios.
+                          </p>
+                        )}
                       </div>
 
                       <div className="sm:col-span-2">
@@ -595,7 +622,7 @@ function NuevaVentaScreen() {
                           type="button"
                           variant="primary"
                           onClick={handleAgregarArticulo}
-                          disabled={!articuloCodigo}
+                          disabled={!articuloCodigo || (articuloSeleccionadoObj !== null && !articuloSeleccionadoObj.tienePrecio)}
                           className="w-full justify-center gap-1 font-bold"
                         >
                           <Plus className="h-4 w-4" aria-hidden="true" />

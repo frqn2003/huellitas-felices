@@ -40,11 +40,15 @@ import { apiGetOpcional } from "@/lib/api-client";
  * LA REGLA PARA DECIDIR
  *   Si la opción lleva un `id` que viaja a la base, tiene que venir de la base.
  */
-export function useCatalogo<T>(url: string, porDefecto: T[] = []): T[] {
+export function useCatalogo<T>(url: string | null | undefined, porDefecto: T[] = []): T[] {
   const [items, setItems] = useState<T[]>(porDefecto);
 
   useEffect(() => {
     let cancelado = false;
+
+    if (!url) {
+      return;
+    }
 
     apiGetOpcional<T[]>(url, porDefecto).then((lista) => {
       // Si el componente se desmontó mientras esperábamos, no tocamos estado.
@@ -60,5 +64,5 @@ export function useCatalogo<T>(url: string, porDefecto: T[] = []): T[] {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url]);
 
-  return items;
+  return url ? items : porDefecto;
 }

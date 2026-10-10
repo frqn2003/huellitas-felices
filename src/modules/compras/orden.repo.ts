@@ -302,8 +302,8 @@ export async function insertCabecera(
 /**
  * Inserta las líneas del detalle.
  *
- * `subtotal` de la línea se calcula en el INSERT (cantidad × precio) para que
- * no pueda quedar desalineado con sus dos factores. La columna es NOT NULL.
+ * `subtotal` de la línea es una columna GENERADA (GENERATED ALWAYS AS (cantidad * precio_acordado) STORED),
+ * por lo que Postgres la calcula automáticamente en la base y rechaza valores explícitos.
  */
 export async function insertDetalles(
   ordenId: number,
@@ -313,8 +313,8 @@ export async function insertDetalles(
   for (const linea of lineas) {
     await client.query(
       `INSERT INTO orden_compra_detalle
-         (orden_compra_id, articulo_id, cantidad, precio_acordado, subtotal)
-       VALUES ($1, $2, $3::numeric, $4::numeric, $3::numeric * $4::numeric)`,
+         (orden_compra_id, articulo_id, cantidad, precio_acordado)
+       VALUES ($1, $2, $3::numeric, $4::numeric)`,
       [ordenId, linea.articuloId, linea.cantidad, linea.precioAcordado],
     );
   }

@@ -124,7 +124,29 @@ Módulo HU-TUR-01 (registro de turnos presenciales, tab "Turnos" dentro de `/cli
 > Pantalla `/turnos/[turnoId]/pago`: módulo HU-VTA-01 (liquidación y facturación en mostrador de consultas, medicamentos, insumos, alimentos y accesorios; desglose automático de Subtotal, IVA 21% y Total; precios tomados de `src/data/lista-precios.ts` (HU-STK-03); persistencia de venta en `src/data/ventas.ts` con reflejo en el historial del cliente en `ClienteFormModal`; comprobante emergente con `ComprobanteTurnoModal` y descarga de PDF nativo). Todas las integraciones preparadas con comentarios `// BACKEND:`.
 > Datos y catálogos placeholder en `src/data/turnos.ts` (camelCase: `estadoId`, `practicaId`, `franjaId`; además de tipos `Turno`/`TurnoDraft`, `estadosTurno` 1-5, `practicas` consulta/cirugía/control, `profesionales` con franjas semanales, y helpers de agenda `generarSlots`/`haySuperposicion`/`horasOcupadas`/`proximosDiasLaborables`). El front trae `id` numérico (PK del backend); cada integración lleva comentario `// BACKEND:` con tabla+endpoint (`grep -rn "BACKEND" src/`).
 > HU-TUR-02 agregó: `transicionesEstado` (1:[2] · 2:[3,4,5] · 3/4/5:[]), `nombreEstado` (1-5), `profesionalPorFranja`/`profesionalIdPorFranja` (mapeo franja→profesional para cruzar en agenda), `practicaPorId` exportado, helpers de semana `sumarDias`/`lunesDeFecha`/`fechasDeSemana`/`formatearSemana` y turnos demo id 10-17 en la semana del 21/09/2026.
-> El anti-solapamiento **excluye los cancelados** (estado 3): un horario queda ocupado solo por turnos pendientes/confirmados/concretados (espejo del EXCLUDE del gist de agenda). El turno se crea en estado pendiente; la confirmación es HU futura.
+### dashboard
+Módulo HU-REP-01 (Dashboard Gerencial, `/dashboard`):
+`KPIGrid` (grilla responsiva de 4 tarjetas numéricas: Ventas del día, Turnos del día, Pacientes en internación y Artículos con stock crítico; evalúa umbrales configurados y resalta en `status-danger` con `AlertTriangle` y texto de advertencia cuando se superan; soporte de skeleton loader animado para estado loading) ·
+`ManagerialDashboardPage` (pantalla client con selección de Sucursal / Consolidado, refresco en tiempo real mediante `setInterval` cada 30s sin recarga completa de página, indicador en vivo con badge y timestamp, botón manual de recálculo y manejo de estados loading/error).
+### reportes
+Módulo HU-REP-02 (Reportes de Ventas, `/reportes/ventas` y `/dashboard?tab=reportes`):
+`ReportFilters` (panel de parámetros con validación de fechas requeridas y orden cronológico, selector de sucursales y categorías) ·
+`ReportKPIs` (tarjetas de resumen numérico: Total Recaudado, Ticket Promedio y Operaciones registradas) ·
+`TrendChart` (gráfico interactivo SVG de evolución diaria con tooltips en hover, eje X/Y formateado y estética Pet Bliss) ·
+`ExportActions` (exportación a CSV mediante Blob con BOM UTF-8 y exportación a PDF mediante `window.print()` con toasts de confirmación) ·
+`ReportResults` (contenedor con resumen, KPIs, gráfico de tendencia y tabla detallada de ventas con formato moneda ARS) ·
+`SalesReportPage` (pantalla client con estados de filtro, loading, error, vacío "Sin datos para los filtros seleccionados" y resultados).
+> Datos y endpoints: `GET /api/reportes/ventas?desde=&hasta=&sucursalId=&categoriaId=` (`src/modules/reportes/reportes.service.ts`).
+
+### rentabilidad
+Módulo de Rentabilidad por Sucursal (`/dashboard?tab=rentabilidad`):
+`ProfitabilityFilters` (selector de período desde/hasta con validación estricta en rojo, selector múltiple de sucursales con chips accesibles, botón de consulta y restablecer) ·
+`ProfitabilityKPIs` (tarjetas por sucursal con ingresos, egresos, margen bruto y margen porcentual) ·
+`ProfitabilityBarChart` (gráfico comparativo de barras agrupadas en SVG nativo: ingresos vs egresos con tooltips interactivos) ·
+`ProfitabilityRanking` (ranking de sucursales con podio, medallas, ordenamiento dinámico por margen o ingresos y barras proporcionales) ·
+`ProfitabilityResults` (contenedor de métricas globales, gráfico, ranking y KPIs con estado vacío "Sin datos para el periodo seleccionado") ·
+`ProfitabilityContent` (pantalla interactiva integrada en dashboard con llamadas a `/api/dashboard/rentabilidad`).
+> Datos y endpoints: `GET /api/dashboard/rentabilidad?desde=&hasta=&sucursales=` (`src/modules/rentabilidad/rentabilidad.service.ts`).
 
 ## Reglas de reuso
 
