@@ -153,31 +153,38 @@ export function HistorialPreciosContent({
             </tr>
           </thead>
           <tbody>
-            {rows.map((h) => (
-              <tr
-                key={h.id}
-                className="border-b border-border/60 transition-colors duration-fast ease-out last:border-b-0 hover:bg-cream-50/60"
-              >
-                <td className="px-4 py-3 text-sm text-text-primary tabular-nums">
-                  {formatFecha(h.vigenciaDesde)} {horaLocal(h.fechaHora)}
-                </td>
-                <td className="px-4 py-3 text-sm font-extrabold text-brand-900 tabular-nums">
-                  {formatMoney(h.precio)}
-                </td>
-                <td className="px-4 py-3 text-sm text-text-secondary tabular-nums">
-                  {formatFecha(h.vigenciaHasta)}
-                </td>
-                <td className="px-4 py-3 text-sm font-medium text-text-primary">
-                  {h.usuarioNombre}
-                </td>
-                <td className="px-4 py-3">
-                  <StatusBadge
-                    variant={h.vigenciaHasta === null ? "success" : "neutral"}
-                    label={h.vigenciaHasta === null ? "Vigente" : "Finalizada"}
-                  />
-                </td>
-              </tr>
-            ))}
+            {rows.map((h) => {
+              const esVigente = h.vigenciaHasta === null;
+              return (
+                <tr
+                  key={h.id}
+                  className={`border-b border-border/60 transition-colors duration-fast ease-out last:border-b-0 ${
+                    esVigente
+                      ? "bg-status-success/15 font-semibold border-l-4 border-l-status-success-strong hover:bg-status-success/20"
+                      : "hover:bg-cream-50/60"
+                  }`}
+                >
+                  <td className="px-4 py-3 text-sm text-text-primary tabular-nums">
+                    {formatFecha(h.vigenciaDesde)} {horaLocal(h.fechaHora)}
+                  </td>
+                  <td className="px-4 py-3 text-sm font-extrabold text-brand-900 tabular-nums">
+                    {formatMoney(h.precio)}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-text-secondary tabular-nums">
+                    {formatFecha(h.vigenciaHasta)}
+                  </td>
+                  <td className="px-4 py-3 text-sm font-medium text-text-primary">
+                    {h.usuarioNombre}
+                  </td>
+                  <td className="px-4 py-3">
+                    <StatusBadge
+                      variant={esVigente ? "success" : "neutral"}
+                      label={esVigente ? "Vigente" : "Finalizada"}
+                    />
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

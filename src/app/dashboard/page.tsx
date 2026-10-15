@@ -5,9 +5,10 @@ import {
   Building2,
   CheckCircle2,
   RotateCcw,
+  Search,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useId, useState } from "react";
+import { Suspense, useEffect, useId, useMemo, useState } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Button } from "@/components/ui/Button";
 import { KPIGrid } from "@/components/dashboard/KPIGrid";
@@ -17,6 +18,13 @@ import {
 } from "@/components/dashboard/DashboardTabs";
 import { ReportesContent } from "@/components/reportes/ReportesContent";
 import { ProfitabilityContent } from "@/components/rentabilidad/ProfitabilityContent";
+import { HistorialPreciosDashboardContent } from "@/components/dashboard/HistorialPreciosDashboardContent";
+import {
+  FiltrosArticulos,
+  type Filtros,
+  type CatalogosFiltroArticulo,
+} from "@/components/articulos/FiltrosArticulos";
+import type { CatalogosArticulo } from "@/data/articulos";
 import type { DashboardKPIs } from "@/modules/dashboard/dashboard.types";
 import { apiGet, apiGetOpcional, mensajeDeError } from "@/lib/api-client";
 
@@ -31,20 +39,24 @@ function ManagerialDashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Tab activo derivado de la URL (?tab=reportes, ?tab=rentabilidad o ?tab=indicadores)
+  // Tab activo derivado de la URL (?tab=reportes, ?tab=rentabilidad, ?tab=historial-precios o ?tab=indicadores)
   const tabParam = searchParams.get("tab");
   const tabActivo: TabDashboard =
     tabParam === "reportes"
       ? "reportes"
       : tabParam === "rentabilidad"
         ? "rentabilidad"
-        : "indicadores";
+        : tabParam === "historial-precios"
+          ? "historial-precios"
+          : "indicadores";
 
   const handleTabChange = (nuevoTab: TabDashboard) => {
     if (nuevoTab === "indicadores") {
       router.push("/dashboard");
     } else if (nuevoTab === "rentabilidad") {
       router.push("/dashboard?tab=rentabilidad");
+    } else if (nuevoTab === "historial-precios") {
+      router.push("/dashboard?tab=historial-precios");
     } else {
       router.push("/dashboard?tab=reportes");
     }
@@ -57,6 +69,45 @@ function ManagerialDashboardContent() {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Estados para búsqueda y filtro de precios (por encima de la línea horizontal)
+  const [busquedaPrecios, setBusquedaPrecios] = useState("");
+  const [filtrosPrecios, setFiltrosPrecios] = useState<Filtros>({
+    categoria: "",
+    estado: "Todos",
+    unidadMedida: "",
+    proveedorId: "",
+  });
+  const [categoriasPrecios, setCategoriasPrecios] = useState<CatalogosArticulo["categorias"]>([]);
+
+  useEffect(() => {
+    let cancelado = false;
+    const t = setTimeout(async () => {
+      if (cancelado) return;
+      try {
+        const cat = await apiGetOpcional<Partial<CatalogosArticulo>>(
+          "/api/articulos/catalogos",
+          {},
+        );
+        if (!cancelado) setCategoriasPrecios(cat.categorias ?? []);
+      } catch {
+        if (!cancelado) setCategoriasPrecios([]);
+      }
+    }, 0);
+    return () => {
+      cancelado = true;
+      clearTimeout(t);
+    };
+  }, []);
+
+  const catalogosFiltroPrecios = useMemo<CatalogosFiltroArticulo>(
+    () => ({
+      categorias: categoriasPrecios,
+      unidadesMedida: [],
+      proveedores: [],
+    }),
+    [categoriasPrecios],
+  );
 
   // Carga de catálogo de sucursales
   useEffect(() => {
@@ -173,6 +224,33 @@ function ManagerialDashboardContent() {
                 disabled={loading && tabActivo === "indicadores"}
               />
             </div>
+
+            {/* Buscador y filtro por encima de la línea horizontal (solo en pestaña Historial de Precios) */}
+            {tabActivo === "historial-precios" && (
+              <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center print:hidden">
+                <div className="relative flex-1">
+                  <Search
+                    className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-text-secondary"
+                    aria-hidden="true"
+                  />
+                  <input
+                    type="search"
+                    value={busquedaPrecios}
+                    onChange={(e) => setBusquedaPrecios(e.target.value)}
+                    placeholder="Buscar por código o nombre..."
+                    aria-label="Buscar por código o nombre"
+                    className="h-11 w-full cursor-text rounded-pill border border-border bg-surface pl-12 pr-4 text-base text-text-primary transition-colors duration-fast ease-out placeholder:text-text-secondary focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/20"
+                  />
+                </div>
+                <FiltrosArticulos
+                  filtros={filtrosPrecios}
+                  onChange={setFiltrosPrecios}
+                  catalogos={catalogosFiltroPrecios}
+                  hideChips
+                  grupos={["categoria", "estado"]}
+                />
+              </div>
+            )}
           </div>
         </header>
 
@@ -311,9 +389,16 @@ function ManagerialDashboardContent() {
           ) : tabActivo === "rentabilidad" ? (
             /* Rentabilidad por Sucursal */
             <ProfitabilityContent />
-          ) : (
+          ) : tabActivo === "reportes" ? (
             /* Módulo de Reportes de Ventas Integrado (HU-REP-02) */
             <ReportesContent />
+          ) : (
+            /* Consulta de Precios Históricos */
+            <HistorialPreciosDashboardContent
+              busqueda={busquedaPrecios}
+              categoria={filtrosPrecios.categoria}
+              estado={filtrosPrecios.estado}
+            />
           )}
         </div>
       </main>

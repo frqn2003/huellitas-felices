@@ -1,9 +1,9 @@
 "use client";
 
-import { FileBarChart, LayoutDashboard, TrendingUp } from "lucide-react";
+import { FileBarChart, History, LayoutDashboard, TrendingUp } from "lucide-react";
 import { useRef } from "react";
 
-export type TabDashboard = "indicadores" | "rentabilidad" | "reportes";
+export type TabDashboard = "indicadores" | "rentabilidad" | "reportes" | "historial-precios";
 
 interface DashboardTabsProps {
   active: TabDashboard;
@@ -19,6 +19,7 @@ const TABS: {
   { id: "indicadores", label: "Indicadores del Día", icon: LayoutDashboard },
   { id: "rentabilidad", label: "Rentabilidad por Sucursal", icon: TrendingUp },
   { id: "reportes", label: "Reportes de Ventas", icon: FileBarChart },
+  { id: "historial-precios", label: "Historial de Precios", icon: History },
 ];
 
 export function DashboardTabs({ active, onChange, disabled = false }: DashboardTabsProps) {
@@ -26,6 +27,7 @@ export function DashboardTabs({ active, onChange, disabled = false }: DashboardT
     indicadores: null,
     rentabilidad: null,
     reportes: null,
+    "historial-precios": null,
   });
 
   const handleKeyDown = (e: React.KeyboardEvent, index: number) => {
