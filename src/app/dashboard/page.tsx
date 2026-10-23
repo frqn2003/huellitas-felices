@@ -168,11 +168,11 @@ function ManagerialDashboardContent() {
   // Cantidad de KPIs en alerta
   const totalAlertas = data
     ? [
-        data.ventasDelDia.alerta,
-        data.turnosDelDia.alerta,
-        data.pacientesInternacion.alerta,
-        data.articulosStockCritico.alerta,
-      ].filter(Boolean).length
+      data.ventasDelDia.alerta,
+      data.turnosDelDia.alerta,
+      data.pacientesInternacion.alerta,
+      data.articulosStockCritico.alerta,
+    ].filter(Boolean).length
     : 0;
 
   return (
@@ -296,11 +296,10 @@ function ManagerialDashboardContent() {
 
                 <span className="text-xs font-semibold text-text-secondary">
                   {sucursalSeleccionada
-                    ? `Mostrando datos de ${
-                        sucursales.find(
-                          (s) => s.id === Number(sucursalSeleccionada),
-                        )?.nombre ?? "sucursal seleccionada"
-                      }`
+                    ? `Mostrando datos de ${sucursales.find(
+                      (s) => s.id === Number(sucursalSeleccionada),
+                    )?.nombre ?? "sucursal seleccionada"
+                    }`
                     : "Mostrando datos consolidados de la red"}
                 </span>
               </div>
@@ -308,11 +307,10 @@ function ManagerialDashboardContent() {
               {/* Banner de estado / Alertas consolidadas */}
               {!loading && !error && (
                 <div
-                  className={`flex flex-wrap items-center justify-between gap-3 rounded-md border p-4 shadow-card ${
-                    totalAlertas > 0
+                  className={`flex flex-wrap items-center justify-between gap-3 rounded-md border p-4 shadow-card ${totalAlertas > 0
                       ? "border-status-danger/40 bg-status-danger/10 text-status-danger-strong"
                       : "border-status-success/30 bg-status-success/10 text-status-success-strong"
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center gap-3">
                     {totalAlertas > 0 ? (
@@ -328,11 +326,10 @@ function ManagerialDashboardContent() {
                     <div>
                       <h2 className="text-sm font-extrabold uppercase tracking-wide">
                         {totalAlertas > 0
-                          ? `${totalAlertas} ${
-                              totalAlertas === 1
-                                ? "indicador requiere atención"
-                                : "indicadores requieren atención"
-                            }`
+                          ? `${totalAlertas} ${totalAlertas === 1
+                            ? "indicador requiere atención"
+                            : "indicadores requieren atención"
+                          }`
                           : "Operación normal"}
                       </h2>
                       <p className="text-xs font-medium opacity-90">

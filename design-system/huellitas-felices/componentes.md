@@ -141,6 +141,7 @@ Módulo HU-REP-02 (Reportes de Ventas, `/reportes/ventas` y `/dashboard?tab=repo
 ### rentabilidad
 Módulo de Rentabilidad por Sucursal (`/dashboard?tab=rentabilidad`):
 `ProfitabilityFilters` (selector de período desde/hasta con validación estricta en rojo, selector múltiple de sucursales con chips accesibles, botón de consulta y restablecer) ·
+`ProfitabilityAccumulatedBarChart` (gráfico full-width de barras apiladas/acumuladas mes a mes: compara Ingresos vs Egresos desglosando Proveedores y Caja Chica, con selector de sucursal independiente, toggle de vista mensual/acumulada y tooltips interactivos) ·
 `ProfitabilityKPIs` (tarjetas por sucursal con ingresos, egresos, margen bruto y margen porcentual) ·
 `ProfitabilityBarChart` (gráfico comparativo de barras agrupadas en SVG nativo: ingresos vs egresos con tooltips interactivos) ·
 `ProfitabilityRanking` (ranking de sucursales con podio, medallas, ordenamiento dinámico por margen o ingresos y barras proporcionales) ·

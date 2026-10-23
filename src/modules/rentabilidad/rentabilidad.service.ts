@@ -1,5 +1,7 @@
 import { query } from "@/lib/db/client";
 import type {
+  EvolucionRentabilidadResponse,
+  MesEvolucionRentabilidad,
   RentabilidadFiltros,
   RentabilidadResumen,
   SucursalRentabilidad,
@@ -44,17 +46,39 @@ export async function obtenerRentabilidadPorSucursal(
 
   const sucursalFilter = sucursalesIds && sucursalesIds.length > 0 ? sucursalesIds : null;
 
-  // 1. Ingresos por ventas en mostrador/recepción
+  // 1. Ingresos por ventas en mostrador/recepción y cobros directos de caja chica (sin duplicar ventas)
   const sqlVentas = `
     SELECT 
       s.id AS sucursal_id,
       s.nombre AS sucursal_nombre,
-      COALESCE(SUM(v.total), 0)::numeric AS ingresos,
-      COUNT(v.id)::int AS cantidad_ventas
+      COALESCE(SUM(t.ingresos), 0)::numeric AS ingresos,
+      COUNT(t.id)::int AS cantidad_ventas
     FROM sucursal s
-    LEFT JOIN venta v ON v.sucursal_id = s.id 
-      AND v.estado IN ('pagado', 'vigente')
-      AND v.fecha >= $1 AND v.fecha <= $2
+    LEFT JOIN (
+      -- Ventas facturadas en mostrador
+      SELECT 
+        v.sucursal_id, 
+        v.id, 
+        v.total AS ingresos
+      FROM venta v
+      WHERE v.estado IN ('pagado', 'vigente')
+        AND v.fecha >= $1 AND v.fecha <= $2
+      
+      UNION ALL
+      
+      -- Ingresos directos de caja chica (sin venta_id para no duplicar ventas cobradas en efectivo)
+      SELECT 
+        c.sucursal_id, 
+        mc.id, 
+        mc.monto AS ingresos
+      FROM sucursal s2
+      JOIN caja c ON c.sucursal_id = s2.id
+      JOIN caja_apertura ca ON ca.caja_id = c.id
+      JOIN movimiento_caja mc ON mc.caja_apertura_id = ca.id
+      WHERE mc.tipo = 'ingreso'
+        AND mc.venta_id IS NULL
+        AND mc.fecha_hora >= $1 AND mc.fecha_hora <= $2
+    ) t ON t.sucursal_id = s.id
     WHERE s.estado = 'activo'
       AND ($3::int[] IS NULL OR s.id = ANY($3))
     GROUP BY s.id, s.nombre
@@ -192,3 +216,251 @@ export async function obtenerRentabilidadPorSucursal(
     ranking,
   };
 }
+
+interface RowEvolucionVentas extends Record<string, unknown> {
+  periodo: string;
+  ingresos: string;
+}
+
+interface RowEvolucionEgresosCaja extends Record<string, unknown> {
+  periodo: string;
+  egresos_caja: string;
+}
+
+interface RowEvolucionEgresosProveedores extends Record<string, unknown> {
+  periodo: string;
+  egresos_proveedores: string;
+}
+
+interface RowSucursalNombre extends Record<string, unknown> {
+  nombre: string;
+}
+
+const MESES_NOMBRES = [
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Septiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre",
+];
+
+const MESES_ABR = [
+  "Ene",
+  "Feb",
+  "Mar",
+  "Abr",
+  "May",
+  "Jun",
+  "Jul",
+  "Ago",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dic",
+];
+
+export async function obtenerEvolucionTemporalRentabilidad(params: {
+  sucursalId: number;
+  desde: string;
+  hasta: string;
+}): Promise<EvolucionRentabilidadResponse> {
+  const { sucursalId, desde, hasta } = params;
+  const fechaDesde = `${desde} 00:00:00`;
+  const fechaHasta = `${hasta} 23:59:59.999`;
+
+  const rowsSucursal = await query<RowSucursalNombre>(
+    `SELECT nombre FROM sucursal WHERE id = $1`,
+    [sucursalId],
+  );
+  const sucursalNombre = rowsSucursal[0]?.nombre || `Sucursal #${sucursalId}`;
+
+  const sqlVentas = `
+    SELECT 
+      periodo,
+      COALESCE(SUM(ingresos), 0)::numeric AS ingresos
+    FROM (
+      -- Ventas registradas
+      SELECT 
+        TO_CHAR(v.fecha, 'YYYY-MM') AS periodo,
+        v.total AS ingresos
+      FROM venta v
+      WHERE v.sucursal_id = $1
+        AND v.estado IN ('pagado', 'vigente')
+        AND v.fecha >= $2 AND v.fecha <= $3
+      
+      UNION ALL
+      
+      -- Ingresos de caja chica sin venta_id (para evitar duplicación)
+      SELECT 
+        TO_CHAR(mc.fecha_hora, 'YYYY-MM') AS periodo,
+        mc.monto AS ingresos
+      FROM sucursal s
+      JOIN caja c ON c.sucursal_id = s.id
+      JOIN caja_apertura ca ON ca.caja_id = c.id
+      JOIN movimiento_caja mc ON mc.caja_apertura_id = ca.id
+      WHERE s.id = $1
+        AND mc.tipo = 'ingreso'
+        AND mc.venta_id IS NULL
+        AND mc.fecha_hora >= $2 AND mc.fecha_hora <= $3
+    ) t
+    GROUP BY periodo
+    ORDER BY periodo ASC
+  `;
+
+  const sqlEgresosCaja = `
+    SELECT 
+      TO_CHAR(mc.fecha_hora, 'YYYY-MM') AS periodo,
+      COALESCE(SUM(mc.monto), 0)::numeric AS egresos_caja
+    FROM sucursal s
+    JOIN caja c ON c.sucursal_id = s.id
+    JOIN caja_apertura ca ON ca.caja_id = c.id
+    JOIN movimiento_caja mc ON mc.caja_apertura_id = ca.id 
+      AND mc.tipo = 'egreso'
+      AND mc.fecha_hora >= $2 AND mc.fecha_hora <= $3
+    WHERE s.id = $1
+    GROUP BY TO_CHAR(mc.fecha_hora, 'YYYY-MM')
+    ORDER BY periodo ASC
+  `;
+
+  const sqlEgresosProveedores = `
+    SELECT 
+      TO_CHAR(p.fecha, 'YYYY-MM') AS periodo,
+      COALESCE(SUM(pi.monto_imputado), 0)::numeric AS egresos_proveedores
+    FROM sucursal s
+    JOIN deposito d ON d.sucursal_id = s.id
+    JOIN orden_compra oc ON oc.deposito_id = d.id
+    JOIN comprobante_proveedor cp ON cp.orden_compra_id = oc.id
+    JOIN (
+      pago_imputacion pi
+      JOIN pago p ON p.id = pi.pago_id 
+        AND p.estado = 'vigente' 
+        AND p.fecha >= $2::date 
+        AND p.fecha <= $3::date
+    ) ON pi.comprobante_proveedor_id = cp.id
+    WHERE s.id = $1
+    GROUP BY TO_CHAR(p.fecha, 'YYYY-MM')
+    ORDER BY periodo ASC
+  `;
+
+  const [resVentas, resCaja, resProv] = await Promise.all([
+    query<RowEvolucionVentas>(sqlVentas, [sucursalId, fechaDesde, fechaHasta]),
+    query<RowEvolucionEgresosCaja>(sqlEgresosCaja, [sucursalId, fechaDesde, fechaHasta]),
+    query<RowEvolucionEgresosProveedores>(sqlEgresosProveedores, [sucursalId, fechaDesde, fechaHasta]),
+  ]);
+
+  const mapVentas = new Map<string, number>();
+  for (const r of resVentas) {
+    mapVentas.set(r.periodo, Number(r.ingresos) || 0);
+  }
+
+  const mapCaja = new Map<string, number>();
+  for (const r of resCaja) {
+    mapCaja.set(r.periodo, Number(r.egresos_caja) || 0);
+  }
+
+  const mapProv = new Map<string, number>();
+  for (const r of resProv) {
+    mapProv.set(r.periodo, Number(r.egresos_proveedores) || 0);
+  }
+
+  // Generamos todos los meses en el rango [desde, hasta]
+  const [startYearStr, startMonthStr] = desde.split("-");
+  const [endYearStr, endMonthStr] = hasta.split("-");
+  let curYear = parseInt(startYearStr, 10);
+  let curMonth = parseInt(startMonthStr, 10);
+  const endYear = parseInt(endYearStr, 10);
+  const endMonth = parseInt(endMonthStr, 10);
+
+  const mesesList: { anio: number; mes: number; periodo: string }[] = [];
+  while (curYear < endYear || (curYear === endYear && curMonth <= endMonth)) {
+    const periodo = `${curYear}-${String(curMonth).padStart(2, "0")}`;
+    mesesList.push({ anio: curYear, mes: curMonth - 1, periodo });
+    curMonth++;
+    if (curMonth > 12) {
+      curMonth = 1;
+      curYear++;
+    }
+  }
+
+  const ahora = new Date();
+  const anioActual = ahora.getFullYear();
+  const mesActual = ahora.getMonth(); // 0..11
+
+  let acumIngresos = 0;
+  let acumProveedores = 0;
+  let acumCaja = 0;
+
+  const meses: MesEvolucionRentabilidad[] = mesesList.map((item) => {
+    const ingresos = mapVentas.get(item.periodo) || 0;
+    const egresosProveedores = mapProv.get(item.periodo) || 0;
+    const egresosCaja = mapCaja.get(item.periodo) || 0;
+    const egresosTotal = egresosProveedores + egresosCaja;
+    const margenBruto = ingresos - egresosTotal;
+    const margenPorcentaje =
+      ingresos > 0
+        ? Number(((margenBruto / ingresos) * 100).toFixed(2))
+        : egresosTotal > 0
+          ? -100
+          : 0;
+
+    const esFuturo =
+      item.anio > anioActual ||
+      (item.anio === anioActual && item.mes > mesActual);
+
+    let acumIngresosVal = 0;
+    let acumProveedoresVal = 0;
+    let acumCajaVal = 0;
+    let acumEgresosTotalVal = 0;
+    let acumMargenBrutoVal = 0;
+
+    if (!esFuturo) {
+      acumIngresos += ingresos;
+      acumProveedores += egresosProveedores;
+      acumCaja += egresosCaja;
+      acumIngresosVal = acumIngresos;
+      acumProveedoresVal = acumProveedores;
+      acumCajaVal = acumCaja;
+      acumEgresosTotalVal = acumProveedores + acumCaja;
+      acumMargenBrutoVal = acumIngresos - acumEgresosTotalVal;
+    }
+
+    const mesIndex = item.mes;
+    const anio = item.anio;
+    const mesLabel = `${MESES_ABR[mesIndex]}${mesesList.length > 12 ? ` '${String(anio).slice(2)}` : ""}`;
+    const mesCompleto = `${MESES_NOMBRES[mesIndex]} ${anio}`;
+
+    return {
+      periodo: item.periodo,
+      mesLabel,
+      mesCompleto,
+      ingresos,
+      egresosProveedores,
+      egresosCaja,
+      egresosTotal,
+      margenBruto,
+      margenPorcentaje,
+      acumIngresos: acumIngresosVal,
+      acumProveedores: acumProveedoresVal,
+      acumCaja: acumCajaVal,
+      acumEgresosTotal: acumEgresosTotalVal,
+      acumMargenBruto: acumMargenBrutoVal,
+      esFuturo,
+    };
+  });
+
+  return {
+    sucursalId,
+    sucursalNombre,
+    desde,
+    hasta,
+    meses,
+  };
+}
+

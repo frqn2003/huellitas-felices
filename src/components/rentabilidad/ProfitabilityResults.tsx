@@ -16,6 +16,7 @@ import { useToast } from "@/components/ui/Toast";
 import { ProfitabilityKPIs } from "./ProfitabilityKPIs";
 import { ProfitabilityBarChart } from "./ProfitabilityBarChart";
 import { ProfitabilityRanking } from "./ProfitabilityRanking";
+import { ProfitabilityAccumulatedBarChart } from "./ProfitabilityAccumulatedBarChart";
 
 interface ProfitabilityResultsProps {
   resultado: RentabilidadResumen | null;
@@ -241,6 +242,15 @@ export function ProfitabilityResults({
             Margen: {resultado.margenPorcentajeTotal > 0 ? `+${resultado.margenPorcentajeTotal}%` : `${resultado.margenPorcentajeTotal}%`}
           </span>
         </div>
+      </div>
+
+      {/* Bloque: Gráfico de Barras Acumuladas Mensuales (Full-Width) */}
+      <div>
+        <ProfitabilityAccumulatedBarChart
+          sucursales={resultado.sucursales}
+          desde={desde}
+          hasta={hasta}
+        />
       </div>
 
       {/* Bloque: Gráfico Comparativo y Ranking */}

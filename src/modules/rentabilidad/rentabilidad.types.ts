@@ -32,3 +32,30 @@ export interface RentabilidadResumen {
   sucursales: SucursalRentabilidad[];
   ranking: SucursalRentabilidad[];
 }
+
+export interface MesEvolucionRentabilidad {
+  periodo: string;
+  mesLabel: string;
+  mesCompleto: string;
+  ingresos: number;
+  egresosProveedores: number;
+  egresosCaja: number;
+  egresosTotal: number;
+  margenBruto: number;
+  margenPorcentaje: number;
+  acumIngresos: number;
+  acumProveedores: number;
+  acumCaja: number;
+  acumEgresosTotal: number;
+  acumMargenBruto: number;
+  esFuturo?: boolean;
+}
+
+export interface EvolucionRentabilidadResponse {
+  sucursalId: number;
+  sucursalNombre: string;
+  desde: string;
+  hasta: string;
+  meses: MesEvolucionRentabilidad[];
+}
+
