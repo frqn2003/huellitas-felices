@@ -90,6 +90,9 @@ export const crearArticuloSchema = z.object({
     .optional()
     .nullable(),
 
+  fechaVencimiento: z.string().trim().optional().nullable(),
+  numeroLote: z.string().trim().max(50).optional().nullable(),
+
   activo: z.boolean().optional(),
 });
 

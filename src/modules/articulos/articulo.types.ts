@@ -33,6 +33,8 @@ export type ArticuloRow = Pick<
   | "imagen_url"
   | "created_at"
   | "updated_at"
+  | "fecha_vencimiento"
+  | "numero_lote"
 > & {
   // Lo que NO es columna de `articulo` y el generador no puede conocer:
   // los nombres que traen los JOIN de catálogo...
@@ -77,6 +79,8 @@ export type ArticuloInput = {
   presentacionId: number;
   /** `articulo.contenido_neto`. NOT NULL con DEFAULT 1. */
   contenidoNeto?: number;
+  fechaVencimiento?: string | null;
+  numeroLote?: string | null;
   imagenUrl?: string | null;
   activo?: boolean;
 };

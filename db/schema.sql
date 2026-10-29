@@ -130,7 +130,9 @@ CREATE TABLE articulo (
   created_at timestamp without time zone DEFAULT now() NOT NULL,
   updated_at timestamp without time zone DEFAULT now() NOT NULL,
   contenido_neto numeric(10,2) DEFAULT 1 NOT NULL,
-  presentacion_id integer(32,0) NOT NULL
+  presentacion_id integer(32,0) NOT NULL,
+  fecha_vencimiento date,
+  numero_lote character varying(50)
 );
 
 CREATE TABLE auditoria (

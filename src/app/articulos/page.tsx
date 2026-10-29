@@ -207,9 +207,8 @@ function ArticulosScreen() {
       presentacionId: Number(draft.presentacion_id) || 0,
       contenidoNeto:
         draft.contenido_neto.trim() !== "" ? Number(draft.contenido_neto) : undefined,
-      // `numero_lote` y `fecha_vencimiento` NO se mandan: son de HU-STK-05
-      // (lotes), fuera del alcance de este sprint por la decisión D1. Las
-      // columnas siguen en la tabla pero nadie las escribe.
+      fechaVencimiento: draft.fecha_vencimiento.trim() ? draft.fecha_vencimiento.trim() : null,
+      numeroLote: draft.numero_lote.trim() ? draft.numero_lote.trim() : null,
       // `proveedorPreferidoId` NO se manda: lo deriva el back de la última orden
       // de compra del artículo (decisión D2).
       imagen: draft.imagen_url || null,

@@ -29,6 +29,8 @@ export type ModoAbm = "INSERCION" | "EDICION" | "LECTURA";
 
 export type TipoEventoSesion = "login" | "logout" | "login_fallido" | "bloqueado";
 
+export type TipoMovimientoCaja = "ingreso" | "egreso";
+
 export type TipoMovimientoStock = "ingreso" | "egreso";
 
 export type TipoObservacionRecepcion = "faltante" | "danado" | "error";
@@ -80,6 +82,8 @@ export interface DbTables {
     updated_at: Date;  // auto (default)
     contenido_neto: string;  // auto (default)
     presentacion_id: number;
+    fecha_vencimiento: Date | null;
+    numero_lote: string | null;
   };
   auditoria: {
     id: string;  // auto (default)
@@ -106,6 +110,18 @@ export interface DbTables {
     saldo_actual: string;  // auto (default)
     estado: EstadoActivoInactivo;  // auto (default)
     created_at: Date;  // auto (default)
+  };
+  caja_apertura: {
+    id: number;  // auto (identity)
+    caja_id: number;
+    usuario_id: number;
+    monto_inicial: string;
+    fecha_apertura: Date;  // auto (default)
+    estado: boolean;  // auto (default)
+    monto_contado: string | null;
+    monto_esperado: string | null;
+    diferencia: string | null;
+    fecha_cierre: Date | null;
   };
   categoria: {
     id: number;  // auto (default)
@@ -149,6 +165,39 @@ export interface DbTables {
     cantidad: string;
     precio_facturado: string;
     subtotal: string | null;
+  };
+  consulta_medica: {
+    id: number;  // auto (identity)
+    turno_id: number;
+    cliente_id: number;
+    mascota_id: number;
+    usuario_id: number;
+    fecha_hora: Date;  // auto (default)
+    motivo_consulta: string;
+    diagnostico: string | null;
+    tratamiento: string | null;
+    medicacion_indicada: string | null;
+    temperatura: string | null;
+    frecuencia_cardiaca: number | null;
+    peso: string | null;
+    estado_fisico_general: string | null;
+    cerrada: boolean;  // auto (default)
+    fecha_cierre: Date | null;
+  };
+  consulta_medica_insumo: {
+    id: number;  // auto (identity)
+    consulta_id: number;
+    articulo_id: number;
+    cantidad: number;
+    usuario_id: number;
+    fecha_hora: Date;  // auto (default)
+  };
+  consulta_medica_nota: {
+    id: number;  // auto (identity)
+    consulta_id: number;
+    usuario_id: number;
+    nota: string;
+    fecha_hora: Date;  // auto (default)
   };
   cotizacion: {
     id: number;  // auto (default)
@@ -197,6 +246,42 @@ export interface DbTables {
     id: number;  // auto (default)
     nombre: string;
   };
+  historial_precios: {
+    id: number;  // auto (identity)
+    articulo_id: number;
+    precio: string;
+    vigencia_desde: Date;
+    vigencia_hasta: Date | null;
+    usuario_id: number;
+    fecha_hora: Date;  // auto (default)
+  };
+  historial_precios_practica: {
+    id: number;  // auto (identity)
+    practica_id: number;
+    precio: string;
+    vigencia_desde: Date;
+    vigencia_hasta: Date | null;
+    usuario_id: number;
+    fecha_hora: Date;  // auto (default)
+  };
+  lista_precio: {
+    id: number;  // auto (identity)
+    articulo_id: number;
+    precio: string;
+    vigencia_desde: Date;  // auto (default)
+    usuario_id: number;
+    fecha_registro: Date;  // auto (default)
+    updated_at: Date;  // auto (default)
+  };
+  lista_precio_practica: {
+    id: number;  // auto (identity)
+    practica_id: number;
+    precio: string;
+    vigencia_desde: Date;  // auto (default)
+    usuario_id: number;
+    fecha_registro: Date;  // auto (default)
+    updated_at: Date;  // auto (default)
+  };
   lote_vencimiento: {
     id: number;  // auto (default)
     ficha_stock_id: number;
@@ -218,6 +303,16 @@ export interface DbTables {
     estado: EstadoActivoInactivo;  // auto (default)
     created_at: Date;  // auto (default)
     updated_at: Date;  // auto (default)
+  };
+  movimiento_caja: {
+    id: number;  // auto (identity)
+    caja_apertura_id: number;
+    tipo: TipoMovimientoCaja;
+    monto: string;
+    motivo: string;
+    venta_id: number | null;
+    usuario_id: number;
+    fecha_hora: Date;  // auto (default)
   };
   movimiento_stock_cab: {
     id: number;  // auto (default)
@@ -271,7 +366,7 @@ export interface DbTables {
     articulo_id: number;
     cantidad: string;
     precio_acordado: string;
-    subtotal: string;
+    subtotal: string | null;
   };
   origen_movimiento: {
     id: number;  // auto (default)
@@ -374,6 +469,7 @@ export interface DbTables {
     notas: string | null;
     usuario_id: number;
     fecha_creacion: Date;  // auto (default)
+    pagado: boolean;  // auto (default)
   };
   unidad_medida: {
     id: number;  // auto (default)
@@ -392,6 +488,32 @@ export interface DbTables {
     bloqueado_hasta: Date | null;
     sucursal_id: number | null;
     auth_id: string | null;
+  };
+  venta: {
+    id: number;  // auto (identity)
+    sucursal_id: number;
+    deposito_id: number;
+    consulta_id: number | null;
+    usuario_id: number;
+    fecha: Date;  // auto (default)
+    total: string;  // auto (default)
+    estado: EstadoDocumento;  // auto (default)
+  };
+  venta_detalle: {
+    id: number;  // auto (identity)
+    venta_id: number;
+    articulo_id: number | null;
+    cantidad: string;
+    precio_unitario: string;
+    subtotal: string | null;
+    consulta_medica_insumo_id: number | null;
+    practica_id: number | null;
+  };
+  venta_medio_pago: {
+    id: number;  // auto (identity)
+    venta_id: number;
+    forma_pago_id: number;
+    monto: string;
   };
 }
 

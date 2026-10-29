@@ -70,12 +70,8 @@ function initialDraft(
       unidadMedidaId: String(articulo.unidadMedidaId),
       categoriaId: String(articulo.categoriaId),
       presentacion_id: String(articulo.presentacion_id),
-      // `numero_lote` y `fecha_vencimiento` arrancan vacíos SIEMPRE, incluso al
-      // editar: son de HU-STK-05 (lotes), la API no los devuelve y el POST
-      // tampoco los manda (ver src/app/articulos/page.tsx). Los inputs quedan
-      // pero hoy no persisten nada.
-      numero_lote: "",
-      fecha_vencimiento: "",
+      numero_lote: articulo.numero_lote ?? "",
+      fecha_vencimiento: articulo.fecha_vencimiento ? articulo.fecha_vencimiento.slice(0, 10) : "",
       // El draft del formulario es todo string (son inputs); la API emite number.
       contenido_neto: String(articulo.contenido_neto),
       imagen_url: articulo.imagen_url,

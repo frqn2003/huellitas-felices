@@ -66,6 +66,12 @@ export function toApi(row: ArticuloRow): Articulo {
     estado: row.estado,
 
     imagen_url: row.imagen_url ?? "",
+    fecha_vencimiento: row.fecha_vencimiento
+      ? (row.fecha_vencimiento instanceof Date
+          ? row.fecha_vencimiento.toISOString().slice(0, 10)
+          : String(row.fecha_vencimiento).slice(0, 10))
+      : "",
+    numero_lote: row.numero_lote ?? "",
     created_at: row.created_at.toISOString(),
     updated_at: row.updated_at.toISOString(),
   };

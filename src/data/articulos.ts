@@ -62,6 +62,10 @@ export interface Articulo {
   estado: "activo" | "inactivo";
   /** Ruta pública de la imagen (`/uploads/articulos/...`). Vacío = sin imagen. */
   imagen_url: string;
+  /** Fecha de vencimiento (YYYY-MM-DD) si fue cargada. */
+  fecha_vencimiento?: string;
+  /** Número de lote si fue cargado. */
+  numero_lote?: string;
   /** dict: created_at/updated_at los pone la base. Solo lectura. */
   created_at: string;
   updated_at: string;

@@ -71,6 +71,8 @@ const SELECT_BASE = `
     prov.razon_social  AS proveedor_preferido_nombre,
     a.estado,
     a.imagen_url,
+    a.fecha_vencimiento,
+    a.numero_lote,
     a.created_at,
     a.updated_at
   FROM articulo a
@@ -207,8 +209,8 @@ export async function insert(
     //    que se persiste: antes se tecleaba "500" y se guardaba 1, en silencio.
     `INSERT INTO articulo
        (nombre, descripcion, categoria_id, unidad_medida_id, fabricante_id,
-        presentacion_id, contenido_neto, imagen_url, estado)
-     VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, 1), $8, $9)
+        presentacion_id, contenido_neto, imagen_url, estado, fecha_vencimiento, numero_lote)
+     VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, 1), $8, $9, $10, $11)
      RETURNING id`,
     [
       data.nombre,
@@ -220,6 +222,8 @@ export async function insert(
       data.contenidoNeto ?? null,
       data.imagenUrl ?? null,
       data.activo === false ? "inactivo" : "activo",
+      data.fechaVencimiento || null,
+      data.numeroLote || null,
     ],
   );
   return rows[0].id;
@@ -240,7 +244,9 @@ export async function update(
          presentacion_id = $7,
          contenido_neto = COALESCE($8, contenido_neto),
          imagen_url = $9,
-         estado = $10
+         estado = $10,
+         fecha_vencimiento = $11,
+         numero_lote = $12
      WHERE id = $1`,
     [
       id,
@@ -253,6 +259,8 @@ export async function update(
       data.contenidoNeto ?? null,
       data.imagenUrl ?? null,
       data.activo === false ? "inactivo" : "activo",
+      data.fechaVencimiento || null,
+      data.numeroLote || null,
     ],
   );
   return (rowCount ?? 0) > 0;
