@@ -409,10 +409,10 @@ function StockScreen() {
       const matchDeposito =
         !filtrosMov.depositoId ||
         m.fichaStock.depositoNombre ===
-          depositos.find((d) => d.id === Number(filtrosMov.depositoId))?.nombre;
+        depositos.find((d) => d.id === Number(filtrosMov.depositoId))?.nombre;
       const matchArticulo =
         !filtrosMov.articulo || m.fichaStock.articuloNombre ===
-          articulosFiltro.find((a) => a.id === Number(filtrosMov.articulo))?.nombre;
+        articulosFiltro.find((a) => a.id === Number(filtrosMov.articulo))?.nombre;
       const fecha = m.fechaHora.slice(0, 10);
       const matchDesde = !filtrosMov.desde || fecha >= filtrosMov.desde;
       const matchHasta = !filtrosMov.hasta || fecha <= filtrosMov.hasta;

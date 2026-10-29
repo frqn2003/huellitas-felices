@@ -76,6 +76,7 @@ export function KPIGrid({ data, loading, className }: KPIGridProps) {
       icono: BadgeDollarSign,
       iconoTendencia: TrendingDown,
       colorIconoNormal: "bg-emerald-100 text-emerald-800",
+      textoAlerta: "Umbral no superado",
     },
     {
       id: "turnos",
@@ -88,6 +89,7 @@ export function KPIGrid({ data, loading, className }: KPIGridProps) {
       icono: CalendarDays,
       iconoTendencia: TrendingUp,
       colorIconoNormal: "bg-sky-100 text-sky-800",
+      textoAlerta: "Umbral superado",
     },
     {
       id: "internacion",
@@ -102,6 +104,7 @@ export function KPIGrid({ data, loading, className }: KPIGridProps) {
       icono: HeartPulse,
       iconoTendencia: AlertTriangle,
       colorIconoNormal: "bg-violet-100 text-violet-800",
+      textoAlerta: "Umbral superado",
     },
     {
       id: "stock-critico",
@@ -116,6 +119,7 @@ export function KPIGrid({ data, loading, className }: KPIGridProps) {
       icono: PackageX,
       iconoTendencia: AlertTriangle,
       colorIconoNormal: "bg-amber-100 text-amber-800",
+      textoAlerta: "Umbral superado",
     },
   ];
 
@@ -149,7 +153,7 @@ export function KPIGrid({ data, loading, className }: KPIGridProps) {
                 {estaEnAlerta ? (
                   <span className="inline-flex items-center gap-1 text-[11px] font-extrabold uppercase text-status-danger-strong">
                     <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden="true" />
-                    Umbral superado
+                    {kpi.textoAlerta}
                   </span>
                 ) : (
                   <span className="text-[11px] font-semibold text-text-secondary">
